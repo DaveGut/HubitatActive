@@ -1,0 +1,75 @@
+{
+  "packageName": "Kasa (TP-Link) Plugs/Switches and Bulbs",
+  "author": "Dave Gutheinz",
+  "version": "1.0",
+  "minimumHEVersion": "0.0",
+  "dateReleased": "2020-04-19",
+  "apps": [
+    {
+      "id": "2ede17f3-d44d-484c-9540-ca84134420ac",
+      "name": "Kasa Integration",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/Application/TP-LinkHubitatApplication.groovy",
+      "required": true,
+      "oauth": false
+    }
+  ],
+  "drivers": [
+    {
+      "id": "9073f240-4736-460c-a053-1295a0d2bf9d",
+      "name": "Kasa Plug Switch",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkPlug-Switch(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "3a413764-efe7-4181-99cb-724f172e6802",
+      "name": "Kasa CT Bulb",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkCTBulb(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "296bc83f-79a5-4aa1-abe2-9ed57fd3c62a",
+      "name": "Kasa Color Bulb",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkColorBulb(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "77419d7a-9272-4e09-8ed6-c169b466f93d",
+      "name": "Kasa Dimming Switch",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkDimmingSwitch(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "62d1054d-9eff-4409-a0dc-3ea67ec92efa",
+      "name": "Kasa EM Multi Plug",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkEM-Multi-Plug(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "a1c14969-031f-430c-9630-075dec1d3caf",
+      "name": "Kasa EM Plug",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkEM-Plug(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "ac106faf-af83-4590-be6b-10c692978295",
+      "name": "Kasa Mono Bulb",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkWhiteBulb(Hubitat).groovy",
+      "required": false
+    },
+    {
+      "id": "d19e18c3-bae3-4bb3-a496-5f4a12afb5ff",
+      "name": "Kasa Multi Plug",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkMulti-Plug(Hubitat).groovy",
+      "required": false
+    }
+  ]
+}
