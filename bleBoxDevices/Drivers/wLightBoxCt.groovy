@@ -23,7 +23,7 @@ metadata {
 	definition (name: "bleBox wLightBox Ct",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/wLightBoxCt.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxCt.groovy"
 			   ) {
 		capability "Light"
 		capability "Switch"
