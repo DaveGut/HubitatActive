@@ -28,7 +28,7 @@ metadata {
 	definition (name: "Kasa EM Plug",
     			namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkEM-Plug(Hubitat).groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Plug.groovy"
 			   ) {
 		capability "Switch"
 		capability "Actuator"
