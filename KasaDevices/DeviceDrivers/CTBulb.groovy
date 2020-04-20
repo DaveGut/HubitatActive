@@ -20,8 +20,9 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 04.08	L5.0.2.  Initial development started for next version:
 		a.	Add type to attribute "switch",
 		b.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
+04.20	5.1.0	Update for Hubitat Program Manager
 =======================================================================================================*/
-def driverVer() { return "L5.0.2" }
+def driverVer() { return "5.1.0" }
 
 metadata {
 	definition (name: "Kasa CT Bulb",
