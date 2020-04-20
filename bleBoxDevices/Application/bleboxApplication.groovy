@@ -38,7 +38,7 @@ definition(
 	iconUrl: "",
 	iconX2Url: "",
 	singleInstance: true,
-	importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Application/blebox%20Manager%20App.groovy"
+	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Application/bleboxApplication.groovy"
 	)
 preferences {
 	page(name: "mainPage")
