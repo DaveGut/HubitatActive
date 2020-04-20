@@ -21,9 +21,9 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 		a.	Add type to attribute "switch",
 		b.	Sending multiple command for on/off eliminating need to send separate status command.
 		c.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
+04.20	5.1.0	Update for Hubitat Program Manager
 =======================================================================================================*/
-def driverVer() { return "L5.0.2" }
-
+def driverVer() { return "5.1.0" }
 metadata {
 	definition (name: "Kasa EM Multi Plug",
     			namespace: "davegut",
