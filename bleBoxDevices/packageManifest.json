@@ -1,0 +1,109 @@
+{
+  "packageName": "BleBox Device Integration",
+  "author": "Dave Gutheinz -- version=1.4.0 --heversion-2.1.9 --datereleased=2020-04-20",
+  "minimumHEVersion": "0.0",
+  "dateReleased": "2020-04-20",
+  "apps": [
+    {
+      "id": "cf912ad2-7c62-4aad-83ba-45c6b3868e8c",
+      "name": "bleBox Integration",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Application/bleboxApplication.groovy",
+      "required": true,
+      "oauth": false
+    }
+  ],
+  "drivers": [
+    {
+      "id": "7ef123f0-8b98-4d75-b57b-16600ebe5d5e",
+      "name": "bleBox airSensor",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/airSensor.groovy",
+      "required": false
+    },
+    {
+      "id": "07dee875-210d-45e6-92b6-949050c1da0a",
+      "name": "bleBox dimmerBox",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/dimmerBox.groovy",
+      "required": false
+    },
+    {
+      "id": "2aaf6ec3-7fab-4c14-a97e-ba98c54deecf",
+      "name": "bleBox gateBox",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/gateBox.groovy",
+      "required": false
+    },
+    {
+      "id": "d3c3ffab-9289-4c12-a9ec-937cceab2a55",
+      "name": "bleBox shutterBox",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/shutterBox.groovy",
+      "required": false
+    },
+    {
+      "id": "97c7df36-33d8-41be-b5e0-11145f388e76",
+      "name": "bleBox switchBox",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBox.groovy",
+      "required": false
+    },
+    {
+      "id": "250e1979-3243-417c-ba53-220e062ba5a8",
+      "name": "bleBox switchBoxD",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBoxD.groovy",
+      "required": false
+    },
+    {
+      "id": "6238784c-b3ee-48f6-b954-04977c06c042",
+      "name": "bleBox tempSensor",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/tempSensor.groovy",
+      "required": false
+    },
+    {
+      "id": "51cb6cb3-a2a1-43fb-963b-7029ed536623",
+      "name": "bleBox wLightBox",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBox.groovy",
+      "required": false
+    },
+    {
+      "id": "9accaad7-3095-4521-bf54-12e9f632aacc",
+      "name": "bleBox wLightBox Ct",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxCt.groovy",
+      "required": false
+    },
+    {
+      "id": "005b6d04-632b-4dcf-9ca0-c82775390deb",
+      "name": "bleBox wLightBox Mono",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxMono.groovy",
+      "required": false
+    },
+    {
+      "id": "4b6a773c-7a97-48fa-8c73-2e5b4859bd9a",
+      "name": "bleBox wLightBox Rgb",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxRgb.groovy",
+      "required": false
+    },
+    {
+      "id": "2f4e8af1-226c-48c1-a16d-e23ba45a5146",
+      "name": "bleBox wLightBox Rgbw",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxRgbw.groovy",
+      "required": false
+    },
+    {
+      "id": "856960cf-e497-44ce-818a-d8ded6842440",
+      "name": "bleBox wLightBoxS",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxS.groovy",
+      "required": false
+    }
+  ]
+}
