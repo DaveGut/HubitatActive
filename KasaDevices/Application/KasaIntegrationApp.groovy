@@ -29,7 +29,7 @@ definition(
 	iconX2Url: "",
 	singleInstance: true,
 	documentationLink: "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
-	importUrl: "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/Application/TP-LinkHubitatApplication.groovy"
+	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy"
 )
 
 preferences {
