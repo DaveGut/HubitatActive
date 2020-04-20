@@ -20,9 +20,10 @@ open API documentation for development and is intended for integration into the 
 					c.	Combined gateBox and doorBox drivers into one.
 10.01.19	1.3.01. Updated error handling.
 02.16.20	1.3.02	Added username and password as an optional Authorization Code.
+04.20.20	1.4.0	Hubitat Package Manager Update
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.3.02" }
+def driverVer() { return "1.4.0" }
 
 metadata {
 	definition (name: "bleBox gateBox",
