@@ -27,7 +27,7 @@ metadata {
 	definition (name: "Kasa CT Bulb",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkCTBulb(Hubitat).groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy"
 			   ) {
         capability "Light"
 		capability "Switch"
