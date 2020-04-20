@@ -26,9 +26,9 @@ and limitations under the License.
 			a.	Checks if scan has been done in last 15 minutes.  Exits if true.
 			b.	Scans Lan segment for bleBox Devices and creates database entry for found devices.
 			c.	Updates children device's deviceIP baseed on scanning.
-04.20.2020	1.2.0	Hubitat Package Manager Support.
+04.20.2020	1.4.0	Hubitat Package Manager Support.
 =============================================================================================*/
-def appVersion() { return "1.2.0" }
+def appVersion() { return "1.4.0" }
 import groovy.json.JsonSlurper
 definition(
 	name: "bleBox Integration",
