@@ -25,7 +25,7 @@ metadata {
 	definition (name: "bleBox tempSensor",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/tempSensor.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/tempSensor.groovy"
 			   ) {
 		capability "Temperature Measurement"
 		attribute "trend", "string"
