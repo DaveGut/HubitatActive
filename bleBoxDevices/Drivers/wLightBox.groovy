@@ -24,7 +24,7 @@ metadata {
 	definition (name: "bleBox wLightBox",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/wLightBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBox.groovy"
 			) {
 		capability "Switch"
 		capability "Actuator"
