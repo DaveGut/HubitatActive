@@ -14,9 +14,10 @@ open API documentation for development and is intended for integration into the 
 
 ===== Hiatory =====
 09.20.19	1.2.01.	Initial Parent-Child release.
+04.20.20	1.4.0	Hubitat Package Manager Update
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.2.01" }
+def driverVer() { return "1.4.0" }
 metadata {
 	definition (name: "bleBox wLightBox Mono",
 				namespace: "davegut",
