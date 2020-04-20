@@ -16,9 +16,10 @@ open API documentation for development and is intended for integration into the 
 09.20.19	1.2.01.	Initial Parent-Child release.
 					Assumption is CT is set in the first value pair (CT, Level).
 10.05.19	1.2.02	Updated CT and Level related calculations.
+04.20.20	1.4.0	Hubitat Package Manager Update
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.2.02" }
+def driverVer() { return "1.4.0" }
 metadata {
 	definition (name: "bleBox wLightBox Ct",
 				namespace: "davegut",
