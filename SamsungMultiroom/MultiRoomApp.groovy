@@ -28,7 +28,7 @@ def appVersion() { return "3.1.0" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
-	name: "${appName()}",
+	name: "Samsung Speakers Integration",
 	namespace: "davegut",
 	author: "Dave Gutheinz",
 	description: "This is a Service Manager for Samsung WiFi speakers and soundbars.",
