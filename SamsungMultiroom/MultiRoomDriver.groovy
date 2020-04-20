@@ -36,7 +36,7 @@ metadata {
 	definition (name: "Samsung Wifi Speaker",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://github.com/DaveGut/Hubitat_Samsung-WiFi-Audio/blob/master/DeviceDriver/SamsungWifiSpeaker.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomDriver.groovy"
 			   ){
 		capability "MusicPlayer"
 		capability "AudioVolume"
