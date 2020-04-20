@@ -27,7 +27,7 @@ metadata {
 	definition (name: "bleBox shutterBox",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/shutterBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/shutterBox.groovy"
 			   ) {
 		capability "Window Shade"
 		capability "Refresh"
