@@ -28,7 +28,7 @@ metadata {
 	definition (name: "Kasa Plug Switch",
     			namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: " https://raw.githubusercontent.com/DaveGut/Hubitat-TP-Link-Integration/master/DeviceDrivers/TP-LinkPlug-Switch(Hubitat).groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Plug-Switch.groovy"
 			   ) {
 		capability "Switch"
 		capability "Actuator"
