@@ -25,7 +25,7 @@ metadata {
 	definition (name: "bleBox switchBox",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/switchBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBox.groovy"
 			   ) {
 		capability "Switch"
         capability "Actuator"
