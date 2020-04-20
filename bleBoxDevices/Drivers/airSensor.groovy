@@ -25,7 +25,7 @@ metadata {
 	definition (name: "bleBox airSensor",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/airSensor.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/airSensor.groovy"
 			   ) {
 		capability "Sensor"
 		attribute "PM_1_Measurement", "string"
@@ -174,12 +174,12 @@ def commandParse(response) {
         default: airQualityLevel = "Very High"
     }
 
-	sendEvent(name: "PM_1_Measurement", value: pm1Value, unit: 'µg/m³')
+	sendEvent(name: "PM_1_Measurement", value: pm1Value, unit: 'Âµg/mÂ³')
 	sendEvent(name: "PM_1_Trend", value: pm1Trend)
-	sendEvent(name: "PM_2_5_Measurement", value: pm25Value, unit: 'µg/m³')
+	sendEvent(name: "PM_2_5_Measurement", value: pm25Value, unit: 'Âµg/mÂ³')
 	sendEvent(name: "PM_2_5_Trend", value: pm25Trend)
     sendEvent(name: "pm2_5Quality", value: pm25Quality)
-	sendEvent(name: "PM_10_Measurement", value: pm10Value, unit: 'µg/m³')
+	sendEvent(name: "PM_10_Measurement", value: pm10Value, unit: 'Âµg/mÂ³')
 	sendEvent(name: "PM_10_Trend", value: pm10Trend)
     sendEvent(name: "pm10Quality", value: pm10Quality)
    	sendEvent(name: "airQuality", value: airQuality, unit: "CAQI")
