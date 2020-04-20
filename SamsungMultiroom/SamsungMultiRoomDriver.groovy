@@ -26,9 +26,11 @@ and limitations under the  License.
 		f.	Tested for > 40 hours, correcting any errors as encountered.
 07.18	3.0.02	Updated playTrack, playTrackAndRestore, and playTrackAndResume to
 		accommodate duration in the track data space.		
+2020
+04.20	3.1.0	Update for Hubitat Package Manager
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.0.01" }
+def driverVer() { return "3.1.0" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
