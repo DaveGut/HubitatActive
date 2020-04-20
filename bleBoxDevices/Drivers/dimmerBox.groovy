@@ -27,7 +27,7 @@ metadata {
 	definition (name: "bleBox dimmerBox",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/bleBox-Hubitat/master/Drivers/dimmerBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/dimmerBox.groovy"
 			   ) {
 		capability "Light"
 		capability "Switch Level"
