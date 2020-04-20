@@ -28,7 +28,7 @@ metadata {
 	definition (name: "bleBox gateBox",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/Hubitat/master/bleBox/Drivers/gateBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/gateBox.groovy"
 			   ) {
 		capability "Momentary"
 		capability "Contact Sensor"
