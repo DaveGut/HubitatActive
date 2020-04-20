@@ -1,0 +1,24 @@
+{
+  "author": "David Gutheinz",
+  "gitHubUrl": "https://github.com/DaveGut/HubitatActive",
+  "packages": [
+    {
+      "name": "Kasa Plugs, Switches and Bulbs",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
+      "description": "Kasa Plugs, switches, and Bulbs Integration"
+    },
+    {
+      "name": "BleBox Device Integration",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/packageManifest.json",
+      "description": "BleBox Devices Integration"
+    },
+    {
+      "name": "Samsung MultiRoom Speakers",
+      "category": "Notification",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/packageManifest.json",
+      "description": "Samsung MultiRoom Speaker Integration"
+    }
+  ]
+}
