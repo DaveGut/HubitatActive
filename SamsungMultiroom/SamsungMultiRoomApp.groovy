@@ -19,10 +19,12 @@ and limitations under the  License.
 		a.	Updated driver data structure
 		b.	Group data gathering centered in app vice driver.
 		c.	Add importUrl allowing future updates via import button in app editor.
+2020
+04.20	3.1.0	Update for Hubitat Package Manager
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 
 import org.json.JSONObject
-def appVersion() { return "3.0.01" }
+def appVersion() { return "3.1.0" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
