@@ -1,0 +1,26 @@
+{
+  "packageName": "Samsung MultiRoom Speakers",
+  "author": "Dave Gutheinz",
+  "version": "3.1.0",
+  "minimumHEVersion": "2.1.9",
+  "dateReleased": "2020-04-20",
+  "apps": [
+    {
+      "id": "5cce274d-6d84-4a56-8533-6e4a61691242",
+      "name": "Samsung Speakers Integration",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomApp.groovy",
+      "required": true,
+      "oauth": false
+    }
+  ],
+  "drivers": [
+    {
+      "id": "689ef827-5405-41ea-98eb-79688af0ddd8",
+      "name": "Samsung Wifi Speaker",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomDriver.groovy",
+      "required": true
+    }
+  ]
+}
