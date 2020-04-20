@@ -19,9 +19,10 @@ open API documentation for development and is intended for integration into the 
 					b.	Added configure method that sets as dimmable or undimmable.
 					c.	Combined two dimmerBox drivers into one.
 10.01.19	1.3.01. Updated error handling.
+04.20.20	1.4.0	Hubitat Package Manager Update
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.3.01" }
+def driverVer() { return "1.4.0" }
 
 metadata {
 	definition (name: "bleBox dimmerBox",
