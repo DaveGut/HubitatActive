@@ -38,7 +38,7 @@ metadata {
     definition (name: "Blink System through IFTTT",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: ""
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/BlinkVirtDevices/BlinkSystemVirtual.groovy"
 			   ) {
         capability "Switch"
         capability "Refresh"
