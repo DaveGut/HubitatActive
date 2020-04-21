@@ -38,7 +38,7 @@ metadata {
     definition (name: "Blink Motion Detector through IFTTT",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: ""
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/BlinkVirtDevices/BlinkMotionVirtual.groovy"
 			   ) {
         capability "Switch"
         capability "Motion Sensor"
