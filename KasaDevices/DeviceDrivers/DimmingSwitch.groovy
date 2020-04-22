@@ -31,7 +31,7 @@ metadata {
 	definition (name: "Kasa Dimming Switch",
     			namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/DimingSwitch.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/DimmingSwitch.groovy"
 			   ) {
 		capability "Switch"
 		capability "Actuator"
