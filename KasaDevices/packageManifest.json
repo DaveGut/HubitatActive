@@ -1,9 +1,9 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "5.1.0",
-  "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-04-20",
+  "version": "5.1.1",
+  "minimumHEVersion": "2.2.0",
+  "dateReleased": "2020-04-23",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
