@@ -7,4 +7,4 @@ Update to version 3.0.
 <img src="https://github.com/DaveGut/HubitatActive/blob/master/SamsungMultiroom/Install%20Notes.jpg" align="center"/>
 
 # Example Hubitat Dashboard(TM)
-<img src="https://github.com/DaveGut/Hubitat-Samsung-WiFi-Audio/blob/master/Dashboard1.jpg" align="center"/>
+<img src="https://github.com/DaveGut/HubitatActive/blob/master/SamsungMultiroom/Documents/Dashboard1.jpg" align="center"/>
