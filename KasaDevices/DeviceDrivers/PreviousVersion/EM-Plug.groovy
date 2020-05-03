@@ -22,8 +22,9 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 		b.	Sending multiple command for on/off eliminating need to send separate status command.
 		c.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
 04.20	5.1.0	Update for Hubitat Program Manager
+05.03	5.1.0.1	Update to correct Power Polling Function.
 =======================================================================================================*/
-def driverVer() { return "5.1.0" }
+def driverVer() { return "5.1.0.1" }
 metadata {
 	definition (name: "Kasa EM Plug",
     			namespace: "davegut",
@@ -132,15 +133,11 @@ def commandResponse(response) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 	}
 	logInfo("commandResponse: switch: ${onOff}")
-	if (!emFunction) {
-		if (state.pollFreq > 0) {
-			runIn(state.pollFreq, quickPoll)
-		}
-	} else {
-		sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerResponse")
-		if (state.pollFreq > 0) {
-			runIn(state.pollFreq, powerPoll)
-		}
+	sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerResponse")
+	if (!emFunction && state.pollFreq > 0) {
+		runIn(state.pollFreq, quickPoll)
+	} else if (emFunction && state.pollFreq>0) {
+		runIn(state.pollFreq, powerPoll)
 	}
 }
 
@@ -307,12 +304,10 @@ def setPollFreq(interval = 0) {
 }
 
 def quickPoll() {
-	logDebug("quickPoll: executing a quickPoll")
 	sendCmd("""{"system" :{"get_sysinfo" :{}}}""", "quickPollResponse")
 }
 
 def quickPollResponse(response) {
-	logDebug("quickPollResponse")
 	def status = parseInput(response).system.get_sysinfo
 	def onOff = "on"
 	if (status.relay_state == 0) { onOff = "off" }
@@ -326,12 +321,12 @@ def quickPollResponse(response) {
 }
 	
 def powerPoll() {
-	sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerResponse")
+	sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerPollResponse")
 }
 
 def powerPollResponse(response) {
 	logDebug("powerPollResponse")
-	def status = parseInput(response).emeter.realtime
+	def status = resp.emeter.get_realtime
 	def power = status.power
 	if (power == null) { power = status.power_mw / 1000 }
 	power = (0.5 + Math.round(100*power)/100).toInteger()
