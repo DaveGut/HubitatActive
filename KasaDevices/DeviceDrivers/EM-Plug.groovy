@@ -23,8 +23,9 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 		c.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
 04.20	5.1.0	Update for Hubitat Program Manager
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
+05.03	5.1.1.1	Update to correct power quick polling function errors.
 =======================================================================================================*/
-def driverVer() { return "5.1.1" }
+def driverVer() { return "5.1.1.1" }
 metadata {
 	definition (name: "Kasa EM Plug",
     			namespace: "davegut",
@@ -128,15 +129,11 @@ def commandResponse(response) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 	}
 	logInfo("commandResponse: switch: ${onOff}")
-	if (!emFunction) {
-		if (state.pollFreq > 0) {
-			runIn(state.pollFreq, quickPoll)
-		}
-	} else {
-		sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerResponse")
-		if (state.pollFreq > 0) {
-			runIn(state.pollFreq, powerPoll)
-		}
+	sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerResponse")
+	if (!emFunction && state.pollFreq > 0) {
+		runIn(state.pollFreq, quickPoll)
+	} else if (emFunction && state.pollFreq>0) {
+		runIn(state.pollFreq, powerPoll)
 	}
 }
 
@@ -326,13 +323,13 @@ def quickPollResponse(response) {
 }
 	
 def powerPoll() {
-	sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerResponse")
+	sendCmd("""{"emeter":{"get_realtime":{}}}""", "powerPollResponse")
 }
 
 def powerPollResponse(response) {
 	def resp = parseInput(response)
 	if (resp == "commsError") {return }
-	def status = resp.emeter.realtime
+	def status = resp.emeter.get_realtime
 	def power = status.power
 	if (power == null) { power = status.power_mw / 1000 }
 	power = (0.5 + Math.round(100*power)/100).toInteger()
