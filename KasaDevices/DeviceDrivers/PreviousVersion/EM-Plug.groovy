@@ -26,7 +26,7 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 =======================================================================================================*/
 def driverVer() { return "5.1.0.1" }
 metadata {
-	definition (name: "Kasa EM Plug",
+	definition (name: "XXXKasa EM Plug",
     			namespace: "davegut",
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Plug.groovy"
@@ -326,7 +326,7 @@ def powerPoll() {
 
 def powerPollResponse(response) {
 	logDebug("powerPollResponse")
-	def status = resp.emeter.get_realtime
+	def status = parseInput(response).emeter.get_realtime
 	def power = status.power
 	if (power == null) { power = status.power_mw / 1000 }
 	power = (0.5 + Math.round(100*power)/100).toInteger()
