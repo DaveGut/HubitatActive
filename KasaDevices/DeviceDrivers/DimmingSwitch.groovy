@@ -26,6 +26,7 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 		c.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
 04.20	5.1.0	Update for Hubitat Program Manager
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
+05.08	5.1.1.1	Fixed error in refresh command.
 =======================================================================================================*/
 def driverVer() { return "5.1.1" }
 metadata {
@@ -119,7 +120,7 @@ def setLevel(percentage, transition = null) {
 
 def refresh() {
 	logDebug("refresh")
-	sendCmd("""{"system" :{"get_sysinfo" :{}}}""", "statusResponse")
+	sendCmd("""{"system" :{"get_sysinfo" :{}}}""", "commandResponse")
 }
 
 def commandResponse(response) {
