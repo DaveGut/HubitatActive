@@ -28,7 +28,7 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
 05.08	5.1.1.1	Fixed error in refresh command.
 =======================================================================================================*/
-def driverVer() { return "5.1.1" }
+def driverVer() { return "5.1.1.1" }
 metadata {
 	definition (name: "Kasa Dimming Switch",
     			namespace: "davegut",
