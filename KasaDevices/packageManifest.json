@@ -4,6 +4,8 @@
   "version": "5.1.1",
   "minimumHEVersion": "2.2.0",
   "dateReleased": "2020-04-23",
+  "documentationLink": "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
+  "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
