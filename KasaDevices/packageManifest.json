@@ -19,7 +19,7 @@
   "drivers": [
     {
       "id": "0ad65cbc-b996-49ae-8586-bfe0b4883db1",
-      "name": "Kasa CT Bulb",
+      "name": "ColorTempBulbs LB120 KL120",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy",
       "required": false
