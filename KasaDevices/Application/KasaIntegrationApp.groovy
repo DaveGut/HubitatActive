@@ -607,7 +607,7 @@ def deviceReboot() {
 	sendDeviceCmd(device.value.ip,
 				  """{"${preamble}":{"reboot":{"delay":3}}}""",
 				  "rebootResponse")
-	app?.removeSetting("removeDevice")
+	app?.removeSetting("rebootDevice")
 }
 
 def rebootResponse(response) {
