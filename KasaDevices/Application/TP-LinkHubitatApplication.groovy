@@ -9,10 +9,11 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		Removed test code.  Tested Update Method.
 04.20	5.1.0	Update for Hubitat Package Manager
 04.21	5.1.1	Update for HUB version 2.2.0, specifically UDP parseLanMessage = true
-06.01	5.2.0	Added instructions to main page.  On updating IP address for devices, force running
-				method "updated" on device.
+06.01	5.2.0	a.	Rework the Driver interface.
+				b.	Added Remove Devices and Kasa Tools to driver.
+				c.	Corrected to parse fragmented returns from devices.				
 =======================================================================================================*/
-def appVersion() { return "A5.2.0" }
+def appVersion() { return "5.2.0" }
 import groovy.json.JsonSlurper
 definition(
 	name: "Kasa Integration",
@@ -86,8 +87,13 @@ def startPage() {
 
 def parseDeviceData(response) {
 	def resp = parseLanMessage(response.description)
+	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
+	plainResp = inputXOR(resp.payload)
+	if (plainResp.length() > 1020) {
+		plainResp = plainResp.substring(0,plainResp.indexOf("preferred")-2) + "}}}"
+	}
 	def parser = new JsonSlurper()
-	def cmdResp = parser.parseText(inputXOR(resp.payload)).system.get_sysinfo
+	def cmdResp = parser.parseText(plainResp).system.get_sysinfo
 	def ip = convertHexToIP(resp.ip)
 	logDebug("parseDeviceData: ${ip} // ${cmdResp}")
 	def dni
@@ -191,7 +197,8 @@ def mainPage() {
 	if (debugLog == true) { runIn(1800, debugOff) }
 	def devices = state.devices
 	
-	def foundDevices = "Kasa App Alias  Inst Driver Hubitat Driver ID"
+//	def foundDevices = "Kasa App Alias  Inst Driver Hubitat Driver ID"
+	def foundDevices = "Kasa App Alias  Inst Hubitat Driver ID"
 	def count = 0
 	devices.each {
 		def installed = "No"
@@ -199,11 +206,11 @@ def mainPage() {
 		def driverVer = ""							   
 		if (child) {
 			installed = "Yes"
-			driverVer = child.driverVer()
+//			driverVer = child.driverVer()
+//			if (drriverVer == null) { driverVer = "" }
 		}
-		plugNo = it.value.plugNo
-		if (plugNo == null) { plugNo = "" }
-		foundDevices += "\n${it.value.alias.padRight(15)} ${installed.padRight(4)} ${driverVer.padRight(6)} Kasa ${it.value.type}"
+//		foundDevices += "\n${it.value.alias.padRight(15)} ${installed.padRight(4)} ${driverVer.padRight(6)} Kasa ${it.value.type}"
+		foundDevices += "\n${it.value.alias.padRight(15)} ${installed.padRight(4)} Kasa ${it.value.type}"
 		count += 1
 	}
 	return dynamicPage(name:"mainPage",
@@ -221,7 +228,8 @@ def mainPage() {
 				title: "<b>Advanced Kasa Device Tools</b>",
 				description: "Bind/Unbind/Reboot Devices"
 			paragraph "<b>${count} Devices are in the Application Database</b>"
-			paragraph "<textarea rows=10 cols=50 readonly='true'>${foundDevices}</textarea>"
+//			paragraph "<textarea rows=10 cols=50 readonly='true'>${foundDevices}</textarea>"
+			paragraph "<textarea rows=10 cols=40 readonly='true'>${foundDevices}</textarea>"
 			input "debugLog", "bool", 
 				title: "Enable debug logging for 30 minutes", 
 				submitOnChange: true,
@@ -309,7 +317,6 @@ def addDevices() {
 def removeDevicesPage() {
 	def devices = state.devices
 	def installedDevices = [:]
-//	FIX TO BASE ON CHILDREN WITH DATA ADDED FROM DEVICES.  IF DEVICE NOT FOUND, MARK CHILD AS LOST DEVICE
 	devices.each {
 		def isChild = getChildDevice(it.value.dni)
 		if (isChild) {
