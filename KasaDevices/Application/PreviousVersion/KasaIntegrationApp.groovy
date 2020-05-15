@@ -14,10 +14,11 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 		a.	Changed version number to Ln.n.n format.
 		b.	Updated error handling request from children.
 03.03	Automated installation using app verified.  Updated doc and import links.
-Removed test code.  Tested Update Method.
+		Removed test code.  Tested Update Method.
 04.20	5.1.0	Update for Hubitat Package Manager
+04.21	5.1.1	Update for HUB version 2.2.0, specifically UDP parseLanMessage = true
 =======================================================================================================*/
-def appVersion() { return "5.1.0" }
+def appVersion() { return "5.1.1" }
 import groovy.json.JsonSlurper
 definition(
 	name: "Kasa Integration",
@@ -228,7 +229,6 @@ def updateDevices(dni, ip, alias, model, type, plugNo, plugId) {
 	devices << ["${dni}" : device]
 	def child = getChildDevice(dni)
 	if (child) {
-		logInfo("updateDevices: ${alias} IP updated to ${ip}")
 		child.updateDataValue("deviceIP", ip)
 		child.updateDataValue("applicationVersion", appVersion())
 		logInfo("updateDevices: ${alias} IP updated to ${ip}")
@@ -315,7 +315,7 @@ def updateDeviceIps(response) {
 }
 
 def findDevices(pollInterval, action) {
-	logInfo("findDevices: This process will generate a LOT of WARNING messages related to UDP Timeout.  THIS IS NORMAL!")
+	logInfo("findDevices: Searching the LAN for your Kasa Devices")
 	def hub
 	try { hub = location.hubs[0] }
 	catch (error) { 
@@ -340,6 +340,7 @@ private sendCmd(ip, action) {
 		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
 		 destinationAddress: "${ip}:9999",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
+		 parseWarning: true,
 		 timeout: 1,
 		 callback: action])
 	sendHubCommand(myHubAction)

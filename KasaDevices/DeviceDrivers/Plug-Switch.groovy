@@ -1,30 +1,15 @@
-/*
-Kasa Local Device Driver
-		Copyright Dave Gutheinz
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file except in compliance with the
-License. You may obtain a copy of the License at: http://www.apache.org/licenses/LICENSE-2.0.
-Unless required by applicable law or agreed to in writing,software distributed under the License is distributed on an 
-"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific 
-language governing permissions and limitations under the License.
-
-DISCLAIMER:  This Applicaion and the associated Device Drivers are in no way sanctioned or supported by TP-Link.  
-All  development is based upon open-source data on the TP-Link devices; primarily various users on GitHub.com.
-
+/*	Kasa Device Driver Series
+Copyright Dave Gutheinz
+License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== 2020 History =====
-02.28	New version 5.0
-		a.	Changed version number to Ln.n.n format where the L refers to LOCAL installation.
-		b.	Moved Quick Polling from preferences to a command with number (seconds) input value.  A value of
-			blank or 0 is disabled.  A value below 5 is read as 5.
-		c.	Upaded all drivers to eight individual divers.
-03.03	Manual install and functional testing complete.  Auto Installation testing complete.
-04.08	L5.0.2.  Initial development started for next version:
-		a.	Add type to attribute "switch",
-		b.	Sending multiple command for on/off eliminating need to send separate status command.
-		c.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
+02.28	New version 5.0.  Moved Quick Polling from preferences to a command with number (seconds)
+		input value.  A value of blank or 0 is disabled.  A value below 5 is read as 5.
 04.20	5.1.0	Update for Hubitat Program Manager
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
+06.01	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
+				b.	Integrated method parseInput into responses and deleted
 =======================================================================================================*/
-def driverVer() { return "5.1.1" }
+def driverVer() { return "5.2.0" }
 metadata {
 	definition (name: "Kasa Plug Switch",
     			namespace: "davegut",
@@ -87,39 +72,26 @@ def updated() {
 	refresh()
 }
 
+
+//	Common to all Kasa single Plugs and Switches
 def on() {
 	logDebug("on")
-	sendCmd("""{"system":{"set_relay_state":{"state":1}},""" +
-			""""system" :{"get_sysinfo" :{}}}""", 
+	sendCmd(outputXOR("""{"system":{"set_relay_state":{"state":1}},""" +
+					  """"system" :{"get_sysinfo" :{}}}"""),
 			"commandResponse")
 }
 
 def off() {
 	logDebug("off")
-	sendCmd("""{"system":{"set_relay_state":{"state":0}},""" +
-			""""system" :{"get_sysinfo" :{}}}""", 
+	sendCmd(outputXOR("""{"system":{"set_relay_state":{"state":0}},""" +
+					  """"system" :{"get_sysinfo" :{}}}"""),
 			"commandResponse")
 }
 
 def refresh() {
 	logDebug("refresh")
-	sendCmd("""{"system" :{"get_sysinfo" :{}}}""", "commandResponse")
-}
-
-def commandResponse(response) {
-	def resp = parseInput(response)
-	if (resp == "commsError") {return }
-	def status = resp.system.get_sysinfo
-	logDebug("commandResponse: status = ${status}")
-	def onOff = "on"
-	if (status.relay_state == 0) { onOff = "off" }
-	if (onOff != device.currentValue("switch")) {
-		sendEvent(name: "switch", value: onOff, type: "digital")
-	}
-	logInfo("commandResponse: switch: ${onOff}")
-	if (state.pollFreq > 0) {
-		runIn(state.pollFreq, quickPoll)
-	}
+	sendCmd("d0f281f88bff9af7d5ef94b6d1b4c09fec95e68fe187e8caf08bf68bf6",
+			"commandResponse")
 }
 
 def setPollFreq(interval = 0) {
@@ -134,25 +106,54 @@ def setPollFreq(interval = 0) {
 	}
 }
 
+
+//	Unique to Kasa Plug-Switch
+def commandResponse(response) {
+	def resp = parseLanMessage(response)
+	if(resp.type == "LAN_TYPE_UDPCLIENT") {
+		state.errorCount = 0
+		def status = parseJson(inputXOR(resp.payload)).system.get_sysinfo
+		logDebug("commandResponse: status = ${status}")
+		def onOff = "on"
+		if (status.relay_state == 0) { onOff = "off" }
+		if (onOff != device.currentValue("switch")) {
+			sendEvent(name: "switch", value: onOff, type: "digital")
+		}
+		logInfo("commandResponse: switch: ${onOff}")
+		if (state.pollFreq > 0) {
+			runIn(state.pollFreq, quickPoll)
+		}
+	} else {
+		setCommsError()
+	}
+}
+
 def quickPoll() {
-	sendCmd("""{"system" :{"get_sysinfo" :{}}}""", "quickPollResponse")
+	sendCmd("d0f281f88bff9af7d5ef94b6d1b4c09fec95e68fe187e8caf08bf68bf6",
+			"quickPollResponse")
 }
 
 def quickPollResponse(response) {
-	def resp = parseInput(response)
-	if (resp == "commsError") {return }
-	def status = resp.system.get_sysinfo
-	def onOff = "on"
-	if (status.relay_state == 0) { onOff = "off" }
-	if (onOff != device.currentValue("switch")) {
-		sendEvent(name: "switch", value: onOff, type: "physical")
-		logInfo("quickPoll: switch: ${onOff}")
-	}
-	if (state.pollFreq > 0) {
-		runIn(state.pollFreq, quickPoll)
+	def resp = parseLanMessage(response)
+	if(resp.type == "LAN_TYPE_UDPCLIENT") {
+		state.errorCount = 0
+		def status = parseJson(inputXOR(resp.payload)).system.get_sysinfo
+		def onOff = "on"
+		if (status.relay_state == 0) { onOff = "off" }
+		if (onOff != device.currentValue("switch")) {
+			sendEvent(name: "switch", value: onOff, type: "digital")
+		}
+		logInfo("quickPollResponse: switch: ${onOff}")
+		if (state.pollFreq > 0) {
+			runIn(state.pollFreq, quickPoll)
+		}
+	} else {
+		setCommsError()
 	}
 }
-	
+
+
+//	Common to all Kasa Drivers
 def logInfo(msg) {
 	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
 }
@@ -169,10 +170,10 @@ def logDebug(msg){
 def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }
 
 private sendCmd(command, action) {
-	logDebug("sendCmd: command = ${command} // action = ${action}")
+	logDebug("sendCmd: action = ${action}")
 	state.lastCommand = [command: "${command}", action: "${action}"]
 	sendHubCommand(new hubitat.device.HubAction(
-		outputXOR(command),
+		command,
 		hubitat.device.Protocol.LAN,
 		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
 		 destinationAddress: "${getDataValue("deviceIP")}:9999",
@@ -181,23 +182,6 @@ private sendCmd(command, action) {
 		 timeout: 2,
 		 callback: action]
 	))
-}
-
-def parseInput(response) {
-	def resp = parseLanMessage(response)
-	if(resp.type != "LAN_TYPE_UDPCLIENT") {
-		def errorString = new String(resp.payload.decodeBase64())
-		logWarn("parseInput: Response error: ${errorString}. Check device physical status and IP Address.")
-		setCommsError()
-		return "commsError"
-	} else {
-		state.errorCount = 0
-		try {
-			return parseJson(inputXOR(resp.payload))
-		} catch (e) {
-			logWarn("parseInput: JsonParse failed. Likely fragmented return from device. error = ${e}.")
-		}
-	}
 }
 
 def setCommsError() {
@@ -209,21 +193,23 @@ def setCommsError() {
 		repeatCommand()
 	} else if (state.errorCount == 3) {
 		if (getDataValue("applicationVersion")) {
-			logWarn("setCommsError: Attempting to update Kasa Device IPs.")
+			logWarn("setCommsError: Commanding parent to check for IP changes.")
 			parent.requestDataUpdate()
 			runIn(30, repeatCommand)
 		} else {
 			runIn(3, repeatCommand)
 		}
 	} else if (state.errorCount == 4) {	
-		def warnText = "<b>setCommsError</b>: Your device is not reachable.\r" +
-						"Complete corrective action then execute any command to continue"
+		def warnText = "setCommsError: \n<b>Your device is not reachable. Potential corrective Actions:\r" +
+			"a.\tDisable the device if it is no longer powered on.\n" +
+			"b.\tRun the Kasa Integration Application and see if the device is on the list.\n" +
+			"c.\tIf not on the list of devices, troubleshoot the device using the Kasa App."
 		logWarn(warnText)
 	}
 }
 
 def repeatCommand() { 
-	logDebug("repeatCommand: ${state.lastCommand}")
+	logWarn("repeatCommand: ${state.lastCommand}")
 	sendCmd(state.lastCommand.command, state.lastCommand.action)
 }
 

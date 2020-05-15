@@ -22,11 +22,12 @@ All  development is based upon open-source data on the TP-Link devices; primaril
 		b.	Sending multiple command for on/off eliminating need to send separate status command.
 		c.	Add 60 and 180 minute refresh rates.  Change default to 60 minutes.
 04.20	5.1.0	Update for Hubitat Program Manager
-05.03	5.1.0.1	Update to correct Power Polling Function.
+04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
+05.03	5.1.1.1	Update to correct power quick polling function errors.
 =======================================================================================================*/
-def driverVer() { return "5.1.0.1" }
+def driverVer() { return "5.1.1.1" }
 metadata {
-	definition (name: "XXXKasa EM Plug",
+	definition (name: "Kasa EM Plug",
     			namespace: "davegut",
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Plug.groovy"
@@ -66,12 +67,6 @@ def updated() {
 	state.errorCount = 0
 	if (device.currentValue("driverVersion") != driverVer()) {
 		updateDataValue("driverVersion", driverVer())
-		if (shortPoll) {
-			state.pollFreq = shortPoll
-			removeSetting("shortPoll")
-		} else {
-			state.pollFreq = 0
-		}
 	}
 	if (!getDataValue("applicationVersion")) {
 		if (!device_IP) {
@@ -104,7 +99,6 @@ def updated() {
 	runIn(5, refresh)
 }
 
-//	Device Cloud and Local Common Methods
 def on() {
 	logDebug("on")
 	sendCmd("""{"system":{"set_relay_state":{"state":1}},""" +
@@ -125,7 +119,9 @@ def refresh() {
 }
 
 def commandResponse(response) {
-	def status = parseInput(response).system.get_sysinfo
+	def resp = parseInput(response)
+	if (resp == "commsError") {return }
+	def status = resp.system.get_sysinfo
 	logDebug("commandResponse: status = ${status}")
 	def onOff = "on"
 	if (status.relay_state == 0 || status.state == 0) { onOff = "off" }
@@ -143,6 +139,7 @@ def commandResponse(response) {
 
 def powerResponse(response) {
 	def cmdResponse = parseInput(response)
+	if (cmdResponse == "commsError") {return }
 	logDebug("powerResponse: cmdResponse = ${cmdResponse}")
 	def realtime = cmdResponse.emeter.get_realtime
 	def power = realtime.power
@@ -157,6 +154,7 @@ def powerResponse(response) {
 
 def setEngrToday(response) {
 	def cmdResponse = parseInput(response)
+	if (cmdResponse == "commsError") {return }
 	logDebug("setEngrToday: ${cmdResponse}")
 	def data = cmdResponse.emeter.get_monthstat.month_list.find { it.month == thisMonth() }
 	def energyData = data.energy
@@ -176,6 +174,7 @@ def updateStats() {
 
 def checkDateResponse(response) {
 	def cmdResponse = parseInput(response)
+	if (cmdResponse == "commsError") {return }
 	logDebug("checkDateResponse: ${cmdResponse}")
 	def data = cmdResponse.time.get_time
 	def newDate = new Date()
@@ -204,6 +203,7 @@ def changeDate(year, month, mday, hour, min, sec) {
 
 def changeDateResponse(response) { 
 	def cmdResponse = parseInput(response)
+	if (cmdResponse == "commsError") {return }
 	logInfo("changeDateResponse: cmdResponse = cmdResponse}")
 	updateStats()
 }
@@ -222,6 +222,7 @@ def today() {
 
 def setThisMonth(response) {
 	def cmdResponse = parseInput(response)
+	if (cmdResponse == "commsError") {return }
 	logDebug("setThisMonth: cmdResponse = ${cmdResponse}")
 	def data = cmdResponse.emeter.get_monthstat.month_list.find { it.month == thisMonth() }
 	def scale = "energy"
@@ -250,6 +251,7 @@ def setThisMonth(response) {
 
 def setLastMonth(response) {
 	def cmdResponse = parseInput(response)
+	if (cmdResponse == "commsError") {return }
 	logDebug("setLastMonth: cmdResponse = ${cmdResponse}")
 	def lastMonth = thisMonth() -1
 	if (lastMonth == 0) { lastMonth = 12 }
@@ -289,9 +291,7 @@ def setLastMonth(response) {
 	logInfo("Last month's energy stats set to ${energyData} // ${avgEnergy}")
 }
 
-//	Device Local Only Methods
 def setPollFreq(interval = 0) {
-	logDebug("setPollFreq: interval = ${interval}")
 	interval = interval.toInteger()
 	if (interval !=0 && interval < 5) { interval = 5 }
 	if (interval != state.pollFreq) {
@@ -308,7 +308,9 @@ def quickPoll() {
 }
 
 def quickPollResponse(response) {
-	def status = parseInput(response).system.get_sysinfo
+	def resp = parseInput(response)
+	if (resp == "commsError") {return }
+	def status = resp.system.get_sysinfo
 	def onOff = "on"
 	if (status.relay_state == 0) { onOff = "off" }
 	if (onOff != device.currentValue("switch")) {
@@ -325,8 +327,9 @@ def powerPoll() {
 }
 
 def powerPollResponse(response) {
-	logDebug("powerPollResponse")
-	def status = parseInput(response).emeter.get_realtime
+	def resp = parseInput(response)
+	if (resp == "commsError") {return }
+	def status = resp.emeter.get_realtime
 	def power = status.power
 	if (power == null) { power = status.power_mw / 1000 }
 	power = (0.5 + Math.round(100*power)/100).toInteger()
@@ -338,36 +341,6 @@ def powerPollResponse(response) {
 	if (emFunction && state.pollFreq > 0) {
 		runIn(state.pollFreq, powerPoll)
 	}
-}
-
-//	Cloud and Local Common Methods
-def setCommsError() {
-	logWarn("setCommsError")
-	state.errorCount += 1
-	if (state.errorCount > 4) {
-		return
-	} else if (state.errorCount < 3) {
-		repeatCommand()
-		logInfo("Executing attempt ${state.errorCount} to recover communications")
-	} else if (state.errorCount == 3) {
-		if (getDataValue("applicationVersion")) {
-			logWarn("setCommsError: Attempting to update Kasa Device IPs.")
-			parent.requestDataUpdate()
-			runIn(30, repeatCommand)
-		} else {
-			runIn(3, repeatCommand)
-			logInfo("Executing attempt ${state.errorCount} to recover communications")
-		}
-	} else if (state.errorCount == 4) {	
-		def warnText = "<b>setCommsError</b>: Your device is not reachable.\r" +
-						"Complete corrective action then execute any command to continue"
-		logWarn(warnText)
-	}
-}
-
-def repeatCommand() { 
-	logDebug("repeatCommand: ${state.lastCommand}")
-	sendCmd(state.lastCommand.command, state.lastCommand.action)
 }
 
 def logInfo(msg) {
@@ -385,30 +358,63 @@ def logDebug(msg){
 
 def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }
 
-//	Local Communications Methods
 private sendCmd(command, action) {
-	logDebug("sendCmd: command = ${command} // device IP = ${getDataValue("deviceIP")}, action = ${action}")
+	logDebug("sendCmd: command = ${command} // action = ${action}")
 	state.lastCommand = [command: "${command}", action: "${action}"]
-	runIn(3, setCommsError)
-	def myHubAction = new hubitat.device.HubAction(
+	sendHubCommand(new hubitat.device.HubAction(
 		outputXOR(command),
 		hubitat.device.Protocol.LAN,
 		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
 		 destinationAddress: "${getDataValue("deviceIP")}:9999",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
+		 parseWarning: true,
 		 timeout: 2,
-		 callback: action])
-	sendHubCommand(myHubAction)
+		 callback: action]
+	))
 }
 
 def parseInput(response) {
-	unschedule(setCommsError)
-	state.errorCount = 0
-	try {
-		return parseJson(inputXOR(parseLanMessage(response).payload))
-	} catch (e) {
-		logWarn("parseInput: JsonParse failed. Response = ${inputXOR(parseLanMessage(response).payload)}.")
+	def resp = parseLanMessage(response)
+	if(resp.type != "LAN_TYPE_UDPCLIENT") {
+		def errorString = new String(resp.payload.decodeBase64())
+		logWarn("parseInput: Response error: ${errorString}. Check device physical status and IP Address.")
+		setCommsError()
+		return "commsError"
+	} else {
+		state.errorCount = 0
+		try {
+			return parseJson(inputXOR(resp.payload))
+		} catch (e) {
+			logWarn("parseInput: JsonParse failed. Likely fragmented return from device. error = ${e}.")
+		}
 	}
+}
+
+def setCommsError() {
+	logWarn("setCommsError")
+	state.errorCount += 1
+	if (state.errorCount > 4) {
+		return
+	} else if (state.errorCount < 3) {
+		repeatCommand()
+	} else if (state.errorCount == 3) {
+		if (getDataValue("applicationVersion")) {
+			logWarn("setCommsError: Attempting to update Kasa Device IPs.")
+			parent.requestDataUpdate()
+			runIn(30, repeatCommand)
+		} else {
+			runIn(3, repeatCommand)
+		}
+	} else if (state.errorCount == 4) {	
+		def warnText = "<b>setCommsError</b>: Your device is not reachable.\r" +
+						"Complete corrective action then execute any command to continue"
+		logWarn(warnText)
+	}
+}
+
+def repeatCommand() { 
+	logDebug("repeatCommand: ${state.lastCommand}")
+	sendCmd(state.lastCommand.command, state.lastCommand.action)
 }
 
 private outputXOR(command) {
@@ -437,5 +443,3 @@ private inputXOR(encrResponse) {
 	}
 	return cmdResponse
 }
-
-//	end-of-file
