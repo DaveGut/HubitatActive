@@ -142,8 +142,8 @@ def quickPollResponse(response) {
 		if (status.relay_state == 0) { onOff = "off" }
 		if (onOff != device.currentValue("switch")) {
 			sendEvent(name: "switch", value: onOff, type: "digital")
+			logInfo("quickPollResponse: switch: ${onOff}")
 		}
-		logInfo("quickPollResponse: switch: ${onOff}")
 		if (state.pollFreq > 0) {
 			runIn(state.pollFreq, quickPoll)
 		}

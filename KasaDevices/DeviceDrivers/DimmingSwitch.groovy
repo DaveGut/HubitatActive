@@ -169,11 +169,12 @@ def quickPollResponse(response) {
 		if (status.relay_state == 0 || status.state == 0) { onOff = "off" }
 		if (onOff != device.currentValue("switch")) {
 			sendEvent(name: "switch", value: onOff, type: "digital")
+			logInfo("quickPollResponse: switch: ${onOff}")
 		}
 		if(status.brightness != device.currentValue("level")) {
 			sendEvent(name: "level", value: status.brightness)
+			logInfo("quickPollResponse: level: ${status.brightness}")
 		}
-		logInfo("quickPollResponse: switch: ${onOff}, level: ${status.brightness}]")
 		if (state.pollFreq > 0) {
 			runIn(state.pollFreq, quickPoll)
 		}
