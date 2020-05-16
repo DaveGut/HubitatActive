@@ -22,11 +22,11 @@ metadata {
 		command "setPollFreq", ["NUMBER"]
 	}
     preferences {
-//		if (!getDataValue("applicationVersion")) {
+		if (!getDataValue("applicationVersion")) {
 			input ("device_IP", "text", title: "Device IP", defaultValue: getDataValue("deviceIP"))
 			input ("plug_No", "enum", title: "Plug Number",
 				options: ["00", "01", "02", "03", "04", "05"])
-//		}
+		}
 		input ("refresh_Rate", "enum", title: "Device Refresh Interval (minutes)", 
 			   options: ["1", "5", "10", "15", "30", "60", "180"], defaultValue: "60")
 		input ("debug", "bool", title: "Enable debug logging", defaultValue: false)
@@ -48,7 +48,7 @@ def updated() {
 	if (device.currentValue("driverVersion") != driverVer()) {
 		updateDataValue("driverVersion", driverVer())
 	}
-//	if (!getDataValue("applicationVersion")) {
+	if (!getDataValue("applicationVersion")) {
 		if (!device_IP || !plug_No) {
 			logWarn("updated: Device IP or Plug Number is not set.")
 			return
@@ -63,7 +63,7 @@ def updated() {
 			sendCmd(outputXOR("""{"system" :{"get_sysinfo" :{}}}"""),
 					"getMultiPlugData")
 		}
-//	}
+	}
 	switch(refresh_Rate) {
 		case "1" : runEvery1Minute(refresh); break
 		case "5" : runEvery5Minutes(refresh); break
@@ -200,23 +200,6 @@ private sendCmd(command, action) {
 		 timeout: 2,
 		 callback: action]
 	))
-}
-
-def parseInput(response) {
-	def resp = parseLanMessage(response)
-	if(resp.type != "LAN_TYPE_UDPCLIENT") {
-		def errorString = new String(resp.payload.decodeBase64())
-		logWarn("parseInput: Response error: ${errorString}. Check device physical status and IP Address.")
-		setCommsError()
-		return "commsError"
-	} else {
-		state.errorCount = 0
-		try {
-			return parseJson(inputXOR(resp.payload))
-		} catch (e) {
-			logWarn("parseInput: JsonParse failed. Likely fragmented return from device. error = ${e}.")
-		}
-	}
 }
 
 def setCommsError() {
