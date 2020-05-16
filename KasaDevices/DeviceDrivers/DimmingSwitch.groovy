@@ -201,7 +201,7 @@ def logDebug(msg){
 def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }
 
 private sendCmd(command, action) {
-	logDebug("sendCmd: command = ${command} // action = ${action}")
+	logDebug("sendCmd: action = ${action}")
 	state.lastCommand = [command: "${command}", action: "${action}"]
 	sendHubCommand(new hubitat.device.HubAction(
 		command,
