@@ -7,9 +7,3 @@ Controlling a Hubitat thermostat via Alexa is not automatic (since the Amazon Ec
 2.  Virtual AcHeat.  Sets thermostat heat set point via the alexa command "set heat to (temperature)" using the "AC Heat Rule"
 3.  Virtual AcFan.  Turns on (via rule "AC Fan On") or to auto (via rule "AC Fan Auto") using the attribute switch (off = auto).
 
-# Rules
-
-
-
-
-
