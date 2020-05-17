@@ -8,8 +8,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
 06.01	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
 				b.	Integrated method parseInput into responses and deleted
+06.01	5.2.0.1	Update to date handling to avoid using state.currDate
 =======================================================================================================*/
-def driverVer() { return "5.2.0" }
+def driverVer() { return "5.2.0.1" }
 metadata {
 	definition (name: "Kasa EM Multi Plug",
     			namespace: "davegut",
@@ -51,6 +52,7 @@ def updated() {
 	log.info "Updating .."
 	unschedule()
 	state.errorCount = 0
+	if (state.currDate) { state.remove("currDate") }
 	if (device.currentValue("driverVersion") != driverVer()) {
 		updateDataValue("driverVersion", driverVer())
 	}
@@ -230,8 +232,9 @@ def powerResponse(response) {
 			sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W")
 			logInfo("setEngrToday: [power: ${power}]")
 		}
+		def year = new Date().format("yyyy").toInteger()
 		sendCmd(outputXOR("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-						  """"emeter":{"get_monthstat":{"year": ${thisYear()}}}}"""),
+						  """"emeter":{"get_monthstat":{"year": ${year}}}}"""),
 				"setEngrToday")
 	} else {
 		setCommsError()
@@ -244,7 +247,8 @@ def setEngrToday(response) {
 		state.errorCount = 0
 		def cmdResponse = parseJson(inputXOR(resp.payload))
 		logDebug("setEngrToday: ${cmdResponse}")
-		def data = cmdResponse.emeter.get_monthstat.month_list.find { it.month == thisMonth() }
+		def month = new Date().format("M").toInteger()
+		def data = cmdResponse.emeter.get_monthstat.month_list.find { it.month == month }
 		def energyData = data.energy
 		if (energyData == null) { energyData = data.energy_wh/1000 }
 		energyData -= device.currentValue("currMonthTotal")
@@ -260,67 +264,10 @@ def setEngrToday(response) {
 
 def updateStats() {
 	logDebug("updateStats")
-	sendCmd(outputXOR("""{"time":{"get_time":null}}"""), "checkDateResponse")
-}
-
-def checkDateResponse(response) {
-	def resp = parseLanMessage(response)
-	if(resp.type == "LAN_TYPE_UDPCLIENT") {
-		state.errorCount = 0
-		def cmdResponse = parseJson(inputXOR(resp.payload))
-		logDebug("checkDateResponse: ${cmdResponse}")
-		def data = cmdResponse.time.get_time
-		def newDate = new Date()
-		def year = newDate.format("yyyy").toInteger()
-		def month = newDate.format("M").toInteger()
-		def day = newDate.format("d").toInteger()
-		if(year == data.year.toInteger() && month == data.month.toInteger() && day == data.mday.toInteger()) {
-			state.currDate = [data.year, data.month, data.mday]
-			pauseExecution(1000)
-			logInfo("checkDateResponse: currDate = ${state.currDate}")
-			sendCmd(outputXOR("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-							  """"emeter":{"get_monthstat":{"year": ${thisYear()}}}}"""),
-					"setThisMonth")
-		} else {
-			logInfo("checkDateResponse: date is not current.")
-			def hour = newDate.format("H").toInteger()
-			def min = newDate.format("m").toInteger()
-			def sec = newDate.format("s").toInteger()
-			changeDate(year, month, day, hour, min, sec)
-		}
-	} else {
-		setCommsError()
-	}
-}
-
-def changeDate(year, month, mday, hour, min, sec) {
-	logInfo("changeDate: Updating date to ${year} /${month} /${mday} /${hour} /${min} /${sec}")
-	sendCmd(outputXOR("""{"time":{"set_timezone":{"year":${year},"month":${month},"mday":${mday},"hour":${hour},"min":${min},"sec":${sec},"index":55}}}"""), 
-			"changeDateResponse")
-}
-
-def changeDateResponse(response) { 
-	def resp = parseLanMessage(response)
-	if(resp.type == "LAN_TYPE_UDPCLIENT") {
-		state.errorCount = 0
-		def cmdResponse = parseJson(inputXOR(resp.payload))
-		logInfo("changeDateResponse: cmdResponse = cmdResponse}")
-		updateStats()
-	} else {
-		setCommsError()
-	}
-}
-
-def thisYear() {
-	return state.currDate[0].toInteger()
-}
-
-def thisMonth() {
-	return state.currDate[1].toInteger()
-}
-
-def today() {
-	return state.currDate[2].toInteger()
+	def year = new Date().format("yyyy").toInteger()
+	sendCmd(outputXOR("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
+					  """"emeter":{"get_monthstat":{"year": ${year}}}}"""),
+			"setThisMonth")
 }
 
 def setThisMonth(response) {
@@ -329,7 +276,10 @@ def setThisMonth(response) {
 		state.errorCount = 0
 		def cmdResponse = parseJson(inputXOR(resp.payload))
 		logDebug("setThisMonth: cmdResponse = ${cmdResponse}")
-		def data = cmdResponse.emeter.get_monthstat.month_list.find { it.month == thisMonth() }
+		def year = new Date().format("yyyy").toInteger()
+		def month = new Date().format("M").toInteger()
+		def day = new Date().format("d").toInteger()
+		def data = cmdResponse.emeter.get_monthstat.month_list.find { it.month == month }
 		def scale = "energy"
 		def energyData
 		if (data == null) { energyData = 0 }
@@ -338,7 +288,6 @@ def setThisMonth(response) {
 			energyData = data."${scale}"
 		}
 		def avgEnergy = 0
-		def day = today()
 		if (day !=1) { avgEnergy = energyData/(day - 1) }
 		if (scale == "energy_wh") {
 			energyData = energyData/1000
@@ -349,8 +298,7 @@ def setThisMonth(response) {
 		sendEvent(name: "currMonthTotal", value: energyData, descriptionText: "KiloWatt Hours", unit: "KWH")
 		sendEvent(name: "currMonthAvg", value: avgEnergy, descriptionText: "KiloWatt Hours per Day", unit: "KWH/D")
 		logInfo("This month's energy stats set to ${energyData} // ${avgEnergy}")
-		def year = thisYear()
-		if (thisMonth() == 1) { year = year -1 }
+		if (month == 1) { year = year -1 }
 		sendCmd(outputXOR("""{"context":{"child_ids":["${getDataValue("plugId")}"]},"emeter":""" +
 						  """{"get_monthstat":{"year": ${year}}}}"""),
 				"setLastMonth")
@@ -365,7 +313,9 @@ def setLastMonth(response) {
 		state.errorCount = 0
 		def cmdResponse = parseJson(inputXOR(resp.payload))
 		logDebug("setLastMonth: cmdResponse = ${cmdResponse}")
-		def lastMonth = thisMonth() -1
+		def year = new Date().format("yyyy").toInteger()
+		def month = new Date().format("M").toInteger()
+		def lastMonth = month - 1
 		if (lastMonth == 0) { lastMonth = 12 }
 		def monthLength
 		switch(lastMonth) {
@@ -377,7 +327,6 @@ def setLastMonth(response) {
 				break
 			case 2:
 				monthLength = 28
-				def year = thisYear()
 				if (year == 2020 || year == 2024 || year == 2028) { monthLength = 29 }
 				break
 			default:
