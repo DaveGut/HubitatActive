@@ -1,14 +1,15 @@
-# Hubitat-KasaTools
+# Alexa Control of a Hubitat Thermostat
 
-This Hubitat Environment application provides Kasa device tools useful but not incorporated into the normal SmartApp and driver.  This is an interim release and the future is integration into the Hubitat App for TP-Link integration.
+Controlling a Hubitat thermostat via Alexa is not automatic (since the Amazon Echo Skill does not support thermostats).  As a work-around, I created several virtual devices drivers/devices, Hubitat rules, and one Amazon Echo routine.
 
-There are three tools:
+## Virtual devices
+1.  virtualAcCool.  Sets thermostat cool set point via the alexa command "set cool to (temperature)" using the "AC Cool Rule".  Triggers the "AC Status" rule (notify via echo speaks) via the alexa routine "get house temperature" using the attribute switch set to on.
+2.  Virtual AcHeat.  Sets thermostat heat set point via the alexa command "set heat to (temperature)" using the "AC Heat Rule"
+3.  Virtual AcFan.  Turns on (via rule "AC Fan On") or to auto (via rule "AC Fan Auto") using the attribute switch (off = auto).
 
-## Unbind Device from the Kasa Cloud
-Allows user to remove cloud processing of the Kasa device (same as the old, but no longer available, Kasa App seting "Local Only".
+# Rules
 
-## Bind Device to the Kasa Cloud
 
-## Reboot a Kasa Device
 
-To operate the tools, you will need the IP address and the type of device.
+
+
