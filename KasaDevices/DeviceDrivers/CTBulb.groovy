@@ -260,7 +260,7 @@ private sendCmd(command, action) {
 		 destinationAddress: "${getDataValue("deviceIP")}:9999",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
 		 parseWarning: true,
-		 timeout: 2,
+		 timeout: 5,
 		 callback: action]
 	))
 }
