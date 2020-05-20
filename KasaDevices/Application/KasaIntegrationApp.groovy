@@ -11,7 +11,8 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 04.21	5.1.1	Update for HUB version 2.2.0, specifically UDP parseLanMessage = true
 06.01	5.2.0	a.	Rework the Driver interface.
 				b.	Added Remove Devices and Kasa Tools to driver.
-				c.	Corrected to parse fragmented returns from devices.				
+				c.	Corrected to parse fragmented returns from devices.		
+				d.	Added ability to control device led
 =======================================================================================================*/
 def appVersion() { return "5.2.0" }
 import groovy.json.JsonSlurper
@@ -36,6 +37,8 @@ preferences {
 	page(name: "kasaToolsPage")
 	page(name: "unbindDevicesPage")
 	page(name: "bindDevicesPage")
+	page(name: "ledOnPage")
+	page(name: "ledOffPage")
 	page(name: "rebootSingleDevicePage")
 }
 
@@ -102,6 +105,12 @@ def parseDeviceData(response) {
 	def alias = cmdResp.alias
 	def model = cmdResp.model.substring(0,5)
 	def type = getType(model)
+	def ledOff = ""
+	if (type != "Mono Bulb" && type != "CT Bulb" && type != "Color Bulb"
+		&& type != "Multi Plug" && type != "EM Multi Plug") {
+		ledOff = true
+		if (cmdResp.led_off == 0) { ledOff = false }
+	}
 	def plugNo
 	def plugId
 	if (cmdResp.children) {
@@ -111,10 +120,10 @@ def parseDeviceData(response) {
 			def plugDni = "${dni}${plugNo}"
 			plugId = cmdResp.deviceId + plugNo
 			alias = it.alias
-			updateDevices(plugDni, ip, alias, model, type, plugNo, plugId)
+			updateDevices(plugDni, ip, alias, model, type, plugNo, plugId, ledOff)
 		}
 	} else {
-		updateDevices(dni, ip, alias, model, type, plugNo, plugId)
+		updateDevices(dni, ip, alias, model, type, plugNo, plugId, ledOff)
 	}
 }
 
@@ -167,7 +176,7 @@ def getType(model) {
 	}
 }
 
-def updateDevices(dni, ip, alias, model, type, plugNo, plugId) {
+def updateDevices(dni, ip, alias, model, type, plugNo, plugId, ledOff) {
 	logDebug("updateDevices")
 	def devices = state.devices
 	def device = [:]
@@ -178,6 +187,7 @@ def updateDevices(dni, ip, alias, model, type, plugNo, plugId) {
 	device["type"] = type
 	device["plugNo"] = plugNo
 	device["plugId"] = plugId
+	device["ledOff"] = ledOff
 	devices << ["${dni}" : device]
 	def child = getChildDevice(dni)
 	if (child) {
@@ -197,7 +207,6 @@ def mainPage() {
 	if (debugLog == true) { runIn(1800, debugOff) }
 	def devices = state.devices
 	
-//	def foundDevices = "Kasa App Alias  Inst Driver Hubitat Driver ID"
 	def foundDevices = "Kasa App Alias  Inst Hubitat Driver ID"
 	def count = 0
 	devices.each {
@@ -206,10 +215,7 @@ def mainPage() {
 		def driverVer = ""							   
 		if (child) {
 			installed = "Yes"
-//			driverVer = child.driverVer()
-//			if (drriverVer == null) { driverVer = "" }
 		}
-//		foundDevices += "\n${it.value.alias.padRight(15)} ${installed.padRight(4)} ${driverVer.padRight(6)} Kasa ${it.value.type}"
 		foundDevices += "\n${it.value.alias.padRight(15)} ${installed.padRight(4)} Kasa ${it.value.type}"
 		count += 1
 	}
@@ -228,7 +234,6 @@ def mainPage() {
 				title: "<b>Advanced Kasa Device Tools</b>",
 				description: "Bind/Unbind/Reboot Devices"
 			paragraph "<b>${count} Devices are in the Application Database</b>"
-//			paragraph "<textarea rows=10 cols=50 readonly='true'>${foundDevices}</textarea>"
 			paragraph "<textarea rows=10 cols=40 readonly='true'>${foundDevices}</textarea>"
 			input "debugLog", "bool", 
 				title: "Enable debug logging for 30 minutes", 
@@ -362,6 +367,8 @@ def kasaToolsPage() {
 	if (unbindDevices) { deviceUnbind() }
 	if (bindDevices) { deviceBind() }
 	if (rebootDevice) { deviceReboot() }
+	if (selectedLedOnDevices) { ledOn() }
+	if (selectedLedOffDevices) { ledOff() }
 	getDeviceBinding()
 	
 	def devicesBindingData = state.devicesBindingData
@@ -384,6 +391,12 @@ def kasaToolsPage() {
 			href "bindDevicesPage",
 				title: "<b>Bind Devices to Kasa Cloud</b>",
 				description: "Makes devices accessible via the Cloud in the Kasa App."
+			href "ledOnPage",
+				title: "<b>Turn LED on for selected devices</b>",
+				description: "Sets led_off to false."
+			href "ledOffPage",
+				title: "<b>Turn LED off for selected devices</b>",
+				description: "Sets led_off to true."
 			href "rebootSingleDevicePage",
 				title: "<b>Reboot a Selected Kasa Device</b>",
 				description: "For troubleshooting a single device."
@@ -571,6 +584,99 @@ def bindResponse(response) {
 }
 
 
+//	Turn LedOff On or Off
+def ledOnPage() {
+	logDebug("ledOnPage")
+	def devices = state.devices
+	def ledOffDevices = [:]
+	devices.each {
+		if (it.value.plugNo == null || it.value.plugNo == "00"){
+			if (it.value.ledOff == true) {
+				ledOffDevices["${it.value.dni}"] = "${it.value.model} ${it.value.alias}"
+			}
+		}
+	}
+	return dynamicPage(name:"ledOnPage",
+		title:"<b>Turn On the Device LED (set led_off to false)</b>",
+		install: false) {
+	 	section("<b>Select Devices to turn on LED</b>") {
+			input ("selectedLedOnDevices", "enum",
+				   required: false,
+				   multiple: true,
+				   title: "Turn on LED devices (${ledOffDevices.size() ?: 0} available)",
+				   description: "Use the dropdown to select devices.  Then select 'Done'.",
+				   options: ledOffDevices)
+		}
+	}
+}
+
+def ledOn() {
+	logInfo("ledOn: ${selectedLedOnDevices}")
+	selectedLedOnDevices.each { dni ->
+		def device = state.devices.find { it.value.dni == dni }
+		logDebug("ledOn: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
+		sendDeviceCmd(device.value.ip,
+					  """{"system":{"set_led_off":{"off":0}}}""",
+					  "ledOnOffResponse")
+	}
+	pauseExecution(4000)
+	app?.removeSetting("selectedLedOnDevices")
+}
+			
+def ledOffPage() {
+	logDebug("ledOffPage")
+	def devices = state.devices
+	def ledOnDevices = [:]
+	devices.each {
+		if (it.value.plugNo == null || it.value.plugNo == "00"){
+			if (it.value.ledOff == false) {
+				ledOnDevices["${it.value.dni}"] = "${it.value.model} ${it.value.alias}"
+			}
+		}
+	}
+	return dynamicPage(name:"ledOnPage",
+		title:"<b>Turn On the Device LED (set led_off to true)</b>",
+		install: false) {
+	 	section("<b>Select Devices to turn on LED</b>") {
+			input ("selectedLedOffDevices", "enum",
+				   required: false,
+				   multiple: true,
+				   title: "Turn off LED devices (${ledOnDevices.size() ?: 0} available)",
+				   description: "Use the dropdown to select devices.  Then select 'Done'.",
+				   options: ledOnDevices)
+		}
+	}
+}
+
+def ledOff() {
+	logInfo("ledOn: ${selectedLedOffDevices}")
+	selectedLedOffDevices.each { dni ->
+		def device = state.devices.find { it.value.dni == dni }
+		logDebug("ledOff: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
+		sendDeviceCmd(device.value.ip,
+					  """{"system":{"set_led_off":{"off":1}}}""",
+					  "ledOnOffResponse")
+	}
+	pauseExecution(4000)
+	app?.removeSetting("selectedLedOffDevices")
+}
+
+def ledOnOffResponse(response) {
+	def resp = parseLanMessage(response.description)
+	def dni = resp.mac
+	def parser = new JsonSlurper()
+	def cmdResp = parser.parseText(inputXOR(resp.payload))
+	logDebug("ledOnOff: cmdResp = ${cmdResp}")
+	if (cmdResp.system.set_led_off.err_code == 0) {
+		def device = state.devices.find { it.value.dni == dni }
+		if (device.value.ledOff == true) { device.value.ledOff = false }
+		else if (device.value.ledOff == false) { device.value.ledOff = true }
+		logInfo("ledOnOffResponse: device ${dni} ledOff state set to ${device.value.ledOff}")
+	}
+	else { logWarn("ledOnOffResponse: Error returned from device.") }
+}
+
+
 //	Reboot Single Device
 def rebootSingleDevicePage() {
 	def devices = state.devices
@@ -607,7 +713,7 @@ def deviceReboot() {
 	sendDeviceCmd(device.value.ip,
 				  """{"${preamble}":{"reboot":{"delay":3}}}""",
 				  "rebootResponse")
-	app?.removeSetting("rebootDevice")
+	app?.removeSetting("removeDevice")
 }
 
 def rebootResponse(response) {
@@ -647,7 +753,6 @@ def pollForIps() {
 		app?.updateSetting("pollEnabled", [type:"bool", value: false])
 		runIn(3600, pollEnable)
 		logInfo("pollForIps: starting poll for Kasa Device IPs.")
-//		state.devices= [:]
 		findDevices(25, updateDeviceIps)
 	}
 }
@@ -701,7 +806,7 @@ private sendCmd(ip, action) {
 		 destinationAddress: "${ip}:9999",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
 		 parseWarning: true,
-		 timeout: 1,
+		 timeout: 3,
 		 callback: action])
 	sendHubCommand(myHubAction)
 }
