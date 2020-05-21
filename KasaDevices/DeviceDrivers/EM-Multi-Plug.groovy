@@ -6,11 +6,13 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		input value.  A value of blank or 0 is disabled.  A value below 5 is read as 5.
 04.20	5.1.0	Update for Hubitat Program Manager
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
-06.01	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
+05.17	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
 				b.	Integrated method parseInput into responses and deleted
-06.01	5.2.0.1	Update to date handling to avoid using state.currDate
+05.21	5.2.1	a.	Update to date handling to avoid using state.currDate.
+				b.	Inserted logic and warning message to handle HS300 return being
+					incomplete and unparsed if the total length of plug names exceed ~102 characters.
 =======================================================================================================*/
-def driverVer() { return "5.2.0.1" }
+def driverVer() { return "5.2.1" }
 metadata {
 	definition (name: "Kasa EM Multi Plug",
     			namespace: "davegut",
@@ -142,7 +144,16 @@ def commandResponse(response) {
 	def resp = parseLanMessage(response)
 	if(resp.type == "LAN_TYPE_UDPCLIENT") {
 		state.errorCount = 0
-		def status = parseJson(inputXOR(resp.payload)).system.get_sysinfo.children.find { it.id == getDataValue("plugNo") }
+		try {
+			resp = parseJson(inputXOR(resp.payload))
+		} catch(e) {
+			logWarn("commandResponse: Parsing failed due to return length too long.\n" +
+			"<b>Probable cause::</b> For the HS300, the names for the six plugs must not exceed a " +
+			"total of 102 characters (or less}. \n<b>Using the Kasa App, " + 
+			"shorten the HS300 plug names and try again.</b>")
+			return
+		}
+		def status = resp.system.get_sysinfo.children.find { it.id == getDataValue("plugNo") }
 		logDebug("commandResponse: status = ${status}")
 		def onOff = "on"
 		if (status.state == 0) { onOff = "off" }

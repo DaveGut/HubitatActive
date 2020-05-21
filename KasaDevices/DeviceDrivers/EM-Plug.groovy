@@ -6,11 +6,11 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		input value.  A value of blank or 0 is disabled.  A value below 5 is read as 5.
 04.20	5.1.0	Update for Hubitat Program Manager
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
-06.01	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
+05.17	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
 				b.	Integrated method parseInput into responses and deleted
-06.01	5.2.0.1	Update to date handling to avoid using state.currDate
+05.21	5.2.1	Update to date handling to avoid using state.currDate
 =======================================================================================================*/
-def driverVer() { return "5.2.0.1" }
+def driverVer() { return "5.2.1" }
 metadata {
 	definition (name: "Kasa EM Plug",
     			namespace: "davegut",

@@ -8,8 +8,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
 06.01	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
 				b.	Integrated method parseInput into responses and deleted
+05.21	5.2.1	Administrative version change to support HPM
 =======================================================================================================*/
-def driverVer() { return "5.2.0" }
+def driverVer() { return "5.2.1" }
 metadata {
 	definition (name: "Kasa Plug Switch",
     			namespace: "davegut",
@@ -34,7 +35,7 @@ metadata {
 
 def installed() {
 	log.info "Installing .."
-	updateDataValue("driverVersion", driverVer())	
+	updateDataValue("driverVersion", driverVer())
 	state.pollFreq = 0
 	updated()
 }

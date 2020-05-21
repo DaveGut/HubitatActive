@@ -8,8 +8,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 05.16	5.2.0	a.	Pre-encrypt refresh commands to reduce per-commnand processing
 				b.	Fixed fragmented return failure in method Status Reponse
 				c.	Integrated method parseInput into responses and deleted
+05.21	5.2.1	Administrative version change to support HPM
 =======================================================================================================*/
-def driverVer() { return "5.2.0" }
+def driverVer() { return "5.2.1" }
 metadata {
 	definition (name: "Kasa Color Bulb",
 				namespace: "davegut",
