@@ -9,12 +9,15 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		Removed test code.  Tested Update Method.
 04.20	5.1.0	Update for Hubitat Package Manager
 04.21	5.1.1	Update for HUB version 2.2.0, specifically UDP parseLanMessage = true
-06.01	5.2.0	a.	Rework the Driver interface.
+05.17	5.2.0	a.	Rework the Driver interface.
 				b.	Added Remove Devices and Kasa Tools to driver.
 				c.	Corrected to parse fragmented returns from devices.		
 				d.	Added ability to control device led
+05.21	5.2.1	a.	Added ability to control device led on/off.
+				b.	Inserted logic and clear warning message to explain HS300 return being
+					incomplete and unparsed if the total length of plug names exceed ~102 characters.
 =======================================================================================================*/
-def appVersion() { return "5.2.0" }
+def appVersion() { return "5.2.1" }
 import groovy.json.JsonSlurper
 definition(
 	name: "Kasa Integration",
@@ -67,6 +70,7 @@ def startPage() {
 		app.updateSetting("debugLog", false)
 		app.updateSetting("licenseAcknowledged", false)
 	}
+	state.hs300Error = ""
 	state.devices = [:]
 	findDevices(25, "parseDeviceData")
 	
@@ -91,17 +95,22 @@ def startPage() {
 def parseDeviceData(response) {
 	def resp = parseLanMessage(response.description)
 	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
-	plainResp = inputXOR(resp.payload)
-	if (plainResp.length() > 1020) {
-		plainResp = plainResp.substring(0,plainResp.indexOf("preferred")-2) + "}}}"
+	def clearResp = inputXOR(resp.payload)
+	if (clearResp.length() > 1022) {
+		if (clearResp.indexOf("HS300") != -1) {
+			logWarn("parseDeviceData: Parsing failed due to return length too long.\n" +
+			"<b>Probable cause::</b> For the HS300, the names for the six plugs must not exceed a " +
+			"total of 102 characters (or less}. \n<b>Using the Kasa App, " + 
+			"shorten the HS300 plug names and try again.</b>")
+			return
+		}
+		clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
 	}
-	def parser = new JsonSlurper()
-	def cmdResp = parser.parseText(plainResp).system.get_sysinfo
+	def cmdResp
+	cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
 	def ip = convertHexToIP(resp.ip)
 	logDebug("parseDeviceData: ${ip} // ${cmdResp}")
-	def dni
-	if (cmdResp.mic_mac) { dni = cmdResp.mic_mac }
-	else { dni = cmdResp.mac.replace(/:/, "") }
+	def dni = resp.mac
 	def alias = cmdResp.alias
 	def model = cmdResp.model.substring(0,5)
 	def type = getType(model)
