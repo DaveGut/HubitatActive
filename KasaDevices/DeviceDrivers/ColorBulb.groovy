@@ -217,7 +217,7 @@ def setColor(Map color) {
 	def saturation = device.currentValue("saturation")
 	if (color.saturation || color.saturation == 0) { saturation = color.saturation }
 	if (highRes != true) {
-		hue = Math.round(0.5 + hue * 3.6).toInteger()
+		hue = Math.round(0.49 + hue * 3.6).toInteger()
 	}
 	if (hue < 0 || hue > 360 || saturation < 0 || saturation > 100 || level < 0 || level > 100) {
 		logWarn("setColor: Entered hue, saturation, or level out of range! (H:${hue}, S:${saturation}, L:${level}")
