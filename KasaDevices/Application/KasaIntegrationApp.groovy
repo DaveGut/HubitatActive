@@ -98,10 +98,11 @@ def parseDeviceData(response) {
 	def clearResp = inputXOR(resp.payload)
 	if (clearResp.length() > 1022) {
 		if (clearResp.indexOf("HS300") != -1) {
-			logWarn("parseDeviceData: Parsing failed due to return length too long.\n" +
+			state.hs300Error = "Parsing failed due to return length too long.\n" +
 			"<b>Probable cause::</b> For the HS300, the names for the six plugs must not exceed a " +
 			"total of 102 characters (or less}. \n<b>Using the Kasa App, " + 
-			"shorten the HS300 plug names and try again.</b>")
+			"shorten the HS300 plug names and try again.</b>"
+			logWarn("parseDeviceData: ${state.hs300Error}")
 			return
 		}
 		clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
@@ -244,6 +245,7 @@ def mainPage() {
 				description: "Bind/Unbind/Reboot Devices"
 			paragraph "<b>${count} Devices are in the Application Database</b>"
 			paragraph "<textarea rows=10 cols=40 readonly='true'>${foundDevices}</textarea>"
+			paragraph "<b>HS300 Error</b>:  ${state.hs300Error}"
 			input "debugLog", "bool", 
 				title: "Enable debug logging for 30 minutes", 
 				submitOnChange: true,
