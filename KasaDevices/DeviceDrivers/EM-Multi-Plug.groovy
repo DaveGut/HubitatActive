@@ -11,6 +11,7 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 05.21	5.2.1	a.	Update to date handling to avoid using state.currDate.
 				b.	Inserted logic and warning message to handle HS300 return being
 					incomplete and unparsed if the total length of plug names exceed ~102 characters.
+05.25	5.2.1.1	Update commands and parsing to allow for 132 total characters (vice 102).
 =======================================================================================================*/
 def driverVer() { return "5.2.1" }
 metadata {
@@ -107,23 +108,25 @@ def getMultiPlugData(response) {
 def on() {
 	logDebug("on")
 	sendCmd(outputXOR("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-					  """"system":{"set_relay_state":{"state": 1}},""" +
-					  """"system" :{"get_sysinfo" :{}}}"""),
+					  """"system":{"set_relay_state":{"state":1}}}"""),
 			"commandResponse")
 }
 
 def off() {
 	logDebug("off")
 	sendCmd(outputXOR("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-					  """"system":{"set_relay_state":{"state": 0}},""" +
-					  """"system" :{"get_sysinfo" :{}}}"""),
+					  """"system":{"set_relay_state":{"state":0}}}"""),
 			"commandResponse")
+}
+
+def commandResponse(response) {
+	refresh()
 }
 
 def refresh() {
 	logDebug("refresh")
 	sendCmd("d0f281f88bff9af7d5ef94b6d1b4c09fec95e68fe187e8caf08bf68bf6",
-			"commandResponse")
+			"statusResponse")
 }
 
 def setPollFreq(interval = 0) {
@@ -140,16 +143,16 @@ def setPollFreq(interval = 0) {
 
 
 //	Unique to Kasa EM Multiplug
-def commandResponse(response) {
+def statusResponse(response) {
 	def resp = parseLanMessage(response)
 	if(resp.type == "LAN_TYPE_UDPCLIENT") {
 		state.errorCount = 0
-		try {
+		if (resp.payload.length() < 2048) {
 			resp = parseJson(inputXOR(resp.payload))
-		} catch(e) {
-			logWarn("commandResponse: Parsing failed due to return length too long.\n" +
-			"<b>Probable cause::</b> For the HS300, the names for the six plugs must not exceed a " +
-			"total of 102 characters (or less}. \n<b>Using the Kasa App, " + 
+		} else {
+			logWarn("statusResponse: Parsing failed due to return length too long.\n" +
+			"<b>Probable cause::</b> For the HS300, the names for the six plugs must " +
+			"not exceed a total of 132 characters (or less}. \n<b>Using the Kasa App, " + 
 			"shorten the HS300 plug names and try again.</b>")
 			return
 		}
