@@ -96,11 +96,11 @@ def parseDeviceData(response) {
 	def resp = parseLanMessage(response.description)
 	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
 	def clearResp = inputXOR(resp.payload)
-	if (clearResp.length() > 1022) {
+	if (clearResp.length() > 1026) {
 		if (clearResp.indexOf("HS300") != -1) {
 			state.hs300Error = "<b>HS300 Error: </b>Parsing failed due to return length too long.\n" +
 			"<b>Probable cause::</b> For the HS300, the names for the six plugs must not exceed a " +
-			"total of 102 characters (or less}. \n<b>Using the Kasa App, " + 
+			"total of 132 characters (or less}. \n<b>Using the Kasa App, " + 
 			"shorten the HS300 plug names and try again.</b>"
 			logWarn("parseDeviceData: ${state.hs300Error}")
 			return
