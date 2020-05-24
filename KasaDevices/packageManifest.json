@@ -4,8 +4,7 @@
   "version": "5.2.1",
   "minimumHEVersion": "2.2.0",
   "dateReleased": "2020-04-23",
-  "releaseNotes": "Application: added LED on/off control.\nEM Multiplug: Added clear message for device name too long eror.\n" +
-                  "EM Multiplug and EM Plug: changed date parsing to not rely on state variables."
+  "releaseNotes": "Application: added LED on/off control.\nEM Multiplug: Added clear message for device name too long eror.\n EM Multiplug and EM Plug: changed date parsing to not rely on state variables."
   "documentationLink": "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "apps": [
