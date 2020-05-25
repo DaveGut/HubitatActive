@@ -3,9 +3,15 @@
   "gitHubUrl": "https://github.com/DaveGut/HubitatActive",
   "packages": [
     {
-      "name": "Kasa Plugs, Switches and Bulbs",
+      "name": "Kasa Plugs, Switches and Bulbs - Initial Installation",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
+      "description": "Kasa Plugs, switches, and Bulbs Integration"
+    },
+    {
+      "name": "Kasa Plugs, Switches and Bulbs - Add New Device Type",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifestB.json",
       "description": "Kasa Plugs, switches, and Bulbs Integration"
     },
     {
