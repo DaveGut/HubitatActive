@@ -3,16 +3,10 @@
   "gitHubUrl": "https://github.com/DaveGut/HubitatActive",
   "packages": [
     {
-      "name": "Kasa Devices Initial Installation",
+      "name": "Kasa Devices Integration",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
-      "description": "Install application and selected device drivers."
-    },
-    {
-      "name": "Kasa Devices To Add New Driver",
-      "category": "Control",
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifestB.json",
-      "description": "Install new driver for new device types."
+      "description": "Install Kasa plugs, switches and bulbs."
     },
     {
       "name": "BleBox Device Integration",
