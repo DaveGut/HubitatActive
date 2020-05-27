@@ -9,6 +9,7 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 06.01	5.2.0	a.	Pre-encrypt refresh / quickPoll commands to reduce per-commnand processing
 				b.	Integrated method parseInput into responses and deleted
 05.21	5.2.1	Administrative version change to support HPM
+05.27	5.2.1.1	Fixed type on quick poll switch implementation.
 =======================================================================================================*/
 def driverVer() { return "5.2.1" }
 metadata {
@@ -142,7 +143,7 @@ def quickPollResponse(response) {
 		def onOff = "on"
 		if (status.relay_state == 0) { onOff = "off" }
 		if (onOff != device.currentValue("switch")) {
-			sendEvent(name: "switch", value: onOff, type: "digital")
+			sendEvent(name: "switch", value: onOff, type: "physical")
 			logInfo("quickPollResponse: switch: ${onOff}")
 		}
 		if (state.pollFreq > 0) {
