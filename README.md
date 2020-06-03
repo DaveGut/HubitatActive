@@ -10,9 +10,6 @@ Provides buttons for rapidly changing a bulb color or color temperature through 
 ## Kasa Devices
 Installation and operation from th Local Area Network of Kasa (TP-Link) bulbs, plugs, switches, and energy monitor switches.
 
-## Kasa Tools
-A tool for Kasa Devices to disconnect from or reconnect to the Kasa Cloud.
-
 ## Samsung Multiroom
 A highly functional driver to control Samsung Multiroom speakers; including groups and TTS functions, through Hubitat
 
