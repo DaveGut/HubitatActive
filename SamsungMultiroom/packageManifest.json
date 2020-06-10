@@ -1,7 +1,7 @@
 {
   "packageName": "Samsung MultiRoom Speakers",
   "author": "Dave Gutheinz",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "minimumHEVersion": "2.1.9",
   "dateReleased": "2020-04-20",
   "releaseNotes": "To update, modify and change the code, the run <b>Save Preferences</b>.\n" +
