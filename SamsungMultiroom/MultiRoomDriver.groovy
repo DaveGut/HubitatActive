@@ -24,7 +24,7 @@ import org.json.JSONObject
 def driverVer() { return "3.2.0" }
 
 metadata {
-	definition (name: "A Samsung Wifi Speaker",
+	definition (name: "Samsung Wifi Speaker",
 				namespace: "davegut",
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomDriver.groovy"
