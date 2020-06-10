@@ -21,10 +21,11 @@ and limitations under the  License.
 		c.	Add importUrl allowing future updates via import button in app editor.
 2020
 04.20	3.1.0	Update for Hubitat Package Manager
+06.15	3.2.0	Minor changes and synchronization with adding URL Presets to driver.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 
 import org.json.JSONObject
-def appVersion() { return "3.1.0" }
+def appVersion() { return "3.2.0" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
@@ -153,7 +154,6 @@ def ssdpHandler(evt) {
 		def speaker = speakers."${uuid}"
 		def child = getChildDevice(dni)
 		if (child) {
-			child.updateInstallData()
 			if (speaker.ip != ip) {
 				speaker.ip = ip
 					logDebug("ssdpHandler: updating child data")

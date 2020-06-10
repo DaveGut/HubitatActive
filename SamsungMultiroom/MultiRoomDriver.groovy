@@ -14,26 +14,17 @@ and limitations under the  License.
 		THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
 		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
 ===== History =============================================================================
-2019
-06.15	3.0.01.	Update to reduce code size and better performance.  Additionally:
-		a.	Changed preset channel data structure for future expansion.
-		b.	Update state and data definitions.  Added update method for use in upgrades.
-			Added this to the updated method.  It checks to see if it has run, and if not
-			it will exit.
-		c.	Added command 'stopAllActivity' that assures steaming music is disconnected.
-		d.	Added button interface for 'stopAllActivity' and 'refresh'.
-		e.	Added importUrl in 'definition'.  Allows updates editor import button.
-		f.	Tested for > 40 hours, correcting any errors as encountered.
-07.18	3.0.02	Updated playTrack, playTrackAndRestore, and playTrackAndResume to
-		accommodate duration in the track data space.		
 2020
 04.20	3.1.0	Update for Hubitat Package Manager
+06.15	3.2.0	a.	Added URLStationPlayback functions per request.
+				b.	Limit debug logging to 30 minutes.
+
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.1.0" }
+def driverVer() { return "3.2.0" }
 
 metadata {
-	definition (name: "Samsung Wifi Speaker",
+	definition (name: "A Samsung Wifi Speaker",
 				namespace: "davegut",
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomDriver.groovy"
@@ -67,6 +58,19 @@ metadata {
 		command "presetCreate", ["NUMBER"]
 		command "presetPlay", ["NUMBER"]
 		command "presetDelete", ["NUMBER"]
+		//	===== URL Play Preset Capability =====
+		attribute "urlPreset_1", "string"
+		attribute "urlPreset_2", "string"
+		attribute "urlPreset_3", "string"
+		attribute "urlPreset_4", "string"
+		attribute "urlPreset_5", "string"
+		attribute "urlPreset_6", "string"
+		attribute "urlPreset_7", "string"
+		attribute "urlPreset_8", "string"
+//		command "urlPresetCreate", [[name: "Preset Number", type: "NUMBER"],[name: "Preset Name", type: "STRING"],[name: "URL for Preset", type: "STRING"]]
+		command "urlPresetCreate", [[name: "Preset Number", type: "NUMBER"],[name: "Preset Name", type: "STRING"]]
+		command "urlPresetPlay", [[name: "Preset Number", type: "NUMBER"]]
+		command "urlPresetDelete", [[name: "Preset Number", type: "NUMBER"]]
 		//	===== Samsung Group Spealer Capability =====
 		attribute "Group_1", "string"
 		attribute "Group_2", "string"
@@ -76,6 +80,13 @@ metadata {
 		command "groupStart", ["NUMBER"]
 		command "groupStop"
 		command "groupDelete", ["NUMBER"]
+		
+//////////////////		
+		command "zTest"
+//////////////////		
+		
+		
+		
 	}
 	preferences {
 		def refreshRate = ["1" : "Refresh every 1 minute",
@@ -90,7 +101,7 @@ metadata {
 		input ("notificationVolume", "num", title: "Notification volume increase in percent", defaultValue: 10)
 		input ("refresh_Rate","enum", title: "Device Refresh Interval", options: refreshRate, defaultValue: "30")
 		input ("spkGroupLoc", "enum", title: "Surround/Stereo Speaker Location", options: positions)
-		input ("debug", "bool",  title: "Enable debug logging", defaultValue: false)
+		input ("debug", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
 		input ("descriptionText", "bool",  title: "Enable description text logging", defaultValue: true)
 		if (getDataValue("hwType") == "Soundbar") {
 			def ttsLanguages = ["en-au":"English (Australia)","en-ca":"English (Canada)", "en-gb":"English (Great Britain)",
@@ -116,10 +127,16 @@ def updated() {
 	log.info "Updating .."
 	unschedule()
 	state.triggered = false
-	state.playingUrl = false
 	state.updateTrackDescription = true
+	if(!state.urlPresetData) { state.urlPresetData = [:] }
+	if (!state.urlPlayback) { state.urlPlayback = false }
+	if (!state.playingNotification) { state.playingNotification = false }
 	state.playQueue = []
 	state.recoveryData = [:]
+	state.spkType = getDataValue("spkType")
+	state.groupType = getDataValue("groupType")
+	state.trackIcon = ""
+	if (debug == true) { runIn(1800, debugLogOff) }
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
 	switch(rate) {
@@ -138,93 +155,12 @@ def updated() {
 	refresh()
 }
 
+def zTest() {
+	state.urlPresetData = [:]
+	state.remove("playingUrl")
+}	
+
 def updateInstallData() {
-//	Use model to determine if update will run.  Will only run if critical updates are still not corrected.
-	def model = getDataValue("model")
-	if(model == null || model == "") {
-		logInfo("updateInstallData: No Install Data Updates Required.")
-		return
-	}
-	unschedule("poll")
-	logInfo("updateInstallData: Updating device installation to new formats, if required")
-//	Attribute Updates
-	sendEvent(name: "repeat", value: "0")
-	sendEvent(name: "shuffle", value: "off")
-	sendCmd("/UIC?cmd=%3Cname%3EGetCurrentEQMode%3C/name%3E")
-	pauseExecution(500)
-//	Program Data Updates
-	if (!getDataValue("inputSources")) {
-		def inputSources = parent.getInputSources(device.getName())
-		logInfo("Creating dataValue inputSources = ${inputSources}")
-		updateDataValue("inputSources", inputSources)
-		pauseExecution(500)
-	}
-	if (!getDataValue("hwType")) {
-		def name = device.name
-		def hwType = "Speaker"
-		if (name[0..1] == "HW") { hwType = "Soundbar" }
-		logInfo("Creating dataValue hwType = ${hwType}")
-		updateDataValue("hwType", hwType)
-		pauseExecution(500)
-	}
-//	Update Preset Data to new format
-	for (int i = 1; i < 9; i++) {
-		def psData = state."Preset_${i}_Data"
-		if (psData == [] || psData == "" || psData == null) {
-			logInfo("Preset_${i}_Data does not exist or is null")
-		} else if (psData[0] == "cp") {
-			def presetData = [:]
-			presetData["type"] = psData[0]
-			presetData["player"] = psData[2]
-			presetData["playerNo"] = psData[3]
-			presetData["station"] = psData[1]
-			presetData["path"] = psData[4]
-			logInfo("Updating state.Preset_${i}_Data to ${presetData}")
-			state."Preset_${i}_Data" = presetData
-			pauseExecution(200)
-		} else {
-			logInfo("Preset_${i}_Data alread correct.  Data = ${psData}")
-		}
-	}
-//	Create new state variables
-	state.groupType = getDataValue("groupType")
-	pauseExecution(200)
-	state.triggered = false
-	pauseExecution(200)
-	if (getDataValue("playingUrl") == "yes") { state.playingUrl = true }
-	else { state.playingUrl = false }
-	pauseExecution(200)
-	state.spkType = getDataValue("spkType")
-	pauseExecution(200)
-	state.trackIcon = ""
-	pauseExecution(200)
-//	Remove state variables no longer used
-	state.remove("unreachableCount")
-	pauseExecution(500)
-	state.remove("currentEqPreset")
-	pauseExecution(500)
-	state.remove("resumePlay")
-	pauseExecution(500)
-	state.remove("trackLength")
-	pauseExecution(500)
-	state.remove("currentSourceNo")
-	pauseExecution(500)
-	state.remove("groupNo")
-	pauseExecution(500)
-	state.remove("currentPresetNo")
-	pauseExecution(200)
-//	Null out device data no longer used
-	updateDataValue("playingUrl", "")
-	pauseExecution(200)
-	updateDataValue("spkType", "")
-	pauseExecution(200)
-	updateDataValue("groupType", "")
-	updateDataValue("groupName", "")
-	pauseExecution(200)
-	updateDataValue("noSubSpks", "")
-	pauseExecution(200)
-//	Key update - used to determin if the update process has already run.
-	updateDataValue("model", null)
 }
 
 //	========== Capability Music Player ==========
@@ -233,9 +169,13 @@ def setLevel(level) { setVolume(level) }
 def play() {
 	playbackControl("play")
 	getVolume()
-	getPlayStatus()
-	getSource()
-	runIn(10, setTrackDescription)
+	if (device.currentValue("subMode") == "url") {
+		sendEvent(name: "status", value: "play")
+	} else {
+		getPlayStatus()
+		getSource()
+		runIn(10, setTrackDescription)
+	}
 }
 
 def pause() {
@@ -246,6 +186,13 @@ def pause() {
 def stop() {
 	unschedule(setTrackDescription)
 	playbackControl("stop")
+	if (device.currentValue("subMode") == "url") {
+		state.urlPlayback = false
+		sendEvent(name: "subMode", value: "cp")
+		sendEvent(name: "trackDescription", value: "")
+		sendEvent(name: "trackData", value: "")
+		runIn(2, refresh)
+	}
 }
 
 def playbackControl(cmd) {
@@ -270,6 +217,9 @@ def previousTrack() {
 	if (device.currentValue("subMode") == "cp") {
 		sendSyncCmd("/CPM?cmd=%3Cname%3ESetPreviousTrack%3C/name%3E")
 		sendSyncCmd("/CPM?cmd=%3Cname%3ESetPreviousTrack%3C/name%3E")
+	} else if (device.currentValue("subMode") == "url") {
+		logInfo("nextTrack command does not work during URL Playback.")
+		return
 	} else {
 		sendSyncCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
 				"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22previous%22/%3E")
@@ -288,6 +238,9 @@ def nextTrack() {
 	}
 	if (device.currentValue("subMode") == "cp") {
 		sendCmd("/CPM?cmd=%3Cname%3ESetSkipCurrentTrack%3C/name%3E")
+	} else if (device.currentValue("subMode") == "url") {
+		logInfo("previousTrack command does not work during URL Playback.")
+		return
 	} else {
 		sendCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
 				"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22next%22/%3E")
@@ -296,26 +249,32 @@ def nextTrack() {
 	runIn(6, setTrackDescription)
 }
 
-def setTrack(trackUri) { logWarn("setTrack: Not implemented.") }
+def setTrack(trackUri) { logWarn("restoreTrack: Not implemented.") }
 
-def restoreTrack(trackuri) { logWarn("restoreTrack: Not implemented.") }
+def restoreTrack(trackUri) { logWarn("restoreTrack: Not implemented.") }
 
-def resumeTrack(trackuri) { logWarn("resumeTrack: Not implemented.") }
+def resumeTrack(trackUri) { logWarn("resumeTrack: Not implemented.") }
 
 def getPlayStatus() {
 	logDebug("getPlayStatus: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
 	if (device.currentValue("subMode") == "cp") {
 		sendSyncCmd("/CPM?cmd=%3Cname%3EGetPlayStatus%3C/name%3E")
+	} else if (device.currentValue("subMode") == "url") {
+		logInfo("getPlayStatus command does not work during URL Playback.")
+		return
 	} else {
 		sendSyncCmd("/UIC?cmd=%3Cname%3EGetPlayStatus%3C/name%3E")
 	}
 }
 
 def setTrackDescription() {
-	def inputSource = device.currentValue("inputSource")
-	def subMode = device.currentValue("subMode")
-	logDebug("setTrackDescription: source = ${inputSource}, subMode = ${subMode}")
 	unschedule("schedSetTrackDescription")
+	if (device.currentValue("subMode") == "url") {
+		logInfo("setTrackDescription command does not work during URL Playback.")
+		return
+	}
+	def inputSource = device.currentValue("inputSource")
+	logDebug("setTrackDescription: source = ${inputSource}, subMode = ${subMode}")
 	state.updateTrackDescription = true
 	if (device.currentValue("status") != "playing") {
 		trackData = new JSONObject("{type: ${inputSource}}")
@@ -331,7 +290,9 @@ def setTrackDescription() {
 
 def schedSetTrackDescription() {
 	logDebug("schedSetTrackDescription: update = ${state.updateTrackDescription}")
-	if (device.currentValue("subMode") != "dlna" && device.currentValue("subMode") != "cp") { return }
+	if (device.currentValue("subMode") != "dlna" && device.currentValue("subMode") != "cp") {
+		return
+	}
 	if(state.updateTrackDescription == false) { return }
 	def trackData = parseJson(device.currentValue("trackData"))
 	def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentPlayTime%3C/name%3E")
@@ -351,6 +312,10 @@ def schedSetTrackDescription() {
 }
 
 def parseMusicInfo(respData) {
+	if (device.currentValue("subMode") == "url") {
+		logInfo("setTrackDescription command does not work during URL Playback.")
+		return
+	}
 	def trackData
 	def trackDescription
 	if (respData.@result == "ng") {
@@ -557,9 +522,27 @@ def convertToTrack(text) {
 	}
 }
 
-def playTrack(trackData, volume=null) {
-	logDebug("playTrack: track = ${trackUri}, Volume = ${volume}")
-	playTrackAndResume(trackData, volume)
+def playTrack(urlData, volume = null) {
+	logDebug("playTrack: track = ${urlData}, Volume = ${volume}")
+	if (volume != null) {
+		setVolume(volume.toInteger())
+	}
+	def trackData = [:]
+	if (urlData.toString()[0] == "[") {
+		trackData = urlData[0]
+	} else {
+		trackData["type"] = "url"
+		trackData["name"] = urlData
+		trackData["url"] = urlData
+	}
+	sendEvent(name: "trackDescription", value: trackData.name)
+	trackData = new JSONObject(trackData)
+	sendEvent(name: "trackData", value: trackData)
+	sendEvent(name: "subMode", value: "url")
+	sendEvent(name: "status", value: "play")
+	state.urlPlayback = true
+	logInfo("playTrack: attempting to start play of ${trackData.url}")
+	execPlay(trackData.url, 0)
 }
 
 def playTrackAndRestore(trackData, volume=null) {
@@ -615,8 +598,8 @@ def addToQueue(trackUri, duration, volume, resumePlay){
 				"resumePlay": resumePlay]
 	state.playQueue.add(playData)
 
-	if (state.playingUrl == false) {
-		state.playingUrl = true
+	if (state.playingNotification == false) {
+		state.playingNotification = true
 		runInMillis(100, startPlayViaQueue, [data: [resumePlay: resumePlay]])
 	} else {
 		runIn(20, startPlayViaQueue, [data: [resumePlay: resumePlay]])
@@ -643,17 +626,22 @@ def createRecoveryData(resumePlay) {
 	state.recoveryData["subMode"] = device.currentValue("subMode")
 	state.recoveryData["prevVolume"] = device.currentValue("volume")
 	state.recoveryData["resumePlay"] = resumePlay
-	if (resumePlay == true && device.currentValue("subMode") == "cp") {
-		logDebug("createRecoveryData: trackData = ${device.currentValue("trackData")}")
-		def trackData = parseJson(device.currentValue("trackData"))
+	def subMode = device.currentValue("subMode")
+	def trackData = parseJson(device.currentValue("trackData"))
+	if (subMode == "cp") {
 		state.recoveryData["player"] = trackData.player
 		state.recoveryData["path"] = trackData.path
+	} else if (subMode == "url") {
+		state.recoveryData["name"] = trackData.name
+		state.recoveryData["url"] = trackData.url
 	}
 }
 
 def playViaQueue() {
+	log.trace playViaQueue
 	logDebug("playViaQueue: queueSize = ${state.playQueue.size()}")
 	if (state.playQueue.size() == 0) {
+		state.playingNotification = false
 		resumePlayer()
 		return
 	}
@@ -702,7 +690,6 @@ def resumePlayer() {
 		return
 	}
 	state.recoveryData = [:]
-	state.playingUrl = false
 	setVolume(data.prevVolume.toInteger())
 	if (data.inputSource != "wifi") {
 		inputSource(data.inputSource)
@@ -717,15 +704,15 @@ def resumePlayer() {
 			case "AmazonPrime":
 				nextTrack()
 				break
-//			case "8tracks":
 			default:
 				sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
 					"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${data.player}%22/%3E" +
 					"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${data.path}%22/%3E")
 				break
-//			default:
-//				break
 		}
+	} else if (data.subMode == "url") {
+		playTrack(data.url)
+		return
 	}
 	play()
 }
@@ -806,8 +793,23 @@ def push(pushed) {
 		case 20:
 			refresh()
 			break
+		case 21 :		//	Preset 1
+		case 22 :		//	Preset 2
+		case 23 :		//	Preset 3
+		case 24 :		//	Preset 4
+		case 25 :		//	Preset 5
+		case 26 :		//	Preset 6
+		case 27 :		//	Preset 7
+		case 28 :		//	Preset 8
+			if (state.triggered == false) {
+				urlPresetPlay(pushed)
+			} else {
+				logWarn("Auto urlPresetCreate is not available")
+				sendEvent(name: "Trigger", value: "notArmed")
+			}
+			break
 		default:
-			logWarn("${device.label}: Invalid Preset Number (must be 0 thru 19)!")
+			logWarn("${device.label}: Invalid Preset Number (must be 0 thru 28)!")
 			break
 	}
 }
@@ -818,9 +820,7 @@ def unTrigger() { state.triggered = false }
 def refresh() {
 	logDebug("refresh")
 	def check = sendSyncCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
-	if (check == "commsError") {
-		return
-	}
+	if (check == "commsError") { return }
 	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 	sendSyncCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
 	if (state.activeGroupNo == "" && device.currentValue("activeGroup")) {
@@ -845,12 +845,16 @@ def stopAllActivity() {
 		sendSyncCmd("/UIC?cmd=%3Cname%3ESetPowerStatus%3C/name%3E" +
 					"%3Cp%20type=%22dec%22%20name=%22powerstatus%22%20val=%220%22/%3E")
 	}
+	stop()
 }
 
 def repeat() {
 	logDebug("repeat: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
 		logWarn("repeat does not work for input source")
+		return
+	} else if (device.currentValue("subMode") == "url") {
+		logInfo("repeat commands do not work during URL Playback.")
 		return
 	}
 	def repeat = device.currentValue("repeat")
@@ -872,6 +876,9 @@ def shuffle() {
 	logDebug("shuffle: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
 		logWarn("shuffle does not work for input source")
+		return
+	} else if (device.currentValue("subMode") == "url") {
+		logInfo("shuffle commands do not work during URL Playback.")
 		return
 	}
 	if (device.currentValue("subMode") == "cp") {
@@ -927,6 +934,7 @@ def inputSource(source = null) {
 			}
 		}
 	}
+	state.urlPlayback = false
 	sendSyncCmd("/UIC?cmd=%3Cname%3ESetFunc%3C/name%3E" +
 				"%3Cp%20type=%22str%22%20name=%22function%22%20val=%22${source}%22/%3E")
 	runIn(4, getSource)
@@ -971,6 +979,7 @@ def presetCreate(preset) {
 }
 
 def presetPlay(preset) {
+	state.urlPlayback = false
 	def psName = device.currentValue("Preset_${preset}")
 	if (preset < 1 || preset > 8) {
 		logWarn("presetPlay: Preset Number out of range (1-8)!")
@@ -1006,6 +1015,50 @@ def presetDelete(preset) {
 	state."Preset_${preset}_Data" = ""
 	sendEvent(name: "Preset_${preset}", value: "preset${preset}")
 	logInfo("presetDeleted: preset = ${preset}")
+}
+
+//	========== urlStation Preset Capability ==========
+def urlPresetCreate(preset, name) {
+	if (preset < 1 || preset > 8) {
+		logWarn("urlPresetCreate: Preset Number out of range (1-8)!")
+		return
+	}
+	def trackData = parseJson(device.currentValue("trackData"))
+	logDebug("urlPresetCreate: preset = ${preset} // name = ${name} // trackData = ${trackData}")
+	def urlData = [:]
+	urlData["type"] = "url"
+	urlData["name"] = name
+	urlData["url"] = trackData.url
+	state.urlPresetData << ["PS_${preset}":[urlData]]
+	sendEvent(name: "urlPreset_${preset}", value: urlData.name)
+	logInfo("urlPresetCreate: created preset ${preset}, data = ${urlData}")
+}
+
+def urlPresetPlay(preset) {
+	def urlData = state.urlPresetData."PS_${preset}"
+	if (preset < 1 || preset > 8) {
+		logWarn("urlPresetPlay: Preset Number out of range (1-8)!")
+		return
+	} else if (urlData == null || urlData == [:]) {
+		logWarn("urlPresetPlay: Preset Not Set!")
+		return
+	}
+	playTrack(urlData)
+	logInfo("urlPresetPlay: Playing ${urlData}")
+}
+
+def urlPresetDelete(preset) {
+	def urlPresetData = state.urlPresetData
+	if (preset < 1 || preset > 8) {
+		logWarn("urlPresetPlay: Preset Number out of range (1-8)!")
+		return
+	} else if (urlPresetData."PS_${preset}" == null || urlPresetData."PS_${preset}" == [:]) {
+		logWarn("urlPresetPlay: Preset Not Set!")
+		return
+	}
+	urlPresetData << ["PS_${preset}":[]]
+	sendEvent(name: "urlPreset_${preset}", value: "urlPreset${preset}")
+	logInfo("urlPresetDelete: preset = ${preset}")
 }
 
 //	========== Samsung Group Speaker Capability ==========
@@ -1318,7 +1371,7 @@ private sendSyncCmd(command){
 	def host = "http://${getDataValue("deviceIP")}:55001"
 	logDebug("sendSyncCmd: Command= ${command}, host = ${host}")
 	try {
-		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 5]) { resp ->
+		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 45]) { resp ->
 		if(resp.status != 200) {
 			logWarn("sendSyncCmd, Command ${command}: Error return: ${resp.status}")
 			return
@@ -1356,6 +1409,7 @@ def extractData(respMethod, respData) {
 		case "MediaBufferEndEvent":
  		case "PausePlaybackEvent":
 		case "StopPlaybackEvent":
+			if (device.currentValue("subMode") == "url") { return }
 			sendEvent(name: "status", value: "paused")
 			state.updateTrackDescription = false
 			break
@@ -1394,8 +1448,12 @@ def extractData(respMethod, respData) {
 		case "CurrentFunc":
 			def inputSource = respData.function
 			def subMode = respData.submode
-			sendEvent(name: "inputSource", value: inputSource)
+			if (state.urlPlayback == true) {
+				subMode = "url"
+				inputSource = "wifi"
+			}
 			if (inputSource != "wifi") { subMode = "none" }
+			sendEvent(name: "inputSource", value: inputSource)
 			sendEvent(name: "subMode", value: subMode)
 			return respMethod
 			break
@@ -1482,6 +1540,11 @@ def extractData(respMethod, respData) {
 
 def logInfo(msg) {
 	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
+}
+
+def debugLogOff() {
+	device.updateSetting("debug", [type:"bool", value: false])
+	logInfo("Debug logging is false.")
 }
 
 def logDebug(msg){
