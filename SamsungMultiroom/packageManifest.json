@@ -10,7 +10,7 @@
 "Function of Note:\n\t<b>Stop</b>: Stops the url playback and restores the player states" +
 "\n\t<b>Pause / Play</b>: Pause and play url as epxected." +
 "\n\t<b>Other Functions</b>: Some functions do not work with url playback and" +
-"return a message instead.  Expampes: Repeat, Shuffle, Next Track, Previous Track."
+"return a message instead.  Expampes: Repeat, Shuffle, Next Track, Previous Track.",
   "apps": [
     {
       "id": "5cce274d-6d84-4a56-8533-6e4a61691242",
