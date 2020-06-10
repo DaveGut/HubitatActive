@@ -3,7 +3,7 @@
   "author": "Dave Gutheinz",
   "version": "3.2.0",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-04-20",
+  "dateReleased": "2020-06-10",
   "releaseNotes": "To update, modify and change the code, the run <b>Save Preferences</b>.\n" +
 "To add preset\n\ta.\tUse <b>Play Track</b> to connect to the URL.\n" +
 "\tb.\tUse <Url Preset Create> to add the preset (can also change preset name).\n" +
