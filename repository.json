@@ -4,7 +4,9 @@
   "packages": [
     {
       "name": "Kasa Devices Integration",
-      "category": "Control",
+      "category": "Integrations",
+      "tags": "Energy Monitoring", "LAN", "Lights & Switches"
+
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
       "description": "Install Kasa plugs, switches and bulbs."
     },
