@@ -7,10 +7,7 @@
   "documentationLink": "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
-  "releaseNotes": "Hubitat Kasa Device Integration Changes:\na.\tConverted comms to rawSocket \nb.\tChanged " +
-                  "quickPoll to scheduled vice run-in.\nUpdate Instructions: For each device, run Save " +
-                  "Preferences OR run the Kasa Integration App.\nInstallation Instructions:  After HPM " +
-                  "installation is complete, run the Kasa Integration app.
+  "releaseNotes": "Hubitat Kasa Device Integration Changes:\na.\tConverted comms to rawSocket \nb.\tChanged quickPoll to scheduled vice run-in.\nUpdate Instructions: For each device, run Save Preferences OR run the Kasa Integration App.\nInstallation Instructions:  After HPM installation is complete, run the Kasa Integration app.
 ",
   "apps": [
     {
