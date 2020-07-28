@@ -1,0 +1,8 @@
+Hubitat Kasa Device Integration
+Changes:
+a. Converted communications to rawSocket (Note: rawSocket in considered Alpha (for one year)\n
+b. Changed quickPoll to scheduled vice run-in.\n
+
+Update Instructions: For each device, run Save Preferences.
+
+Installation Instructions:  After HPM installation is complete, run the Kasa Integration app.
