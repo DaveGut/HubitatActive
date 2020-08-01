@@ -40,4 +40,4 @@ b.  "Hubitat Provided Methods (Since 2.1.2)"
 
 My testing has indicated a stable interface on my operational hub.  However, overuse of quick polling can slow down an operational hub and may impact performance. 
 
-## Warning:  Quick Polling can have negative impact on the Hubitat Hub and network performance. If you encounter performance "problems, before contacting Hubitat support, turn off quick polling and check your sysem out.
+## Warning:  Quick Polling can have negative impact on the Hubitat Hub and network performance. If you encounter performance issues, before contacting Hubitat support, turn off quick polling and check your sysem out.
