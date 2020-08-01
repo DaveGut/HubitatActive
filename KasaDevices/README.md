@@ -21,8 +21,6 @@ c.  Installation using Hubitat Package Manager.
 # Version 5.3 Changes
 The Integrtion has been updated to versio 5.3.  This is a major communications method update but overall functionality is minor.
 
-a.  Communications Update
-
     1.  Implemented rawSocket for driver communications to alleviate problems with UDP communications
     
         a)  excessive errors due to other LAN UDP traffic
