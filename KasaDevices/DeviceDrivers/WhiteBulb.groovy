@@ -2,15 +2,16 @@
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== 2020 History =====
-02.28	New version 5.0.
+02.28	New version 5.0.  Deprecated with this version
 04.20	5.1.0	Update for Hubitat Program Manager
-04.23	5.1.1	Update for Hub version 2.2.0, specifically the parseLanMessage = true option.
-05.16	5.2.0	a.	Pre-encrypt refresh commands to reduce per-commnand processing
-				b.	Fixed fragmented return failure in method Status Reponse
-				c.	Integrated method parseInput into responses and deleted
-05.21	5.2.1	Administrative version change to support HPM
-=======================================================================================================*/
-def driverVer() { return "5.2.1" }
+05,17	5.2.0	UDP Comms Update.  Deprecated with this version.
+08.01	5.3.0	Major rewrite of LAN communications using rawSocket.  Other edit improvements.
+				a.	implemented rawSocket for communications to address UPD errors and
+					the issue that Hubitat UDP not supporting Kasa return lengths > 1024.
+				b.	Use encrypted version of refresh / quickPoll commands
+====================================================================================================*/
+def driverVer() { return "5.3.0" }
+
 metadata {
 	definition (name: "Kasa Mono Bulb",
 				namespace: "davegut",
@@ -26,30 +27,41 @@ metadata {
 	}
 	preferences {
 		if (!getDataValue("applicationVersion")) {
-			input ("device_IP", "text", title: "Device IP", defaultValue: getDataValue("deviceIP"))
+			input ("device_IP", "text", 
+				   title: "Device IP", 
+				   defaultValue: getDataValue("deviceIP"))
 		}
-		input ("transition_Time", "num", title: "Default Transition time (seconds)", defaultValue: 0)
-		input ("refresh_Rate", "enum", title: "Device Refresh Interval (minutes)", 
-			   options: ["1", "5", "10", "15", "30", "60", "180"], defaultValue: "60")
-		input ("debug", "bool", title: "Enable debug logging", defaultValue: false)
-		input ("descriptionText", "bool", title: "Enable description text logging", defaultValue: true)
+		input ("transition_Time", "num", 
+			   title: "Default Transition time (seconds)", 
+			   defaultValue: 0)
+		input ("refresh_Rate", "enum", 
+			   title: "Device Refresh Interval (minutes)", 
+			   options: ["1", "5", "10", "15", "30", "60", "180"], 
+			   defaultValue: "60")
+		input ("debug", "bool", 
+			   title: "Enable debug logging", 
+			   defaultValue: false)
+		input ("descriptionText", "bool", 
+			   title: "Enable description text logging", 
+			   defaultValue: true)
 	}
 }
 
-
-//	Common to all Kasa Bulbs
 def installed() {
-	log.info "Installing .."
-	updated()
+	logInfo("Installing Device....")
+	runIn(2, updated)
 }
 
+//	===== Updated and associated methods =====
 def updated() {
-	log.info "Updating .."
+	logInfo("Updating device preferences....")
 	unschedule()
+	state.respLength = 0
+	state.response = ""
+	state.lastConnect = 0
 	state.errorCount = 0
-	if (device.currentValue("driverVersion") != driverVer()) {
-		updateDataValue("driverVersion", driverVer())
-	}
+	
+	//	Manual installation support.  Get IP and Plug Number
 	if (!getDataValue("applicationVersion")) {
 		if (!device_IP) {
 			logWarn("updated: Device IP is not set.")
@@ -60,6 +72,36 @@ def updated() {
 			logInfo("updated: Device IP set to ${device_IP.trim()}")
 		}
 	}
+
+	//	Update various preferences.
+	if (debug == true) { 
+		runIn(1800, debugLogOff)
+		logInfo("updated: Debug logging enabled for 30 minutes.")
+	} else {
+		unschedule(debugLogOff)
+		logInfo("updated: Debug logging is off.")
+	}
+	logInfo("updated: Description text logging is ${descriptionText}.")
+	state.transTime = 1000*transition_Time.toInteger()
+	logInfo("updated: Light transition time set to ${transition_Time} seconds.")
+	logInfo("updated: ${updateDriverData()}")
+	setRefresh()
+
+	refresh()
+}
+
+def updateDriverData() {
+	//	Version 5.2 to 5.3 updates
+	if (getDataValue("driverVersion") != driverVer()) {
+		updateDataValue("driverVersion", driverVer())
+	}
+	state.remove("lastCommand")
+	
+	return "Device data updated to latest values"
+}
+
+def setRefresh() {
+	logDebug("setRefresh: pollInterval = ${state.pollInterval}, refreshRate = ${refresh_Rate}")
 	switch(refresh_Rate) {
 		case "1" : runEvery1Minute(refresh); break
 		case "5" : runEvery5Minutes(refresh); break
@@ -67,29 +109,32 @@ def updated() {
 		case "15" : runEvery15Minutes(refresh); break
 		case "30" : runEvery30Minutes(refresh); break
 		case "180": runEvery3Hours(refresh); break
-		default: runEvery1Hour(refresh)
+		default:
+			runEvery1Hour(refresh); break
+			return "refresh set to default of every 60 minute(s)."
 	}
-	logInfo("updated: Refresh set for every ${refresh_Rate} minute(s).")
-	state.transTime = 1000*transition_Time.toInteger()
-	logInfo("updated: Light transition time set to ${transition_Time} seconds.")
-	if (debug == true) { runIn(1800, debugLogOff) }
-	logInfo("updated: Debug logging is: ${debug} for 30 minutes.")
-	logInfo("updated: Description text logging is ${descriptionText}.")
-	refresh()
+	return "Refresh set for every ${interval} minute(s)."
 }
 
+def debugLogOff() {
+	device.updateSetting("debug", [type:"bool", value: false])
+	logInfo("debugLogOff: Debug logging is off.")
+}
+
+
+//	===== Command Methods =====
 def on() {
-	logDebug("On: transition time = ${state.transTime}")
-	sendCmd(outputXOR("""{"smartlife.iot.smartbulb.lightingservice":{"transition_light_state":""" +
-					  """{"on_off":1,"transition_period":${state.transTime}}}}"""),
-			"commandResponse")
+	logDebug("on: transition time = ${state.transTime}")
+	def command = """{"smartlife.iot.smartbulb.lightingservice":""" +
+		"""{"transition_light_state":{"on_off":1,"transition_period":${state.transTime}}}}"""
+	sendCmd(outputXOR(command))
 }
 
 def off() {
-	logDebug("Off: transition time = ${state.transTime}")
-	sendCmd(outputXOR("""{"smartlife.iot.smartbulb.lightingservice":{"transition_light_state":""" +
-					  """{"on_off":0,"transition_period":${state.transTime}}}}"""),
-			"commandResponse")
+	logDebug("off: transition time = ${state.transTime}")
+	def command = """{"smartlife.iot.smartbulb.lightingservice":""" +
+		"""{"transition_light_state":{"on_off":0,"transition_period":${state.transTime}}}}"""
+	sendCmd(outputXOR(command))
 }
 
 def setLevel(percentage, rate = null) {
@@ -101,9 +146,10 @@ def setLevel(percentage, rate = null) {
 	} else {
 		rate = 1000*rate.toInteger()
 	}
-	sendCmd(outputXOR("""{"smartlife.iot.smartbulb.lightingservice":{"transition_light_state":""" +
-					  """{"ignore_default":1,"on_off":1,"brightness":${percentage},"transition_period":${rate}}}}"""),
-			"commandResponse")
+	def command = """{"smartlife.iot.smartbulb.lightingservice":""" +
+		"""{"transition_light_state":{"ignore_default":1,"on_off":1,""" +
+		""""brightness":${percentage},"transition_period":${rate}}}}"""
+	sendCmd(outputXOR(command))
 }
 
 def startLevelChange(direction) {
@@ -119,138 +165,146 @@ def stopLevelChange() {
 }
 
 def levelUp() {
-	def newLevel = device.currentValue("level").toInteger() + 4
-	if (newLevel > 101) { return }
+	def curLevel = device.currentValue("level").toInteger()
+	if (curLevel == 100) { return }
+	def newLevel = curLevel + 4
 	if (newLevel > 100) { newLevel = 100 }
 	setLevel(newLevel, 0)
-	runIn(1	,levelUp)
+	runIn(1, levelUp)
 }
 
 def levelDown() {
-	def newLevel = device.currentValue("level").toInteger() - 4
-	if (newLevel < -1) { return }
-	else if (newLevel <= 0) { off() }
-	else {
-		setLevel(newLevel, 0)
-		runIn(1, levelDown)
-	}
+	def curLevel = device.currentValue("level").toInteger()
+	if (curLevel == 0) { return }
+	def newLevel = curLevel - 4
+	if (newLevel < 0) { newLevel = 0 }
+	setLevel(newLevel, 0)
+	if (newLevel == 0) { off() }
+	runIn(1, levelDown)
 }
 
 def refresh(){
 	logDebug("refresh")
-		sendCmd("d0f281f88bff9af7d5ef94b6d1b4c09fec95e68fe187e8caf08bf68bf6",
-				"statusResponse")
+	def command = "0000001dd0f281f88bff9af7d5ef94b6d1b4c09fec95e68" +
+		"fe187e8caf08bf68bf6"
+	sendCmd(command)
 }
 
-def commandResponse(response) {
-	def resp = parseLanMessage(response)
-	if(resp.type == "LAN_TYPE_UDPCLIENT") {
-		state.errorCount = 0
-		resp = parseJson(inputXOR(resp.payload))
-		logDebug("commandResponse: cmdResponse = ${resp}")
-		updateBulbData(resp["smartlife.iot.smartbulb.lightingservice"].transition_light_state)
-	} else {
-		setCommsError()
-	}
-}
-
-def statusResponse(response) {
-	def resp = parseLanMessage(response)
-	if(resp.type == "LAN_TYPE_UDPCLIENT") {
-		state.errorCount = 0
-		resp = inputXOR(resp.payload)
-		if (resp.length() >= 1023) {
-			resp = resp.substring(0,resp.indexOf("preferred")-2) + "}}}"
-		}
-		resp = parseJson(resp)
-		logDebug("statusResponse: cmdResponse = ${resp}")
-		updateBulbData(resp.system.get_sysinfo.light_state)
-	} else {
-		setCommsError()
-	}
-}
-
-
-//	Unique to Kasa Mono Bulb
 def updateBulbData(status) {
 	logDebug("updateBulbData: ${status}")
 	def deviceStatus = [:]
+	def type = getDataValue("devType")
 	if (status.on_off == 0) { 
-		sendEvent(name: "switch", value: "off", type: "physical")
+		sendEvent(name: "switch", value: "off", type: "digital")
 		deviceStatus << ["power" : "off"]
 	} else {
-		sendEvent(name: "switch", value: "on", type: "physical")
+		sendEvent(name: "switch", value: "on", type: "digital")
 		deviceStatus << ["power" : "on"]
 		sendEvent(name: "level", value: status.brightness, unit: "%")
 		deviceStatus << ["level" : status.brightness]
 	}
-	logInfo("Status: ${deviceStatus}")
+	logInfo("updateBulbData: Status = ${deviceStatus}")
 }
 
 
-//	Common to all Kasa Drivers
-def logInfo(msg) {
-	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
-}
-
-def debugLogOff() {
-	device.updateSetting("debug", [type:"bool", value: false])
-	logInfo("Debug logging is false.")
-}
-
-def logDebug(msg){
-	if(debug == true) { log.debug "${device.label} ${driverVer()} ${msg}" }
-}
-
-def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }
-
-private sendCmd(command, action) {
-	logDebug("sendCmd: action = ${action}")
-	state.lastCommand = [command: "${command}", action: "${action}"]
-	sendHubCommand(new hubitat.device.HubAction(
-		command,
-		hubitat.device.Protocol.LAN,
-		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
-		 destinationAddress: "${getDataValue("deviceIP")}:9999",
-		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
-		 parseWarning: true,
-		 timeout: 5,
-		 callback: action]
-	))
-}
-
-def setCommsError() {
-	logWarn("setCommsError")
-	state.errorCount += 1
-	if (state.errorCount > 4) {
+//	===== distribute responses =====
+def distResp(response) {
+	logDebug("distResp: response length = ${response.length()}")
+	if (response.length() == null) {
+		logDebug("distResp: null return rejected.")
+		return 
+	}
+	
+	def resp
+	try {
+		resp = parseJson(inputXOR(response))
+	} catch (e) {
+		logWarn("distResp: Invalid or incomplete return.\nerror = ${e}")
 		return
-	} else if (state.errorCount < 3) {
-		repeatCommand()
-	} else if (state.errorCount == 3) {
-		if (getDataValue("applicationVersion")) {
-			logWarn("setCommsError: Commanding parent to check for IP changes.")
-			parent.requestDataUpdate()
-			runIn(30, repeatCommand)
-		} else {
-			runIn(3, repeatCommand)
-		}
-	} else if (state.errorCount == 4) {	
-		def warnText = "setCommsError: \n<b>Your device is not reachable. Potential corrective Actions:\r" +
-			"a.\tDisable the device if it is no longer powered on.\n" +
-			"b.\tRun the Kasa Integration Application and see if the device is on the list.\n" +
-			"c.\tIf not on the list of devices, troubleshoot the device using the Kasa App."
-		logWarn(warnText)
+	}
+	unschedule(rawSocketTimeout)
+	state.errorCount = 0
+	
+	if (resp["smartlife.iot.smartbulb.lightingservice"]) {
+		updateBulbData(resp["smartlife.iot.smartbulb.lightingservice"].transition_light_state)
+	} else {
+		updateBulbData(resp.system.get_sysinfo.light_state)
 	}
 }
 
-def repeatCommand() { 
-	logWarn("repeatCommand: ${state.lastCommand}")
-	sendCmd(state.lastCommand.command, state.lastCommand.action)
+
+//	===== Common Kasa Driver code =====
+private sendCmd(command) {
+	logDebug("sendCmd")
+	runIn(2, rawSocketTimeout, [data: command])
+	if (now() - state.lastConnect > 35000) {
+		logDebug("sendCmd: Connecting.....")
+		try {
+			interfaces.rawSocket.connect("${getDataValue("deviceIP")}", 
+										 9999, byteInterface: true)
+		} catch (error) {
+			logDebug("SendCmd: error = ${error}")
+			return
+		}
+	}
+	interfaces.rawSocket.sendMessage(command)
 }
 
+def socketStatus(message) {
+	if (message == "receive error: Stream closed.") {
+		logDebug("socketStatus: Socket Established")
+	} else {
+		logWarn("socketStatus = ${message}")
+	}
+}
+
+def parse(message) {
+	def respLength
+	if (message.length() > 8 && message.substring(0,4) == "0000") {
+		def hexBytes = message.substring(0,8)
+		respLength = 8 + 2 * hubitat.helper.HexUtils.hexStringToInt(hexBytes)
+		if (message.length() == respLength) {
+			distResp(message)
+			state.lastConnect = now()
+		} else {
+			state.response = message
+			state.respLength = respLength
+		}
+	} else {
+		def resp = state.response
+		resp = resp.concat(message)
+		if (resp.length() == state.respLength) {
+			state.response = ""
+			state.respLength = 0
+			state.lastConnect = now()
+			distResp(resp)
+		} else {
+			state.response = resp
+		}
+	}
+}
+
+def rawSocketTimeout(command) {
+	state.errorCount += 1
+	if (state.errorCount <= 2) {
+		logDebug("rawSocketTimeout: attempt = ${state.errorCount}")
+		state.lastConnect = 0
+		sendCmd(command)
+	} else {
+		logWarn("rawSocketTimeout: Retry on error limit exceeded. Error " +
+				"count = ${state.errorCount}.  If persistant try SavePreferences.")
+		if (state.errorCount > 10) {
+			unschedule(quickPoll)
+			logWarn("rawSocketTimeout: Quick Poll Disabled.")
+		}
+	}
+}
+
+
+//	-- Encryption / Decryption
 private outputXOR(command) {
 	def str = ""
-	def encrCmd = ""
+	def encrCmd = "000000" + Integer.toHexString(command.length()) 
  	def key = 0xAB
 	for (int i = 0; i < command.length(); i++) {
 		str = (command.charAt(i) as byte) ^ key
@@ -260,8 +314,8 @@ private outputXOR(command) {
    	return encrCmd
 }
 
-private inputXOR(encrResponse) {
-	String[] strBytes = encrResponse.split("(?<=\\G.{2})")
+private inputXOR(resp) {
+	String[] strBytes = resp.substring(8).split("(?<=\\G.{2})")
 	def cmdResponse = ""
 	def key = 0xAB
 	def nextKey
@@ -274,3 +328,17 @@ private inputXOR(encrResponse) {
 	}
 	return cmdResponse
 }
+
+
+//	 ===== Logging =====
+def logTrace(msg){ log.trace "${device.label} ${msg}" }
+
+def logInfo(msg) {
+	if (descriptionText == true) { log.info "${device.label} ${msg}" }
+}
+
+def logDebug(msg){
+	if(debug == true) { log.debug "${device.label} ${msg}" }
+}
+
+def logWarn(msg){ log.warn "${device.label} ${msg}" }
