@@ -9,32 +9,38 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				a.	implemented rawSocket for communications to address UPD errors and
 					the issue that Hubitat UDP not supporting Kasa return lengths > 1024.
 				b.	Use encrypted version of refresh / quickPoll commands
-=======================================================================================================*/
+====================================================================================================*/
 def driverVer() { return "5.3.0" }
 
 metadata {
-	definition (name: "Kasa Multi Plug",
+	definition (name: "Kasa EM Plug",
     			namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Multi-Plug.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Plug.groovy"
 			   ) {
 		capability "Switch"
 		capability "Actuator"
 		capability "Refresh"
-		command "setPollFreq", [[
-			name: "Poll Interval 0 = off, 5s - 30s range", 
-			type: "NUMBER"]]
+		command "setPollInterval", [[
+			name: "Poll Interval in seconds",
+			constraints: ["off", "5", "10", "15", "20", "25", "30"],
+			type: "ENUM"]]
+		capability "Power Meter"
+		capability "Energy Meter"
+		attribute "currMonthTotal", "number"
+		attribute "currMonthAvg", "number"
+		attribute "lastMonthTotal", "number"
+		attribute "lastMonthAvg", "number"
 	}
-
 	preferences {
 		if (!getDataValue("applicationVersion")) {
-			input ("device_IP", "text", 
-				   title: "Device IP", 
+			input ("device_IP", "text",
+				   title: "Device IP",
 				   defaultValue: getDataValue("deviceIP"))
-			input ("plug_No", "enum", 
-				   title: "Plug Number",
-				   options: ["00", "01", "02", "03", "04", "05"])
 		}
+		input ("emFunction", "bool", 
+			   title: "Enable Energy Monitor", 
+			   defaultValue: false)
 		input ("refresh_Rate", "enum",  
 			   title: "Device Refresh Interval (minutes)", 
 			   options: ["1", "5", "10", "15", "30", "60", "180"], 
@@ -65,23 +71,16 @@ def updated() {
 	state.lastConnect = 0
 	state.errorCount = 0
 	if (!state.pollInterval) { state.pollInterval = "off" }
-	
+
 	//	Manual installation support.  Get IP and Plug Number
 	if (!getDataValue("applicationVersion")) {
-		if (!device_IP || !plug_No) {
-			logWarn("updated: Device IP or Plug Number is not set.")
+		if (!device_IP) {
+			logWarn("updated: Device IP is not set.")
 			return
 		}
 		if (getDataValue("deviceIP") != device_IP.trim()) {
 			updateDataValue("deviceIP", device_IP.trim())
 			logInfo("updated: Device IP set to ${device_IP.trim()}")
-		}
-		if (!getDataValue("plugNo")) {
-			updateDataValue("plugNo", plug_No)
-			logInfo("updated: Plug Number set to ${plug_No}")
-			def command = "0000001dd0f281f88bff9af7d5ef94b6d1b4c09" +
-				"fec95e68fe187e8caf08bf68bf6"
-			sendCmd(command)
 		}
 	}
 
@@ -104,14 +103,18 @@ def updated() {
 	logInfo("updated: ${updateDriverData()}")
 	setRefresh()
 
-	runIn(5, refresh)
-}
-
-def setPlugId(resp) {
-	def plugNo = getDataValue("plugNo")
-	def plugId = "${resp.system.get_sysinfo.deviceId}${plugNo}"
-	updateDataValue("plugId", plugId)
-	logInfo("setPlugId: Plug ID = ${plugId}")
+	//	Energy Monitor startup
+	if (emFunction) {
+		pauseExecution(1000)
+		sendEvent(name: "power", value: 0, descriptionText: "Watts", unit: "W")
+		schedule("0 01 0 * * ?", updateEmStats)
+		runEvery30Minutes(getEnergyToday)
+		runIn(1, getEnergyToday)
+		runIn(2, updateEmStats)
+		logInfo("updated: Energy Monitor Function enabled.")
+	} else {
+		refresh()
+	}
 }
 
 def updateDriverData() {
@@ -158,6 +161,13 @@ def setRefresh() {
 	}
 }
 
+def updateEmStats() {
+	logDebug("updateEmStats: Updating daily energy monitor data.")
+	def year = new Date().format("yyyy").toInteger()
+	def command = outputXOR("""{"emeter":{"get_monthstat":{"year": ${year}}}}""")
+	sendCmd(command)
+}
+
 def debugLogOff() {
 	device.updateSetting("debug", [type:"bool", value: false])
 	logInfo("debugLogOff: Debug logging is off.")
@@ -168,31 +178,48 @@ def pollTestOff() {
 	logInfo("pollTestOff: poll testing is off")
 }
 
-def plugId() { return getDataValue("plugId") }
-
 
 //	===== Device Command Methods =====
 def on() {
 	logDebug("on")
-	def command = outputXOR("""{"context":{"child_ids":["${plugId()}"]},""" +
-							""""system":{"set_relay_state":{"state":1},""" +
+	def command
+	if (emFunction) {
+		command = outputXOR("""{"system":{"set_relay_state":{"state":1},""" +
+							""""get_sysinfo":{}},""" +
+							""""emeter":{"get_realtime":{}}}""")
+	} else {
+		command = outputXOR("""{"system":{"set_relay_state":{"state":1},""" +
 							""""get_sysinfo":{}}}""")
+	}
 	sendCmd(command)
 }
 
 def off() {
 	logDebug("off")
-	def command = outputXOR("""{"context":{"child_ids":["${plugId()}"]},""" +
-							""""system":{"set_relay_state":{"state":0},""" +
+	def command
+	if (emFunction) {
+		command = outputXOR("""{"system":{"set_relay_state":{"state":0},""" +
+							""""get_sysinfo":{}},""" +
+							""""emeter":{"get_realtime":{}}}""")
+	} else {
+		command = outputXOR("""{"system":{"set_relay_state":{"state":0},""" +
 							""""get_sysinfo":{}}}""")
+	}
 	sendCmd(command)
 }
 
 def refresh() {
 	logDebug("refresh")
 	if (pollTest) { logTrace("Poll Test.  Time = ${now()}") }
-	def command = "0000001dd0f281f88bff9af7d5ef94b6d1b4c09" +
-		"fec95e68fe187e8caf08bf68bf6"
+	def command
+	if (emFunction) {
+		command = "0000003bd0f281f88bff9af7d5ef94b6d1b4c09fec95e68f" +
+			"e187e8caf08bf68ba787a5c0adc8bcd9ab89b3c8ea8de89cc3b1d4b5d9" +
+			"adc4a9cceed4afd2afd2"
+	} else {
+		command = "0000001dd0f281f88bff9af7d5ef94b6d1b4c09" +
+			"fec95e68fe187e8caf08bf68bf6"
+	}
 	sendCmd(command)
 }
 
@@ -219,14 +246,136 @@ def setPollInterval(interval) {
 
 def setSysInfo(resp) {
 	def status = resp.system.get_sysinfo
-	status = status.children.find { it.id == plugId() }
 	logDebug("setSysInfo: status = ${status}")
 	def onOff = "on"
-	if (status.state == 0) { onOff = "off" }
+	if (status.relay_state == 0) { onOff = "off" }
 	if (onOff != device.currentValue("switch")) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 		logInfo("setSysInfo: switch: ${onOff}")
 	}
+	if (resp.emeter) { setPower(resp) }
+}
+
+
+//	===== Device Energy Monitor Methods =====
+def getPower() {
+	logDebug("getPower")
+	def command = outputXOR("""{"emeter":{"get_realtime":{}}}""")
+	sendCmd(command)
+}
+
+def setPower(resp) {
+	status = resp.emeter.get_realtime
+	logDebug("setPower: status = ${status}")
+	def power = status.power
+	if (power == null) { power = status.power_mw / 1000 }
+	power = (0.5 + Math.round(100*power)/100).toInteger()
+	def curPwr = device.currentValue("power").toInteger()
+	if (power > curPwr + 1 || power < curPwr - 1) { 
+		sendEvent(name: "power", value: power, 
+				  descriptionText: "Watts", unit: "W")
+		logInfo("pollResp: power = ${power}")
+	}
+}
+
+def getEnergyToday() {
+	def year = new Date().format("yyyy").toInteger()
+	def month = new Date().format("M").toInteger()
+	def command = outputXOR("""{"emeter":{"get_daystat":{"month":${month},"year":${year}}}}""")
+	sendCmd(command)
+}
+
+def setEnergyToday(resp) {
+	logDebug("setEnergyToday: ${resp}")
+	def day = new Date().format("d").toInteger()
+	def data = resp.day_list.find { it.day == day }
+	def energyData = data.energy
+	if (energyData == null) { energyData = data.energy_wh/1000 }
+	energyData = Math.round(100*energyData)/100
+	if (energyData != device.currentValue("energy")) {
+		sendEvent(name: "energy",value: energyData, 
+				  descriptionText: "KiloWatt Hours", unit: "kWH")
+		logInfo("setEngrToday: [energy: ${energyData}]")
+	}
+}
+
+def setThisMonth(resp) {
+	logDebug("setThisMonth: ${resp}")
+	def year = new Date().format("yyyy").toInteger()
+	def month = new Date().format("M").toInteger()
+	def day = new Date().format("d").toInteger()
+	def data = resp.month_list.find { it.month == month }
+	def scale = "energy"
+	def energyData
+	if (data == null) {
+		energyData = 0
+	} else {
+		if (data.energy == null) { scale = "energy_wh" }
+		energyData = data."${scale}"
+	}
+	def avgEnergy = 0
+	if (day !=1) { avgEnergy = energyData/(day - 1) }
+	if (scale == "energy_wh") {
+		energyData = energyData/1000
+		avgEnergy = avgEnergy/1000
+	}
+	energyData = Math.round(100*energyData)/100
+	avgEnergy = Math.round(100*avgEnergy)/100
+	sendEvent(name: "currMonthTotal", value: energyData, 
+			  descriptionText: "KiloWatt Hours", unit: "KWH")
+	sendEvent(name: "currMonthAvg", value: avgEnergy, 
+			  descriptionText: "KiloWatt Hours per Day", unit: "KWH/D")
+	logInfo("setThisMonth: Energy stats set to ${energyData} // ${avgEnergy}")
+	if (month != 1) {
+		setLastMonth(resp)
+	} else {
+		def command = outputXOR("""{"emeter":{"get_monthstat":{"year":${year-1}}}}""")
+		sendCmd(command)
+	}
+}
+
+def setLastMonth(resp) {
+	logDebug("setLastMonth: cmdResponse = ${resp}")
+	def year = new Date().format("yyyy").toInteger()
+	def month = new Date().format("M").toInteger()
+	def lastMonth = month - 1
+	if (lastMonth == 0) { lastMonth = 12 }
+	def monthLength
+	switch(lastMonth) {
+		case 4:
+		case 6:
+		case 9:
+		case 11:
+			monthLength = 30
+			break
+		case 2:
+			monthLength = 28
+			if (year == 2020 || year == 2024 || year == 2028) { monthLength = 29 }
+			break
+		default:
+			monthLength = 31
+	}
+	def data = resp.month_list.find { it.month == lastMonth }
+	def scale = "energy"
+	def energyData
+	if (data == null) { energyData = 0 }
+	else {
+		if (data.energy == null) { scale = "energy_wh" }
+		energyData = data."${scale}"
+	}
+	def avgEnergy = energyData/monthLength
+	if (scale == "energy_wh") {
+		energyData = energyData/1000
+		avgEnergy = avgEnergy/1000
+	}
+	energyData = Math.round(100*energyData)/100
+	avgEnergy = Math.round(100*avgEnergy)/100
+	sendEvent(name: "lastMonthTotal", value: energyData, 
+			  descriptionText: "KiloWatt Hours", unit: "KWH")
+	sendEvent(name: "lastMonthAvg", value: avgEnergy, 
+			  descriptionText: "KiloWatt Hoursper Day", unit: "KWH/D")
+	logInfo("setLastMonth: Energy stats set to ${energyData} // ${avgEnergy}")
+	refresh()
 }
 
 
@@ -248,10 +397,17 @@ def distResp(response) {
 	unschedule(rawSocketTimeout)
 	state.errorCount = 0
 	
-	if (!getDataValue("plugId")) {
-		setPlugId(resp)
-	} else {
+	def month = new Date().format("M").toInteger()
+	if(resp.system) {
 		setSysInfo(resp)
+	} else if (resp.emeter.get_realtime) {
+		setPower(resp.emeter.get_realtime)
+	} else if (resp.emeter.get_daystat) {
+		setEnergyToday(resp.emeter.get_daystat)
+	} else if (resp.emeter.get_monthstat.month_list.find { it.month == month }) {
+		setThisMonth(resp.emeter.get_monthstat)
+	} else if (resp.emeter.get_monthstat.month_list.find { it.month == month - 1 }) {
+		setLastMonth(resp.emeter.get_monthstat)
 	}
 }
 
