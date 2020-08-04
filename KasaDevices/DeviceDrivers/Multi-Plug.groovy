@@ -21,9 +21,10 @@ metadata {
 		capability "Switch"
 		capability "Actuator"
 		capability "Refresh"
-		command "setPollFreq", [[
-			name: "Poll Interval 0 = off, 5s - 30s range", 
-			type: "NUMBER"]]
+		command "setPollInterval", [[
+			name: "Poll Interval in seconds",
+			constraints: ["off", "5", "10", "15", "20", "25", "30"],
+			type: "ENUM"]]
 	}
 
 	preferences {
