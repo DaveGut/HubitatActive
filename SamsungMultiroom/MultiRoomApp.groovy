@@ -26,7 +26,7 @@ and limitations under the  License.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 
 import org.json.JSONObject
-def appVersion() { return "3.2.0" }
+def appVersion() { return "3.2.1" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
