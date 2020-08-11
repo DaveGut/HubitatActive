@@ -18,10 +18,11 @@ and limitations under the  License.
 04.20	3.1.0	Update for Hubitat Package Manager
 06.15	3.2.0	a.	Added URLStationPlayback functions per request.
 				b.	Limit debug logging to 30 minutes.
+08.11	3.2.1	Fixed button call function for urlPlayback to call correct preset.
 
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.2.0" }
+def driverVer() { return "3.2.1" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -802,7 +803,8 @@ def push(pushed) {
 		case 27 :		//	Preset 7
 		case 28 :		//	Preset 8
 			if (state.triggered == false) {
-				urlPresetPlay(pushed)
+//				urlPresetPlay(pushed)
+				urlPresetPlay(pushed-20)
 			} else {
 				logWarn("Auto urlPresetCreate is not available")
 				sendEvent(name: "Trigger", value: "notArmed")
