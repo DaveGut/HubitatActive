@@ -1,10 +1,10 @@
 {
   "packageName": "Samsung MultiRoom Speakers",
   "author": "Dave Gutheinz",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-08-11",
-  "releaseNotes": "Fixed button call for urlPlayback function.",
+  "dateReleased": "2020-08-16",
+  "releaseNotes": "Fixed button call for urlPlayback function.  Fixed preset function returning null.",
   "apps": [
     {
       "id": "5cce274d-6d84-4a56-8533-6e4a61691242",
