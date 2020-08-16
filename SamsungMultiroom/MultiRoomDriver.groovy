@@ -19,10 +19,11 @@ and limitations under the  License.
 06.15	3.2.0	a.	Added URLStationPlayback functions per request.
 				b.	Limit debug logging to 30 minutes.
 08.11	3.2.1	Fixed button call function for urlPlayback to call correct preset.
+08.16	3.2.2	Fixed presetCreate to work properly with urlPresets.
 
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.2.1" }
+def driverVer() { return "3.2.2" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -68,7 +69,6 @@ metadata {
 		attribute "urlPreset_6", "string"
 		attribute "urlPreset_7", "string"
 		attribute "urlPreset_8", "string"
-//		command "urlPresetCreate", [[name: "Preset Number", type: "NUMBER"],[name: "Preset Name", type: "STRING"],[name: "URL for Preset", type: "STRING"]]
 		command "urlPresetCreate", [[name: "Preset Number", type: "NUMBER"],[name: "Preset Name", type: "STRING"]]
 		command "urlPresetPlay", [[name: "Preset Number", type: "NUMBER"]]
 		command "urlPresetDelete", [[name: "Preset Number", type: "NUMBER"]]
@@ -81,13 +81,6 @@ metadata {
 		command "groupStart", ["NUMBER"]
 		command "groupStop"
 		command "groupDelete", ["NUMBER"]
-		
-//////////////////		
-		command "zTest"
-//////////////////		
-		
-		
-		
 	}
 	preferences {
 		def refreshRate = ["1" : "Refresh every 1 minute",
@@ -155,11 +148,6 @@ def updated() {
 	}
 	refresh()
 }
-
-def zTest() {
-	state.urlPresetData = [:]
-	state.remove("playingUrl")
-}	
 
 def updateInstallData() {
 }
@@ -270,11 +258,12 @@ def getPlayStatus() {
 
 def setTrackDescription() {
 	unschedule("schedSetTrackDescription")
-	if (device.currentValue("subMode") == "url") {
+	def inputSource = device.currentValue("inputSource")
+	def subMode = device.currentValue("subMode")
+	if (subMode == "url") {
 		logInfo("setTrackDescription command does not work during URL Playback.")
 		return
 	}
-	def inputSource = device.currentValue("inputSource")
 	logDebug("setTrackDescription: source = ${inputSource}, subMode = ${subMode}")
 	state.updateTrackDescription = true
 	if (device.currentValue("status") != "playing") {
@@ -952,18 +941,20 @@ def getSource() {
 //	========== Samsung Player Preset Capability ==========
 def presetCreate(preset) {
 	logDebug("presetCreate: preset = ${preset}")
-	def hold = getSource()
-	def subMode = device.currentValue("subMode")
+	state.urlPlayback = false
+	def sourceData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
 	if (preset < 1 || preset > 8) {
 		logWarn("presetCreate: Preset Number out of range (1-8)!")
 		return
-	} else if (subMode != "cp") {
+	}
+	def subMode = sourceData.submode
+	if (subMode != "cp") {
 		logWarn("presetCreate: Can't create from media from source!")
 		return
 	}
 	state."Preset_${preset}_Data" = [:]
-	hold = setTrackDescription()
-	pauseExecution(1000)
+	setTrackDescription()
+	pauseExecution(2000)
 	def trackData = parseJson(device.currentValue("trackData"))
 	if (trackData.player == "Amazon" || trackData.player == "AmazonPrime") {
 		logWarn("presetCreate: Preset not currently supported for Amazon")
@@ -981,12 +972,17 @@ def presetCreate(preset) {
 }
 
 def presetPlay(preset) {
-	state.urlPlayback = false
-	def psName = device.currentValue("Preset_${preset}")
 	if (preset < 1 || preset > 8) {
 		logWarn("presetPlay: Preset Number out of range (1-8)!")
 		return
-	} else if (psName == "preset${preset}") {
+	}
+	playbackControl("stop")
+	if (state.urlPlayback == true) {
+		state.urlPlayback = false
+		def sourceData = getSource()
+	}
+	def psName = device.currentValue("Preset_${preset}")
+	if (psName == "preset${preset}") {
 		logWarn("presetPlay: Preset Not Set!")
 		return
 	}
@@ -1031,17 +1027,19 @@ def urlPresetCreate(preset, name) {
 	urlData["type"] = "url"
 	urlData["name"] = name
 	urlData["url"] = trackData.url
+	state.urlPlayback = true
 	state.urlPresetData << ["PS_${preset}":[urlData]]
 	sendEvent(name: "urlPreset_${preset}", value: urlData.name)
 	logInfo("urlPresetCreate: created preset ${preset}, data = ${urlData}")
 }
 
 def urlPresetPlay(preset) {
-	def urlData = state.urlPresetData."PS_${preset}"
 	if (preset < 1 || preset > 8) {
 		logWarn("urlPresetPlay: Preset Number out of range (1-8)!")
 		return
-	} else if (urlData == null || urlData == [:]) {
+	} 
+	def urlData = state.urlPresetData."PS_${preset}"
+	if (urlData == null || urlData == [:]) {
 		logWarn("urlPresetPlay: Preset Not Set!")
 		return
 	}
@@ -1457,7 +1455,7 @@ def extractData(respMethod, respData) {
 			if (inputSource != "wifi") { subMode = "none" }
 			sendEvent(name: "inputSource", value: inputSource)
 			sendEvent(name: "subMode", value: subMode)
-			return respMethod
+			return respData
 			break
 		case "7BandEQList":
 			return respData
