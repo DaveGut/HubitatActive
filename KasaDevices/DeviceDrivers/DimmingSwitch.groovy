@@ -9,8 +9,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				a.	implemented rawSocket for communications to address UPD errors and
 					the issue that Hubitat UDP not supporting Kasa return lengths > 1024.
 				b.	Use encrypted version of refresh / quickPoll commands
+08.16	5.3.0.1	Corrected error in command for set level.
 ===================================================================================================*/
-def driverVer() { return "5.3.0" }
+def driverVer() { return "5.3.0.1" }
 
 metadata {
 	definition (name: "Kasa Dimming Switch",
@@ -177,7 +178,7 @@ def setLevel(percentage, transition = null) {
 	if (percentage > 100) { percentage = 100 }
 	percentage = percentage.toInteger()
 	def command = outputXOR("""{"smartlife.iot.dimmer":{"set_brightness":{"brightness":${percentage}}},""" +
-			      """"system":{"set_relay_state":{"state":1}},"get_sysinfo":{}}}""")
+							""""system":{"set_relay_state":{"state":1},"get_sysinfo":{}}}""")
 	sendCmd(command)
 }
 
@@ -222,6 +223,7 @@ def setPollInterval(interval) {
 }
 
 def setSysInfo(resp) {
+logTrace(resp)
 	def status = resp.system.get_sysinfo
 	logDebug("setSysInfo: status = ${status}")
 	def onOff = "on"
