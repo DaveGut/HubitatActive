@@ -223,7 +223,6 @@ def setPollInterval(interval) {
 }
 
 def setSysInfo(resp) {
-logTrace(resp)
 	def status = resp.system.get_sysinfo
 	logDebug("setSysInfo: status = ${status}")
 	def onOff = "on"
