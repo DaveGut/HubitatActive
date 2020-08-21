@@ -1,10 +1,10 @@
 {
   "packageName": "Samsung MultiRoom Speakers",
   "author": "Dave Gutheinz",
-  "version": "3.2.2",
+  "version": "3.3.0",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-08-16",
-  "releaseNotes": "Fixed button call for urlPlayback function.  Fixed preset function returning null.",
+  "dateReleased": "2020-08-21",
+  "releaseNotes": "a.	Added capability PushableButton linking directly to existing Push method, and b.	Added blank audio stream (1 second) to starting queue, alleviating the bonk in the middle of an actual notification.",
   "apps": [
     {
       "id": "5cce274d-6d84-4a56-8533-6e4a61691242",
