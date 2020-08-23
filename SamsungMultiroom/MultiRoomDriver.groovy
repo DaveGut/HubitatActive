@@ -166,9 +166,7 @@ def play() {
 		restoreTrack(trackData)
 	} else {
 		playbackControl("play")
-		getVolume()
-		getSource()
-		runIn(10, setTrackDescription)
+		runIn(1, refresh)
 	}
 }
 
@@ -295,15 +293,19 @@ def setTrackDescription() {
 	logDebug("setTrackDescription: source = ${inputSource}, subMode = ${subMode}")
 	state.updateTrackDescription = true
 	def trackData
-	if (device.currentValue("status") != "playing") {
-		trackData = new JSONObject("{type: ${inputSource}}")
-		sendEvent(name: "trackData", value: trackData)
-		sendEvent(name: "trackDescription", value: "${inputSource}")
-	} else if (subMode == "dlna") {
+	if (subMode == "dlna") {
 		trackData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetMusicInfo%3C/name%3E")
 	} else if (subMode == "cp") {
 		trackData = sendSyncCmd("/CPM?cmd=%3Cname%3EGetRadioInfo%3C/name%3E")
 	}
+	
+	try{
+		trackData = new JSONObject(trackData)
+	} catch (error) {
+		logWarn("setTrackData: ${trackData}")
+		trackData = new JSONObject("{type: ukn, error: dataParseError}")
+	}
+	sendEvent(name: "trackData", value: trackData)
 	return trackData
 }
 
@@ -315,7 +317,6 @@ def schedSetTrackDescription() {
 	if(state.updateTrackDescription == false) { return }
 	def trackData = parseJson(device.currentValue("trackData"))
 	def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentPlayTime%3C/name%3E")
-
 	def timelength
 	if (trackData.title == "Commercial") { timelength = trackData.trackLength.toInteger() }
 	else { timelength = respData.timelength.toInteger() }
@@ -336,106 +337,104 @@ def parseMusicInfo(respData) {
 		return
 	}
 	def trackData
-	def trackDescription
+	def trackDescription = "unknown"
 	if (respData.@result == "ng") {
-		trackDescription = "WiFi DLNA No Music"
-		trackData = "{type: dlna, error: no music}"
+		trackDescription = respData.errCode
+		trackData = "{type: dlna, error: ${respData.errCode}}"
 	} else {
+		def deviceUdn = respData.device_udn.toString().replace("uuid:", "")
+		def playbackType = respData.playbacktype
+		def playIndex = respData.playindex
+		def objectid = respData.objectid
+
 		def parentId =  respData.parentId
 		if (parentId == "") { parentId = "unknown" }
+
 		def parentId2 =  respData.parentid
 		if (parentId2 == "") { parentId2 = "unknown" }
+	
 		def player =  respData.sourcename.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[]", "")
 		if (player == "") { player = "unknown" }
+	
 		def album = respData.album.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[]", "")
-		if (album == "") { album = "unknown" }
+		if (album == "") { album = "album" }
+
 		def artist = respData.artist.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[]", "")
 		if (artist == "") { artist = "unknown" }
+
 		def title = respData.title.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[]", "")
 		if (title == "") { title = "unknown" }
-		def deviceUdn = respData.device_udn.toString().replace("uuid:", "")
 
 		trackDescription = "${artist}: ${title}"
+
 		trackData = "{type: ${device.currentValue("subMode")}, deviceUdn: ${deviceUdn}, "
 		trackData += "playbackType: ${respData.playbacktype}, parentId: ${parentId}, parentId2: ${parentId2}, "
 		trackData += "playIndex: ${respData.playindex}, album: ${album}, artist: ${artist}, "
 		trackData += "title: ${title}, objectId: ${respData.objectid}}"
-		logDebug("parseMusicInfo: trackData = ${trackData}")
-		runIn(2, schedSetTrackDescription)
 	}
-	try{
-		trackData = new JSONObject(trackData)
-	} catch (error) {
-		logWarn("setTrackData: ${trackData}")
-		trackData = new JSONObject("{type: dlna, error: dataParseError}")
-	}
+	
 	state.trackIcon = ""
 	sendEvent(name: "trackDescription", value: "${trackDescription}")
-	sendEvent(name: "trackData", value: trackData)
+	runIn(2, schedSetTrackDescription)
 	return trackData
 }
 
 def parseRadioInfo(respData) {
+	def trackData
 	def player = respData.cpname
-	if (player == null) {
-		logWarn("parseRadioInfo: CP Name is null. trackData not updated")
-		sendEvent(name: "trackDescription", value: "unknown")
-		runIn(60, setTrackDescription)
-		return "{error: no player id}"
-	}
-	def station = "unknown"
-	if (respData.station != "") {
-		station = respData.station.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
-	} else if (respData.root != "") {
-		station = respData.root.toString()
-	}
-	def path = respData.mediaid
-	def artist = respData.artist.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
-	def album = respData.album.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
-	def title = respData.title.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
-	def trackLength = respData.tracklength.toString()
-	switch(player) {
-		case "iHeartRadio":
-			artist = "iHeartRadio"
-			path = "l${path.toString().take(4)}"
-			break
-		case "Pandora":
-			if (trackLength == "0") {
-				artist = "Pandora"
-				title = "Commercial"
-				trackLength = "30"
-				path = "na"
-				album = "none"
-			}
-			break
-		case "8tracks":
-			if (respData.mixname == "") { station = "${player} - ${path}" }
-			else { station = "${respData.mixname}" }
-			break
-		case "TuneIn":
-			station = title
-			artist = "TuneIn"
-			album = "none"
-			trackLength = "0"
-			break
-		default:
-			break
-	}
-	def cpChannels = cpChannels()
-	def playerNo  = cpChannels."${player}"
-	def trackData = "{type: cp, player: ${player}, playerNo: ${playerNo}, station: ${station}, trackLength: ${trackLength}, "
-	trackData += "path: ${path}, album: ${album}, artist: ${artist}, title: ${title}}"
+	if (player == null || player == "Unknown") {
+		trackData = "{type: cp, player: ${player}, error: Player returned as unknown}"
+	} else {
+		def cpChannels = cpChannels()
+		def playerNo = cpChannels."${player}"
+		trackData = "{type: cp, player: ${player}, playerNo: ${playerNo}, "
 
-	logDebug("parseRadioInfo: trackData = ${trackData}")
-	state.trackIcon = "${respData.thumbnail}"
-	sendEvent(name: "trackDescription", value: "${artist}: ${title}")
-	try{
-		trackData = new JSONObject(trackData)
-	} catch (error) {
-		logWarn("setTrackData: ${trackData}")
-		trackData = new JSONObject("{error: dataParseError}")
+		def station = "unknown"
+		if (respData.station != "") {
+			station = respData.station.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
+		} else if (respData.root != "") {
+			station = respData.root.toString()
+		}
+
+		def path = respData.mediaid
+		def artist = respData.artist.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
+		def album = respData.album.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
+		def title = respData.title.toString().replaceAll("[\\\\/:*?\"<>|,'\\]\\[;]", "")
+		def trackLength = respData.tracklength.toString()
+		switch(player) {
+			case "iHeartRadio":
+				artist = "iHeartRadio"
+				path = "l${path.toString().take(4)}"
+				break
+			case "Pandora":
+				if (trackLength == "0") {
+					artist = "Pandora"
+					title = "Commercial"
+					trackLength = "30"
+					path = "na"
+					album = "none"
+				}
+				break
+			case "8tracks":
+				if (respData.mixname == "") { station = "${player} - ${path}" }
+				else { station = "${respData.mixname}" }
+				break
+			case "TuneIn":
+				station = title
+				artist = "TuneIn"
+				album = "none"
+				trackLength = "0"
+				break
+			default:
+				break
+		}
+		
+		trackData += "station: ${station}, trackLength: ${trackLength}, path: ${path}, "
+		trackData += "album: ${album}, artist: ${artist}, title: ${title}}"
+		trackDescription = "${artist}: ${title}"
 	}
-	sendEvent(name: "trackData", value: trackData)
+	state.trackIcon = "${respData.thumbnail}"
+	sendEvent(name: "trackDescription", value: trackDescription)
 	runIn(2, schedSetTrackDescription)
 	return trackData
 }
@@ -1008,13 +1007,15 @@ def presetPlay(preset) {
 	if (psData.playerNo != "99") {
 		def service = sendSyncCmd("/CPM?cmd=%3Cname%3ESetCpService%3C/name%3E" +
 				"%3Cp%20type=%22dec%22%20name=%22cpservice_id%22%20val=%22${psData.playerNo}%22/%3E")
+		pauseExecution(200)
 	}
 	def id = sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
 			"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${psData.player}%22/%3E" +
 			"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${psData.path}%22/%3E")
 	pauseExecution(1000)
 	playbackControl("play")
-	runIn(10, refresh)
+	runIn(20, refresh)
+//	runIn(10, play)
 	logInfo("presetPlay: Playing ${psName}")
 }
 
