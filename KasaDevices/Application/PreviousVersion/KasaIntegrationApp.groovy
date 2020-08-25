@@ -2,23 +2,11 @@
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== 2020 History =====
-02.28	New version 5.0
-		a.	Changed version number to Ln.n.n format.
-		b.	Updated error handling request from children.
-03.03	Automated installation using app verified.  Updated doc and import links.
-		Removed test code.  Tested Update Method.
-04.20	5.1.0	Update for Hubitat Package Manager
-04.21	5.1.1	Update for HUB version 2.2.0, specifically UDP parseLanMessage = true
-05.17	5.2.0	a.	Rework the Driver interface.
-				b.	Added Remove Devices and Kasa Tools to driver.
-				c.	Corrected to parse fragmented returns from devices.		
-				d.	Added ability to control device led
-05.21	5.2.1	a.	Added ability to control device led on/off.
-				b.	Inserted logic and clear warning message to explain HS300 return being
-					incomplete and unparsed if the total length of plug names exceed ~102 characters.
+08.01	Release on new version 5.3.  Minor updates supporting 5.3.
 =======================================================================================================*/
-def appVersion() { return "5.2.1" }
+def appVersion() { return "5.3.0" }
 import groovy.json.JsonSlurper
+
 definition(
 	name: "Kasa Integration",
 	namespace: "davegut",
@@ -44,7 +32,6 @@ preferences {
 	page(name: "ledOffPage")
 	page(name: "rebootSingleDevicePage")
 }
-
 
 def installed() {
 	log.info "installed"
@@ -96,7 +83,7 @@ def parseDeviceData(response) {
 	def resp = parseLanMessage(response.description)
 	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
 	def clearResp = inputXOR(resp.payload)
-	if (clearResp.length() > 1026) {
+	if (clearResp.length() > 1022) {
 		if (clearResp.indexOf("HS300") != -1) {
 			state.hs300Error = "<b>HS300 Error: </b>Parsing failed due to return length too long.\n" +
 			"<b>Probable cause::</b> For the HS300, the names for the six plugs must not exceed a " +
@@ -204,6 +191,8 @@ def updateDevices(dni, ip, alias, model, type, plugNo, plugId, ledOff) {
 		child.updateDataValue("deviceIP", ip)
 		child.updateDataValue("applicationVersion", appVersion())
 		logInfo("updateDevices: ${alias} IP updated to ${ip}")
+		child.updated()
+		logInfo("updateDevices: ${alias} running updatDriverData")
 	}		
 	logInfo("updateDevices: ${alias} added to devices array")
 }
@@ -264,7 +253,7 @@ def addDevicesPage() {
 	devices.each {
 		def isChild = getChildDevice(it.value.dni)
 		if (!isChild) {
-			uninstalledDevices["${it.value.dni}"] = "${it.value.model} ${it.value.alias}"
+			uninstalledDevices["${it.value.dni}"] = "${it.value.alias}     ${it.value.model}"
 		}
 	}
 	def pageInstructions = "<b>Before Installing New Devices</b>\n"
@@ -324,6 +313,7 @@ def addDevices() {
 				logWarn("Failed to install ${device.value.alias}.  Driver most likely not installed.")
 			}
 		}
+		pauseExecution(3000)
 	}
 	app?.removeSetting("selectedAddDevices")
 }
@@ -872,6 +862,8 @@ private String convertHexToIP(hex) {
 private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 
 def debugOff() { app.updateSetting("debugLog", false) }
+
+def logTrace(msg){ log.trace "${device.label} ${msg}" }
 
 def logDebug(msg){
 	if(debugLog == true) { log.debug "${appVersion()} ${msg}" }

@@ -9,8 +9,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				a.	implemented rawSocket for communications to address UPD errors and
 					the issue that Hubitat UDP not supporting Kasa return lengths > 1024.
 				b.	Use encrypted version of refresh / quickPoll commands
-====================================================================================================*/
-def driverVer() { return "5.3.0" }
+08.25	5.3.1	Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.
+===================================================================================================*/
+def driverVer() { return "5.3.1" }
 
 metadata {
 	definition (name: "Kasa Color Bulb",
@@ -394,17 +395,31 @@ def distResp(response) {
 //	===== Common Kasa Driver code =====
 private sendCmd(command) {
 	logDebug("sendCmd")
-	runIn(2, rawSocketTimeout, [data: command])
-	if (now() - state.lastConnect > 35000) {
-		logDebug("sendCmd: Connecting.....")
+	if (now() - state.lastConnect > 35000 ||
+	   device.name == "HS100" || device.name == "HS200") {
+		logDebug("sendCmd: Attempting to connect.....")
 		try {
 			interfaces.rawSocket.connect("${getDataValue("deviceIP")}", 
 										 9999, byteInterface: true)
 		} catch (error) {
-			logDebug("SendCmd: error = ${error}")
+			logDebug("SendCmd: Unable to connect to device at ${getDataValue("deviceIP")}. " +
+					 "Error = ${error}")
+			if (!getDataValue("applicationVersion")) {
+				logWarn("sendCmd:  Check your IP address and device power.")
+				return
+			}
+			def pollEnabled = parent.pollForIps()
+			if (pollEnabled == true) {
+				logDebug("SendCmd: Attempting to update IP address.")
+				runIn(10, rawSocketTimeout, [data: command])
+			} else {
+				logWarn("SendCmd: IP address updat attempted within last hour./n" + 
+					    "Check your device. Disable if not longer in use.")
+			}
 			return
 		}
 	}
+	runIn(2, rawSocketTimeout, [data: command])
 	interfaces.rawSocket.sendMessage(command)
 }
 
