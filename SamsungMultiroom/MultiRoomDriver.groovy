@@ -20,13 +20,15 @@ and limitations under the  License.
 				b.	Limit debug logging to 30 minutes.
 08.11	3.2.1	Fixed button call function for urlPlayback to call correct preset.
 08.16	3.2.2	Fixed presetCreate to work properly with urlPresets.
-08.31	3.3.0	Update Code for the below:
+08.21	3.3.0	Update Code for the below:
 				a.	Added capability PushableButton linking directly to existing Push method
 				b.	Added blank audio stream (1 second) to starting queue, alleviating
 					the "bonk" in the middle of an actual notification.
+09.01	3.3.1	Changes resolving issue where queue would hang.  Corrected by adding
+				a clause to run playViaQueue 10 seconds after "last" perceived message.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.3.0" }
+def driverVer() { return "3.3.1" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -607,6 +609,9 @@ def addToQueue(trackUri, duration, volume, resumePlay){
 	if (state.playingNotification == false) {
 		state.playingNotification = true
 		runInMillis(100, startPlayViaQueue, [data: [resumePlay: resumePlay]])
+	} else {
+//	Added to add case where queue stops without 
+		runIn(10, playViaQueue)
 	}
 }
 
@@ -614,7 +619,6 @@ def startPlayViaQueue(data) {
 	logDebug("startPlayViaQueue: queueSize = ${state.playQueue.size()}")
 	if (state.playQueue.size() == 0) { return }
 	state.recoveryData = createRecoveryData(data.resumePlay)
-//	Create null track and play to alleviate bonk issue
 	def track = convertToTrack("     ")
 	execPlay(track.uri, true)
 	runIn(1, resumePlayer)
@@ -658,7 +662,6 @@ def playViaQueue() {
 
 	setVolume(playVolume)
 	execPlay(playData.trackUri, playData.resumePlay)
-//	runIn(playData.duration, playViaQueue)
 	runIn(playData.duration, resumePlayer)
 }
 

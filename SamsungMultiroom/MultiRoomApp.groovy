@@ -22,11 +22,11 @@ and limitations under the  License.
 2020
 04.20	3.1.0	Update for Hubitat Package Manager
 06.15	3.2.0	Minor changes and synchronization with adding URL Presets to driver.
-8.16	3.3.0	Synch with driver change.
+09.01	3.3.1	Synch with driver change.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 
 import org.json.JSONObject
-def appVersion() { return "3.3.0" }
+def appVersion() { return "3.3.1" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
