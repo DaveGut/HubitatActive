@@ -35,10 +35,10 @@ definition(
 	author: "Dave Gutheinz",
 	description: "This is a Service Manager for Samsung WiFi speakers and soundbars.",
 	category: "Convenience",
-	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomApp.groovy",
 	iconUrl: "",
 	iconX2Url: "",
-	singleInstance: true
+	singleInstance: true,
+	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomApp.groovy"
 )
 
 preferences {
