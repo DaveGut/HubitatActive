@@ -611,7 +611,7 @@ def addToQueue(trackUri, duration, volume, resumePlay){
 		runInMillis(100, startPlayViaQueue, [data: [resumePlay: resumePlay]])
 	} else {
 //	Added to add case where queue stops without 
-		runIn(10, playViaQueue)
+		runIn(duration.toInteger() + 10, playViaQueue)
 	}
 }
 
