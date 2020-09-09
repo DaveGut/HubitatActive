@@ -26,9 +26,14 @@ and limitations under the  License.
 					the "bonk" in the middle of an actual notification.
 09.01	3.3.1	Changes resolving issue where queue would hang.  Corrected by adding
 				a clause to run playViaQueue 10 seconds after "last" perceived message.
+09.09	3.3.2	More corrections for queue hanging.
+				a.	Modified addToQueue
+				b.	Created new exposed command "kickStartQueue".
+				c.	Modified playViaQueue to run kickStartQueue 60 seconds after last
+					playViaQueue execution (using runIn(60, kickStartQueue)
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.3.1" }
+def driverVer() { return "3.3.2" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -87,6 +92,8 @@ metadata {
 		command "groupStart", [[name: "Group Number", type: "NUMBER"]]
 		command "groupStop"
 		command "groupDelete", [[name: "Group Number", type: "NUMBER"]]
+		//	===== Queue Restart =====
+		command "kickStartQueue"
 	}
 	preferences {
 		def refreshRate = ["1" : "Refresh every 1 minute",
@@ -117,7 +124,6 @@ metadata {
 		}
 	}
 }
-
 
 def installed() {
 	log.info "Installing .."
@@ -304,7 +310,7 @@ def setTrackDescription() {
 	try{
 		trackData = new JSONObject(trackData)
 	} catch (error) {
-		logWarn("setTrackData: ${trackData}")
+		logDebug("setTrackData: ${trackData}")
 		trackData = new JSONObject("{type: ukn, error: dataParseError}")
 	}
 	sendEvent(name: "trackData", value: trackData)
@@ -593,7 +599,6 @@ def playTrackAndResume(trackData, volume=null) {
 		resumePlay = true
 	}
 	addToQueue(trackUri, duration, volume, resumePlay)
-//	addToQueue(trackUri, duration, volume, true)
 }
 
 def addToQueue(trackUri, duration, volume, resumePlay){
@@ -611,7 +616,8 @@ def addToQueue(trackUri, duration, volume, resumePlay){
 		runInMillis(100, startPlayViaQueue, [data: [resumePlay: resumePlay]])
 	} else {
 //	Added to add case where queue stops without 
-		runIn(duration.toInteger() + 10, playViaQueue)
+//		runIn(duration.toInteger() + 10, playViaQueue)
+		runIn(30, startPlayViaQueue)
 	}
 }
 
@@ -621,7 +627,7 @@ def startPlayViaQueue(data) {
 	state.recoveryData = createRecoveryData(data.resumePlay)
 	def track = convertToTrack("     ")
 	execPlay(track.uri, true)
-	runIn(1, resumePlayer)
+	runIn(1, playViaQueue)
 }
 
 def createRecoveryData(resumePlay) {
@@ -663,11 +669,12 @@ def playViaQueue() {
 	setVolume(playVolume)
 	execPlay(playData.trackUri, playData.resumePlay)
 	runIn(playData.duration, resumePlayer)
+	runIn(60, kickStartQueue)
 }
 
 def execPlay(trackUri, resumePlay) {
-	//	Speaker Play
 	if (getDataValue("hwType") == "Speaker") {
+	//	Speaker Play
 		def playResume = 1
 		if (resumePlay == false) { playResume = "0" }
 		sendCmd("/UIC?cmd=%3Cname%3ESetUrlPlayback%3C/name%3E" +
@@ -724,6 +731,13 @@ def resumePlayer() {
 	playbackControl("play")
 	runIn(10, setTrackDescription)
 	logInfo("resumePlayer: restoring play, data = ${recData}")
+}
+
+def kickStartQueue() {
+	logInfo("kickStartQueue: One last resumePlay to assure the queue is empty.")
+	if (state.playQueue.size() > 0) {
+		playViaQueue()
+	}
 }
 
 //	========== Capability Pushable Button ==========
@@ -1391,10 +1405,10 @@ private sendSyncCmd(command){
 	try {
 		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 45]) { resp ->
 			if(resp.status != 200) {
-				logWarn("sendSyncCmd, Command ${command}: Error return: ${resp.status}")
+				logDebug("sendSyncCmd, Command ${command}: Error return: ${resp.status}")
 				return
 			} else if (resp.data == null){
-				logWarn("sendSyncCmd, Command ${command}: No data in command response.")
+				logDebug("sendSyncCmd, Command ${command}: No data in command response.")
 				return
 			}
 			def respMethod = resp.data.method
@@ -1403,7 +1417,7 @@ private sendSyncCmd(command){
 		}
 	} catch (error) {
 		if (command == "/UIC?cmd=%3Cname%3EGetPlayStatus%3C/name%3E") { return }
-		logWarn("sendSyncCmd, Command ${command}: No response received.  Error = ${error}")
+		logDebug("sendSyncCmd, Command ${command}: No response received.  Error = ${error}")
 		return "commsError"
 	}
 }
