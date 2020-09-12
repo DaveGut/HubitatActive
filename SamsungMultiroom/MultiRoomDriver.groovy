@@ -24,16 +24,17 @@ and limitations under the  License.
 				a.	Added capability PushableButton linking directly to existing Push method
 				b.	Added blank audio stream (1 second) to starting queue, alleviating
 					the "bonk" in the middle of an actual notification.
-09.01	3.3.1	Changes resolving issue where queue would hang.  Corrected by adding
-				a clause to run playViaQueue 10 seconds after "last" perceived message.
-09.09	3.3.2	More corrections for queue hanging.
-				a.	Modified addToQueue
-				b.	Created new exposed command "kickStartQueue".
-				c.	Modified playViaQueue to run kickStartQueue 60 seconds after last
-					playViaQueue execution (using runIn(60, kickStartQueue)
+09.12	3.3.3	Includes 3.3.1 and 3.3.2.  Updates to queing functions to preclude hung queue.
+				a.	Modified and simplified queue functions
+				b.	Created new exposed command "kickStartQueue".  Will run after last queued
+					message and can be called at any time.
+				c.	Modified refresh and setTrackDescription functions to NOT update when
+					playing URLs.  The device itself contains no data on the URL and this
+					causes invalid data to be written to the data value "trackData".  This
+					then causes a failure in the recovery queue.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.3.2" }
+def driverVer() { return "3.3.3" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -142,10 +143,11 @@ def updated() {
 	state.urlPlayback = false
 	state.playingNotification = false
 	state.playQueue = []
-	state.recoveryData = [:]
 	state.spkType = getDataValue("spkType")
 	state.groupType = getDataValue("groupType")
 	state.trackIcon = ""
+	
+	if (state.recoveryData) { state.remove("recoveryData") }
 	if (debug == true) { runIn(1800, debugLogOff) }
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
@@ -455,10 +457,11 @@ def setVolume(volumelevel) {
 	if (getDataValue("hwType") == "Soundbar") { volScale = 100 }
 	if (volumelevel < 1 || volumelevel > 100) { return }
 	def deviceVolume = Math.round(volScale*volumelevel/100).toInteger()
-	sendCmd("/UIC?cmd=%3Cname%3ESetVolume%3C/name%3E" +
+	def volume = sendSyncCmd("/UIC?cmd=%3Cname%3ESetVolume%3C/name%3E" +
 			"%3Cp%20type=%22dec%22%20name=%22volume%22%20val=%22${deviceVolume}%22/%3E")
 
 	if (state.spkType == "Main") { groupVolume(volumelevel, curVol) }	//Grouped Speakers
+	return volume
 }
 
 def getVolume() {
@@ -514,7 +517,6 @@ def playTextAndRestore(text, volume=null) {
 		return
 	}
 	logDebug("playTextAndRestore: Text = ${text}, Volume = ${volume}")
-	if (volume == null) { volume = device.currentValue("volume") }
 	def track = convertToTrack(text)
 	addToQueue(track.uri, track.duration, volume, false)
 }
@@ -526,13 +528,8 @@ def playTextAndResume(text, volume=null) {
 		return
 	}
 	logInfo("playTextAndResume: Text = ${text}, Volume = ${volume}")
-	if (volume == null) { volume = device.currentValue("volume") }
 	def track = convertToTrack(text)
-	def resumePlay = false
-	if (device.currentValue("status") == "playing") {
-		resumePlay = true
-	}
-	addToQueue(track.uri, track.duration, volume, resumePlay)
+	addToQueue(track.uri, track.duration, volume, true)
 }
 
 def convertToTrack(text) {
@@ -559,7 +556,6 @@ def playTrackAndRestore(trackData, volume=null) {
 		return
 	}
 	logDebug("playTrackAndResore: Volume = ${volume}, trackData = ${trackData}")
-	if (volume == null) { volume = device.currentValue("volume") }
 	def trackUri
 	def duration
 	if (trackData[0] == "[") {
@@ -581,7 +577,6 @@ def playTrackAndResume(trackData, volume=null) {
 		return
 	}
 	logDebug("playTrackAndResume: Volume = ${volume}, trackData = ${trackData}")
-	if (volume == null) { volume = device.currentValue("volume") }
 	def trackUri
 	def duration
 	if (trackData[0] == "[") {
@@ -594,82 +589,58 @@ def playTrackAndResume(trackData, volume=null) {
 		trackUri = trackData
 		duration = 15
 	}
-	def resumePlay = false
-	if (device.currentValue("status") == "playing") {
-		resumePlay = true
-	}
-	addToQueue(trackUri, duration, volume, resumePlay)
+	addToQueue(trackUri, duration, volume, true)
 }
 
+//	========== Play Queue Execution ==========
 def addToQueue(trackUri, duration, volume, resumePlay){
 	logDebug("addToQueue: ${trackUri},${duration},${volume},${resumePlay}") 
 	duration = duration + 3
 	playData = ["trackUri": trackUri, 
-				"duration": duration.toInteger(),
-				"requestVolume": volume.toInteger(),
-				"notificationVolume": notificationVolume.toInteger(),
-				"resumePlay": resumePlay]
+				"duration": duration,
+				"requestVolume": volume]
 	state.playQueue.add(playData)
 
 	if (state.playingNotification == false) {
 		state.playingNotification = true
-		runInMillis(100, startPlayViaQueue, [data: [resumePlay: resumePlay]])
-	} else {
-//	Added to add case where queue stops without 
-//		runIn(duration.toInteger() + 10, playViaQueue)
-		runIn(30, startPlayViaQueue)
+		runInMillis(100, startPlayViaQueue, [data: resumePlay])
 	}
 }
 
-def startPlayViaQueue(data) {
-	logDebug("startPlayViaQueue: queueSize = ${state.playQueue.size()}")
+def startPlayViaQueue(resumePlay) {
+	logDebug("startPlayViaQueue: queueSize = ${state.playQueue.size()}, resumePlay = ${resumePlay}")
 	if (state.playQueue.size() == 0) { return }
-	state.recoveryData = createRecoveryData(data.resumePlay)
-	def track = convertToTrack("     ")
-	execPlay(track.uri, true)
-	runIn(1, playViaQueue)
+	unschedule(setTrackDescription)
+	state.recoveryVolume = device.currentValue("volume")
+	def blankTrack = convertToTrack("     ")
+	execPlay(blankTrack.uri, true)
+	runIn(1, playViaQueue, [data: resumePlay])
 }
 
-def createRecoveryData(resumePlay) {
-	logDebug("createRecoveryData: resumePlay = ${resumePlay}")
-	def recoveryData = [:]
-	recoveryData["prevVolume"] = device.currentValue("volume")
-	recoveryData["resumePlay"] = resumePlay
-	if (resumePlay == true) {
-		def subMode = device.currentValue("subMode")
-		recoveryData["inputSource"] = device.currentValue("inputSource")
-		recoveryData["subMode"] = subMode
-		def trackData = parseJson(device.currentValue("trackData"))
-		if (subMode == "cp") {
-			recoveryData["player"] = trackData.player
-			recoveryData["path"] = trackData.path
-		} else if (subMode == "url") {
-			recoveryData["name"] = trackData.name
-			recoveryData["url"] = trackData.url
-		}
-	}
-	return recoveryData
-}
-
-def playViaQueue() {
-	logDebug("playViaQueue: queueSize = ${state.playQueue.size()}")
+def playViaQueue(resumePlay) {
+	logDebug("playViaQueue: queueSize = ${state.playQueue.size()}, resumePlay = ${resumePlay}")
 	if (state.playQueue.size() == 0) {
-		resumePlayer()
+		resumePlayer(resumePlay)
 		return
 	}
 	def playData = state.playQueue.get(0)
 	state.playQueue.remove(0)
-	logDebug("playViaQueue: playData = ${playData}, recoveryData = ${state.recoveryData}")
-	
-	def recoveryVolume = state.recoveryData.prevVolume.toInteger()
+
+logInfo("playViaQueue: playData = ${playData}, recoveryVolume = ${state.recoveryVolume}")
+	logDebug("playViaQueue: playData = ${playData}, recoveryVolume = ${state.recoveryVolume}")
+
+	recVolume = state.recoveryVolume.toInteger()
 	def playVolume = playData.requestVolume
-	if (playVolume == 0) { playVolume = recoveryVolume + playData.notificationVolume }
+	if (!playVolume) {
+		def multFactor = 1 + notificationVolume.toInteger()/100
+		playVolume = (multFactor * recVolume).toInteger()
+	}
 	if (playVolume > 100) { playVolume = 100 }
 
-	setVolume(playVolume)
-	execPlay(playData.trackUri, playData.resumePlay)
-	runIn(playData.duration, resumePlayer)
-	runIn(60, kickStartQueue)
+	def vol = setVolume(playVolume)
+	execPlay(playData.trackUri, resumePlay)
+	runIn(playData.duration, resumePlayer, [data: resumePlay])
+	runIn(30, kickStartQueue, [data: resumePlay])
 }
 
 def execPlay(trackUri, resumePlay) {
@@ -696,47 +667,48 @@ def execPlay(trackUri, resumePlay) {
 	}
 }
 
-def resumePlayer() {
+def resumePlayer(resumePlay) {
 	if (state.playQueue.size() > 0) {
-		playViaQueue()
+		playViaQueue(resumePlay)
 		return
 	}
-	def recData = state.recoveryData
-	logDebug("resumePlayer: recoveryData = ${recData}")
-	state.playingNotification = false
-	state.recoveryData = [:]
-	setVolume(recData.prevVolume.toInteger())
-	sendCmd("/UIC?cmd=%3Cname%3ESetFunc%3C/name%3E" +
-			"%3Cp%20type=%22str%22%20name=%22function%22%20val=%22${source}%22/%3E")
 
-	if (recData.resumePlay == false) {
-		return
-	} else if (recData.subMode == "cp") {
-		sendEvent(name: "subMode", value: "cp")
-		switch(recData.player) {
+logInfo("resumePlayer: resumePlay = ${resumePlay}")
+	logDebug("resumePlayer: resumePlay = ${resumePlay}")
+	state.playingNotification = false
+	setVolume(state.recoveryVolume)
+	
+	if (resumePlay == false) {return}
+	
+	def trackData = new JSONObject(device.currentValue("trackData"))
+	def subMode = device.currentValue("subMode")
+	
+logInfo("resumePlayer: restoring play, track data = ${trackData}")
+	logDebug("resumePlayer: restoring play, track data = ${trackData}")
+	if (subMode == "cp") {
+		switch(trackData.player) {
 			case "Amazon":
 			case "AmazonPrime":
 				nextTrack()
 				break
 			default:
 				def id = sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
-					"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${recData.player}%22/%3E" +
-					"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${recData.path}%22/%3E")
+					"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${trackData.player}%22/%3E" +
+					"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${trackData.path}%22/%3E")
 		}
-	} else if (recData.subMode == "url") {
-		sendEvent(name: "subMode", value: "url")
-		playTrack(recData.url)
+		play()
+		runIn(20, setTrackDescription)
+	} else if (subMode == "url") {
+		playTrack(trackData.url)
 	}
-	pauseExecution(500)
-	playbackControl("play")
-	runIn(10, setTrackDescription)
-	logInfo("resumePlayer: restoring play, data = ${recData}")
 }
 
-def kickStartQueue() {
-	logInfo("kickStartQueue: One last resumePlay to assure the queue is empty.")
+def kickStartQueue(resumePlay = true) {
+	logInfo("kickStartQueue: resumePlay = ${resumePlay}.")
 	if (state.playQueue.size() > 0) {
-		playViaQueue()
+		resumePlayer(resumePlay)
+	} else {
+		state.playingNotification = false
 	}
 }
 
@@ -847,13 +819,15 @@ def refresh() {
 	pauseExecution(500)
 	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 	pauseExecution(500)
-	getSource()
 	if (state.activeGroupNo == "" && device.currentValue("activeGroup")) {
 		sendEvent(name: "activeGroup", value: "none")
 	}
 	pauseExecution(500)
 	getPlayStatus()
-	runIn(4, setTrackDescription)
+	if (device.currentValue("subMode") != "url") {
+		getSource()
+		runIn(4, setTrackDescription)
+	}
 }
 
 //	========== Samsung-specific Speaker Control ==========
@@ -1470,6 +1444,7 @@ def extractData(respMethod, respData) {
 			volume = Math.round(100*volume/volScale).toInteger()
 			sendEvent(name: "level", value: volume)
 			sendEvent(name: "volume", value: volume)
+			return volume
 			break
 		case "MuteStatus":
 			if (respData.mute == "on") {
@@ -1489,7 +1464,7 @@ def extractData(respMethod, respData) {
 			if (inputSource != "wifi") { subMode = "none" }
 			sendEvent(name: "inputSource", value: inputSource)
 			sendEvent(name: "subMode", value: subMode)
-			return respData
+			return [inputSource: inputSource, subMode: subMode]
 			break
 		case "7BandEQList":
 			return respData
