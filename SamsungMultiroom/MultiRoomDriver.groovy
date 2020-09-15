@@ -32,9 +32,10 @@ and limitations under the  License.
 					playing URLs.  The device itself contains no data on the URL and this
 					causes invalid data to be written to the data value "trackData".  This
 					then causes a failure in the recovery queue.
+09.15	3.3.4	Update to correct several errors.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.3.3" }
+def driverVer() { return "3.3.4" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -146,8 +147,8 @@ def updated() {
 	state.spkType = getDataValue("spkType")
 	state.groupType = getDataValue("groupType")
 	state.trackIcon = ""
-	
 	if (state.recoveryData) { state.remove("recoveryData") }
+
 	if (debug == true) { runIn(1800, debugLogOff) }
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
@@ -171,7 +172,7 @@ def updated() {
 def setLevel(level) { setVolume(level) }
 
 def play() {
-	if (device.currentValue("subMode") == "url") {
+	if (state.urlPlayback == true) {
 		def trackData = parseJson(device.currentValue("trackData"))
 		restoreTrack(trackData)
 	} else {
@@ -187,6 +188,7 @@ def pause() {
 
 def stop() {
 	unschedule(setTrackDescription)
+	state.urlPlayback = false
 	playbackControl("stop")
 }
 
@@ -212,7 +214,7 @@ def previousTrack() {
 	if (device.currentValue("subMode") == "cp") {
 		sendSyncCmd("/CPM?cmd=%3Cname%3ESetPreviousTrack%3C/name%3E")
 		sendSyncCmd("/CPM?cmd=%3Cname%3ESetPreviousTrack%3C/name%3E")
-	} else if (device.currentValue("subMode") == "url") {
+	} else if (state.urlPlayback == true) {
 		logInfo("nextTrack command does not work during URL Playback.")
 		return
 	} else {
@@ -233,7 +235,7 @@ def nextTrack() {
 	}
 	if (device.currentValue("subMode") == "cp") {
 		sendCmd("/CPM?cmd=%3Cname%3ESetSkipCurrentTrack%3C/name%3E")
-	} else if (device.currentValue("subMode") == "url") {
+	} else if (state.urlPlayback == true) {
 		logInfo("previousTrack command does not work during URL Playback.")
 		return
 	} else {
@@ -260,26 +262,20 @@ def playText(text, volume=null) {
 	playTextAndResume(text, volume)
 }
 
-def playTrack(urlData, volume = null) {
+def playTrack(trackData, volume = null) {
 	logDebug("playTrack: trackData = ${urlData}, Volume = ${volume}")
 	if (volume == null) { volume = device.currentValue("volume") }
-	def trackData
-	if (urlData.toString()[0] == "[") {
-		trackData = urlData
-	} else {
-		trackData = [:]
-		trackData["type"] = "url"
-		trackData["name"] = urlData
-		trackData["url"] = urlData
+
+	if (trackData.toString()[0] != "[") {
+		trackData = [url: trackData, name: trackData]
 	}
-	unschedule("schedSetTrackDescription")
+		
 	sendEvent(name: "trackDescription", value: trackData.name)
 	trackData = new JSONObject(trackData)
 	sendEvent(name: "trackData", value: trackData)
-	sendEvent(name: "subMode", value: "url")
 	sendEvent(name: "status", value: "playing")
 	state.urlPlayback = true
-	logInfo("playTrack: attempting to start play of ${trackData.url}")
+	logDebug("playTrack: attempting to start play of ${trackData.url}")
 	execPlay(trackData.url, 0)
 }
 
@@ -294,27 +290,32 @@ def getPlayStatus() {
 
 def setTrackDescription() {
 	unschedule("schedSetTrackDescription")
-	def inputSource = device.currentValue("inputSource")
-	def subMode = device.currentValue("subMode")
-	if (subMode == "url") {
-		logInfo("setTrackDescription command does not work during URL Playback.")
+	if (state.urlPlayback == true) {
+		logDebug("setTrackDescription command does not work during URL Playback.")
+		trackData = "urlPlayback active"
 		return
 	}
+	def source = getSource()
+	def inputSource = source.inputSource
+	def subMode = source.subMode
 	logDebug("setTrackDescription: source = ${inputSource}, subMode = ${subMode}")
 	state.updateTrackDescription = true
 	def trackData
-	if (subMode == "dlna") {
-		trackData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetMusicInfo%3C/name%3E")
-	} else if (subMode == "cp") {
+	def trackDescription
+	if (subMode == "cp") {
 		trackData = sendSyncCmd("/CPM?cmd=%3Cname%3EGetRadioInfo%3C/name%3E")
+	} else {
+		trackData = "{type: ${subMode}, player: Unknown, artist: ukn, title: ukn}"
 	}
 	
 	try{
 		trackData = new JSONObject(trackData)
 	} catch (error) {
 		logDebug("setTrackData: ${trackData}")
-		trackData = new JSONObject("{type: ukn, error: dataParseError}")
+		trackData = new JSONObject("{type: ukn, player: Unknown, artist: ukn, title: ukn, error: DATA PARSE ERROR}")
 	}
+	trackDescription = "${trackData.artist}: ${trackData.title}"
+	sendEvent(name: "trackDescription", value: trackDescription)
 	sendEvent(name: "trackData", value: trackData)
 	return trackData
 }
@@ -342,10 +343,6 @@ def schedSetTrackDescription() {
 }
 
 def parseMusicInfo(respData) {
-	if (device.currentValue("subMode") == "url") {
-		logInfo("setTrackDescription command is not valid during URL Playback.")
-		return
-	}
 	def trackData
 	def trackDescription = "unknown"
 	if (respData.@result == "ng") {
@@ -393,7 +390,7 @@ def parseRadioInfo(respData) {
 	def trackData
 	def player = respData.cpname
 	if (player == null || player == "Unknown") {
-		trackData = "{type: cp, player: ${player}, error: Player returned as unknown}"
+		trackData = "{type: cp, player: ${player}, artist: ukn, title: ukn}"
 	} else {
 		def cpChannels = cpChannels()
 		def playerNo = cpChannels."${player}"
@@ -441,10 +438,8 @@ def parseRadioInfo(respData) {
 		
 		trackData += "station: ${station}, trackLength: ${trackLength}, path: ${path}, "
 		trackData += "album: ${album}, artist: ${artist}, title: ${title}}"
-		trackDescription = "${artist}: ${title}"
 	}
 	state.trackIcon = "${respData.thumbnail}"
-	sendEvent(name: "trackDescription", value: trackDescription)
 	runIn(2, schedSetTrackDescription)
 	return trackData
 }
@@ -611,6 +606,8 @@ def startPlayViaQueue(resumePlay) {
 	logDebug("startPlayViaQueue: queueSize = ${state.playQueue.size()}, resumePlay = ${resumePlay}")
 	if (state.playQueue.size() == 0) { return }
 	unschedule(setTrackDescription)
+	getSource()
+	setTrackDescription()
 	state.recoveryVolume = device.currentValue("volume")
 	def blankTrack = convertToTrack("     ")
 	execPlay(blankTrack.uri, true)
@@ -626,7 +623,6 @@ def playViaQueue(resumePlay) {
 	def playData = state.playQueue.get(0)
 	state.playQueue.remove(0)
 
-logInfo("playViaQueue: playData = ${playData}, recoveryVolume = ${state.recoveryVolume}")
 	logDebug("playViaQueue: playData = ${playData}, recoveryVolume = ${state.recoveryVolume}")
 
 	recVolume = state.recoveryVolume.toInteger()
@@ -673,19 +669,18 @@ def resumePlayer(resumePlay) {
 		return
 	}
 
-logInfo("resumePlayer: resumePlay = ${resumePlay}")
 	logDebug("resumePlayer: resumePlay = ${resumePlay}")
 	state.playingNotification = false
 	setVolume(state.recoveryVolume)
-	
 	if (resumePlay == false) {return}
-	
+
 	def trackData = new JSONObject(device.currentValue("trackData"))
 	def subMode = device.currentValue("subMode")
-	
-logInfo("resumePlayer: restoring play, track data = ${trackData}")
 	logDebug("resumePlayer: restoring play, track data = ${trackData}")
-	if (subMode == "cp") {
+
+	if (state.urlPlayback == true) {
+		playTrack([url: trackData.url, name: trackData.name])
+	} else if (subMode == "cp" && trackData.player != "Unknown") {
 		switch(trackData.player) {
 			case "Amazon":
 			case "AmazonPrime":
@@ -697,10 +692,7 @@ logInfo("resumePlayer: restoring play, track data = ${trackData}")
 					"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${trackData.path}%22/%3E")
 		}
 		play()
-		runIn(20, setTrackDescription)
-	} else if (subMode == "url") {
-		playTrack(trackData.url)
-	}
+	} 
 }
 
 def kickStartQueue(resumePlay = true) {
@@ -813,20 +805,18 @@ def unTrigger() { state.triggered = false }
 
 //	========== Capability Refresh ==========
 def refresh() {
-	if (state.playingNotification == true) { return }
+	if (state.playingNotification == true) {
+		logDebug("refresh: ignored while playing notifications")
+		return
+	}
 	logDebug("refresh")
 	getVolume()
-	pauseExecution(500)
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
-	pauseExecution(500)
+	def status = getPlayStatus()
+	setTrackDescription()
+	pauseExecution(2000)
+	sendCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 	if (state.activeGroupNo == "" && device.currentValue("activeGroup")) {
 		sendEvent(name: "activeGroup", value: "none")
-	}
-	pauseExecution(500)
-	getPlayStatus()
-	if (device.currentValue("subMode") != "url") {
-		getSource()
-		runIn(4, setTrackDescription)
 	}
 }
 
@@ -837,15 +827,16 @@ def stopAllActivity() {
 		groupStop()
 		pauseExecution(1000)
 	}
-	inputSource("bt")
-	pauseExecution(3000)
-	inputSource("wifi")
+	stop()
 	if (getDataValue("hwType") == "Soundbar") {
 		pauseExecution(3000)
 		sendSyncCmd("/UIC?cmd=%3Cname%3ESetPowerStatus%3C/name%3E" +
 					"%3Cp%20type=%22dec%22%20name=%22powerstatus%22%20val=%220%22/%3E")
+		return
 	}
-	stop()
+	inputSource("bt")
+	pauseExecution(3000)
+	inputSource("wifi")
 }
 
 def repeat() {
@@ -853,7 +844,7 @@ def repeat() {
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
 		logWarn("repeat does not work for input source")
 		return
-	} else if (device.currentValue("subMode") == "url") {
+	} else if (state.urlPlayback == false) {
 		logInfo("repeat commands do not work during URL Playback.")
 		return
 	}
@@ -877,7 +868,7 @@ def shuffle() {
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
 		logWarn("shuffle does not work for input source")
 		return
-	} else if (device.currentValue("subMode") == "url") {
+	} else if (state.urlPlayback == false) {
 		logInfo("shuffle commands do not work during URL Playback.")
 		return
 	}
@@ -955,9 +946,6 @@ def presetCreate(preset) {
 		return
 	}
 	state.urlPlayback = false
-	getSource()
-	getPlayStatus()
-	pauseExecution(1000)
 	def trackData = setTrackDescription()
 	if (trackData.type != "cp") {
 		logWarn("presetCreate: Can't create channel preset from media from source!")
@@ -967,7 +955,6 @@ def presetCreate(preset) {
 		return
 	}
 
-	state.urlPlayback = false
 	state."Preset_${preset}_Data" = [:]
 	def presetData = state."Preset_${preset}_Data"
 	presetData["type"] = trackData.type
@@ -993,7 +980,6 @@ def presetPlay(preset) {
 	}
 	sendEvent(name: "inputSource", value: "wifi")
 	sendEvent(name: "subMode", value: "cp")
-	state.urlPlayback = false
 
 	if (psData.playerNo != "99") {
 		def service = sendSyncCmd("/CPM?cmd=%3Cname%3ESetCpService%3C/name%3E" +
@@ -1003,8 +989,8 @@ def presetPlay(preset) {
 	def id = sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
 			"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${psData.player}%22/%3E" +
 			"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${psData.path}%22/%3E")
-	pauseExecution(1000)
-	playbackControl("play")
+	play()
+//	playbackControl("play")
 	runIn(20, refresh)
 //	runIn(10, play)
 	logInfo("presetPlay: Playing ${psName}")
@@ -1017,12 +1003,12 @@ def presetDelete(preset) {
 		return
 	}
 	state."Preset_${preset}_Data" = ""
-	sendEvent(name: "Preset_${preset}", value: "preset${preset}")
+	sendEvent(name: "Preset_${preset}", value: "Preset_${preset}")
 	logInfo("presetDeleted: preset = ${preset}")
 }
 
 //	========== urlStation Preset Capability ==========
-def urlPresetCreate(preset, name) {
+def urlPresetCreate(preset, name = "NotSet") {
 	if (preset < 1 || preset > 8) {
 		logWarn("urlPresetCreate: Preset Number out of range (1-8)!")
 		return
@@ -1030,10 +1016,8 @@ def urlPresetCreate(preset, name) {
 	def trackData = parseJson(device.currentValue("trackData"))
 	logDebug("urlPresetCreate: preset = ${preset} // name = ${name} // trackData = ${trackData}")
 	def urlData = [:]
-	urlData["type"] = "url"
 	urlData["name"] = name
 	urlData["url"] = trackData.url
-	state.urlPlayback = true
 	state.urlPresetData << ["PS_${preset}":[urlData]]
 	sendEvent(name: "urlPreset_${preset}", value: urlData.name)
 	logInfo("urlPresetCreate: created preset ${preset}, data = ${urlData}")
@@ -1358,14 +1342,14 @@ private sendCmd(command){
 
 def parse(resp) {
 	resp = parseLanMessage(resp)
-	if(resp.status != 200) {
-		logWarn("parse: Error return: ${resp}")
+	if (resp.port == "23ed") {
+		logDebug("parse: Response received from UPNP port.")
+		return
+	} else if(resp.status != 200) {
+		logDEebug("parse: Error return: ${resp}")
 		return
 	} else if (resp.body == null){
-		logWarn("parse: No data in command response.")
-		return
-	} else if (resp.port == "23ed") {
-		logDebug("parse: Response received from UPNP port.")
+		logDebug("parse: No data in command response.")
 		return
 	}
 	def respMethod = (new XmlSlurper().parseText(resp.body)).method
@@ -1416,7 +1400,7 @@ def extractData(respMethod, respData) {
 		case "MediaBufferEndEvent":
  		case "PausePlaybackEvent":
 		case "StopPlaybackEvent":
-			if (device.currentValue("subMode") == "url") { return }
+			if (state.urlPlayback == true) { return }
 			sendEvent(name: "status", value: "paused")
 			state.updateTrackDescription = false
 			break
@@ -1457,10 +1441,6 @@ def extractData(respMethod, respData) {
 		case "CurrentFunc":
 			def inputSource = respData.function
 			def subMode = respData.submode
-			if (state.urlPlayback == true) {
-				subMode = "url"
-				inputSource = "none"
-			}
 			if (inputSource != "wifi") { subMode = "none" }
 			sendEvent(name: "inputSource", value: inputSource)
 			sendEvent(name: "subMode", value: subMode)
