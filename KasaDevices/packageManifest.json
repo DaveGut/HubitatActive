@@ -1,13 +1,13 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "5.3.1",
+  "version": "5.3.2",
   "minimumHEVersion": "2.2.0",
-  "dateReleased": "2020-08-25",
+  "dateReleased": "2020-11-19",
   "documentationLink": "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
-  "releaseNotes": "Hubitat Kasa Device Integration. Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.",
+  "releaseNotes": "Hubitat Kasa Device Integration. Added HS115 EM Smart Plug to device list.  That device needs verification.",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
