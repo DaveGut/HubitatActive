@@ -5,8 +5,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 08.01	Release on new version 5.3.  Minor updates supporting 5.3.
 08.25	5.3.1	Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.
 09.08	5.3.1.1	Added KP105 to list of Smart Plugs.
+11.19	5.3.2	Added KP115 to the list of Energy Monitor Smart Plugs.
 =======================================================================================================*/
-def appVersion() { return "5.3.1" }
+def appVersion() { return "5.3.2" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -138,6 +139,7 @@ def getType(model) {
 			return "Plug Switch"
 			break
 		case "HS110" :
+		case "KP115" :
 			return "EM Plug"
 			break
 		case "KP200" :
