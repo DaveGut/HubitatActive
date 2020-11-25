@@ -1,11 +1,11 @@
-# Local Hubitat-TP-Link-Integration
-Local (non-cloud) integration of TP-Link Devices into Hubitat Environment.  This set supports:
+# Cloud Hubitat-TP-Link-Integration
+## Supports devices that have been upgraded to firmware that does not support the Local Integration Method.
 
-a. Manual installation where the user enters the IP address and other information.  Does not utilize the integration application.
+Cloud integration of TP-Link Devices into Hubitat Environment.  This is to address changes to the TP-Link firmware for some devices.  This set supports:
 
-b. Integrated installation using the Application,
+a. Integrated installation using the Application,
 
-c.  Installation using Hubitat Package Manager.
+b.  Installation using Hubitat Package Manager.
 
 # See the link below for information and instructions.
 
