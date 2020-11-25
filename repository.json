@@ -10,6 +10,13 @@
       "description": "Install Kasa plugs, switches and bulbs."
     },
     {
+      "name": "Cloud Kasa Devices Integration",
+      "category": "Integrations",
+      "tags": ["LAN", "Lights & Switches"],
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCloudDevices/packageManifest.json",
+      "description": "Cloud based: Install Kasa plugs, switches and bulbs."
+    },
+    {
       "name": "BleBox Device Integration",
       "category": "Integrations",
       "tags": ["Lights & Switches", "LAN", "Doors & Windows"],
