@@ -1,5 +1,4 @@
-Hubitat Kasa Device Integration Changes:\n
-a.\tConverted comms to rawSocket \n
-b.\tChanged quickPoll to scheduled vice run-in.\n\n
-<b>Update Instructions</b>: For each device, run Save Preferences\n\n
+Cloud Hubitat Kasa Device Integration Changes:\n
+a.\tNew to support non-local-capable devices \n
+b.\tRemoved quick polling..\n\n
 <b>Installation Instructions</b>:  After HPM installation is complete, run the Kasa Integration app.
