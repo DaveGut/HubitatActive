@@ -11,8 +11,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				b.	Use encrypted version of refresh / quickPoll commands
 08.16	5.3.0.1	Corrected error in command for set level.
 08.25	5.3.1	Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.
+11/27	5.3.3	Fixed error handling to properly cancel quick polling and refresh after 10 errors.
 ===================================================================================================*/
-def driverVer() { return "5.3.1" }
+def driverVer() { return "5.3.3" }
 
 metadata {
 	definition (name: "Kasa Dimming Switch",
@@ -262,6 +263,7 @@ def distResp(response) {
 //	===== Common Kasa Driver code =====
 private sendCmd(command) {
 	logDebug("sendCmd")
+	runIn(4, rawSocketTimeout, [data: command])
 	if (now() - state.lastConnect > 35000 ||
 	   device.name == "HS100" || device.name == "HS200") {
 		logDebug("sendCmd: Attempting to connect.....")
@@ -286,7 +288,6 @@ private sendCmd(command) {
 			return
 		}
 	}
-	runIn(2, rawSocketTimeout, [data: command])
 	interfaces.rawSocket.sendMessage(command)
 }
 
@@ -335,7 +336,8 @@ def rawSocketTimeout(command) {
 				"count = ${state.errorCount}.  If persistant try SavePreferences.")
 		if (state.errorCount > 10) {
 			unschedule(quickPoll)
-			logWarn("rawSocketTimeout: Quick Poll Disabled.")
+			unschedule(refresh)
+			logWarn("rawSocketTimeout: Quick Poll and Refresh Disabled.")
 		}
 	}
 }
