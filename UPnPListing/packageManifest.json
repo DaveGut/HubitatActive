@@ -2,7 +2,7 @@
   "packageName": "UPnP Device Listing",
   "author": "David Gutheinz",
   "version": "1.0.0",
-  "minimumHEVersion": "2.3.0",
+  "minimumHEVersion": "2.2.3",
   "communityLink": "https://community.hubitat.com/t/release-upnp-device-listing/58417",
   "dateReleased": "2020-12-08",
   "apps": [
