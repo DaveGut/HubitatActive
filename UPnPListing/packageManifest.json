@@ -1,0 +1,19 @@
+{
+  "packageName": "UPnP Device Listing",
+  "author": "David Gutheinz",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.3.0",
+  "communityLink": "https://community.hubitat.com/t/release-upnp-device-listing/58417",
+  "dateReleased": "2020-12-08",
+  "apps": [
+    {
+      "id": "6ded44de-b5e9-456b-af9a-f2fd69e03d96",
+      "name": "UPnP Device List",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/UPnPListing/UpNPListing.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false
+    }
+  ]
+}
