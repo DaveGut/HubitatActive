@@ -30,5 +30,12 @@
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/UPnPListing/packageManifest.json",
       "description": "List UPnP devices with path to the capability page"
     }
+    {
+      "name": "Samsung Multiroom Speakers",
+      "category": "Speakers",
+      "tags": ["LAN", "Notification", "Speakers"],
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/packageManifest.json",
+      "description": "Samsung Multiroom Speaker Integration with Notification Capability"
+    }
   ]
 }
