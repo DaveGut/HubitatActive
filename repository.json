@@ -36,6 +36,13 @@
       "tags": ["LAN", "Utility"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/UPnPListing/packageManifest.json",
       "description": "List UPnP devices with path to the capability page"
+    },
+    {
+      "name": "Samsung TV Remote",
+      "category": "Utility",
+      "tags": ["LAN", "Utility", "Control"],
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/packageManifest.json",
+      "description": "Samsung TV Remote (2016 and Later TVs)"
     }
   ]
 }
