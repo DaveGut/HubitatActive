@@ -46,7 +46,7 @@ metadata {
 	definition (name: "Samsung TV Remote",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/Hubitat-Samsung-T/main/Hubitat-Samsung%20TV%20Remote%20Driver.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/SamsungTVRemote.groovy"
 			   ){
 		//	===== UPnP Augmentation =====
 		capability "SamsungTV"			//	cmds: on/off, volume, mute. attrs: switch, volume, mute
