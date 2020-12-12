@@ -39,8 +39,9 @@ Beta 1.3.0	1.  Added UPnP commands to set level, mute, playStatus, and notificat
 			4.	Removed following Button Interface:  on, off, artModeOn, artModeOff,
 				artModeStatus, volumeUp, volumeDown, mute
 			ToDo List: Find a means to poll status frequently (looking for non-obtrusive method.)
+Beta 1.3.1	Fixed art mode function.
 */
-def driverVer() { return "1.3.0" }
+def driverVer() { return "1.3.1" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -141,11 +142,8 @@ def updated() {
 		logInfo("Performing test using tokenSupport = ${tokenSupport}")
 		checkInstall()
 	}
-	if(getDataValue("frameTv") == "true") {
-		sendEvent(name: "artModeStatus", value: "off")
-	} else {
-		sendEvent(name: "artModeStatus", value: "notAvail")
-	}
+//	Temp code until I find the value returned for getFrameTV status.
+	sendEvent(name: "artModeStatus", value: "off")
 
 	runEvery15Minutes(refresh)
 	refresh()
@@ -570,13 +568,14 @@ def sendKey(key, cmd = "Click") {
 //	TV Art Display
 def artMode() {
 	def newStatus
+	if(getDataValue("frameTv") == "false") {
+		logWarn("artModeOn: notFrame")
+		return
+	}
 	if (getDataValue("artModeStatus") == "off") {
 		newStatus = "on"
 	} else if (getDataValue("artModeStatus") == "on") {
 		newStatus = "off"
-	} else {
-		logWarn("artModeOn: notFrame")
-		return
 	}
 	sendEvent(name: "artModeStatus", value: newStatus)
 	def data = [value:"${newStatus}",
