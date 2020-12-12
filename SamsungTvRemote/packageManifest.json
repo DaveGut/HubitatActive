@@ -4,16 +4,5 @@
   "version": "1.0.0",
   "minimumHEVersion": "2.2.3",
   "communityLink": "https://community.hubitat.com/t/samsung-hubitat-tv-integration/55120",
-  "dateReleased": "2020-12-10",
-  "apps": [
-    {
-      "id": "bc5cab2c-5381-4f7e-8b4d-a98c2ecdf2ff",
-      "name": "Samsung TV Remote",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/SamsungTVRemote.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": false
-    }
-  ]
+  "dateReleased": "2020-12-10"
 }
