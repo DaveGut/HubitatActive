@@ -39,9 +39,14 @@ Beta 1.3.0	1.  Added UPnP commands to set level, mute, playStatus, and notificat
 			4.	Removed following Button Interface:  on, off, artModeOn, artModeOff,
 				artModeStatus, volumeUp, volumeDown, mute
 			ToDo List: Find a means to poll status frequently (looking for non-obtrusive method.)
-Beta 1.3.1	Fixed art mode function.
+Beta 1.3.2	a.	Fixed art mode function.
+			b.	Modified play/pause to work as Enter if no media is present (this will 
+				pause/play external (HDMI) media, if available) by passing command on HDMI/CEC
+				interface.  Also enables play/pause interface on Media Player dashboard tile.
+			c.	Added mute toggle to allow single tile mute in addition to use of Media Play
+				dashboard tile.
 */
-def driverVer() { return "1.3.1" }
+def driverVer() { return "1.3.2" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -103,10 +108,17 @@ metadata {
 		//	===== Button Interface =====
 		capability "PushableButton"
 		command "push", ["NUMBER"]
+//		command "setPollInterval", [[
+//			name: "Poll Interval in seconds",
+//			constraints: ["off", "5", "10", "15", "20", "25", "30"],
+//			type: "ENUM"]]
 	}
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip")
-		def tvModes = ["AMBIENT", "ART_MODE", "TV", "Source1", "Source2", "Source3", "Source4", "none"]
+		def tvModes = ["ART_MODE", "Ambient", "none"]
+		input ("refreshInterval", "enum",  
+			   title: "Device Refresh Interval (minutes)", 
+			   options: ["1", "5", "10", "15", "30", "60", "180"])
 		input ("tvPwrOnMode", "enum", title: "TV Startup Display", options: tvModes, defalutValue: "none")
 		def ttsLanguages = ["en-au":"English (Australia)","en-ca":"English (Canada)", "en-gb":"English (Great Britain)",
 							"en-us":"English (United States)", "en-in":"English (India)","ca-es":"Catalan",
@@ -142,11 +154,21 @@ def updated() {
 		logInfo("Performing test using tokenSupport = ${tokenSupport}")
 		checkInstall()
 	}
-//	Temp code until I find the value returned for getFrameTV status.
-	sendEvent(name: "artModeStatus", value: "off")
-
-	runEvery15Minutes(refresh)
-	refresh()
+	pauseExecution(2000)
+	if(getDataValue("frameTv") == "false") {
+		sendEvent(name: "artModeStatus", value: "notFrameTV")
+	} else { getArtModeStatus() }
+	switch(refreshInterval) {
+		case "1" : runEvery1Minute(refresh); break
+		case "5" : runEvery5Minutes(refresh); break
+		case "10" : runEvery10Minutes("refresh"); break
+		case "15" : runEvery15Minutes(refresh); break
+		case "30" : runEvery30Minutes(refresh); break
+		case "180": runEvery3Hours(refresh); break
+		default:
+			runEvery1Hour(refresh); break
+	}
+	runIn(2, refresh)
 }
 def getDeviceData() {
 	logInfo("getDeviceData: Updating Device Data.")
@@ -192,7 +214,7 @@ def checkInstall() {
 	close()
 }
 
-//	========== SEND Commands to Devices ==========
+//	========== SEND UPnP Commands to Devices ==========
 private sendCmd(type, action, body = []){
 	logDebug("sendCmd: type = ${type}, upnpAction = ${action}, upnpBody = ${body}")
 	def cmdPort
@@ -214,8 +236,7 @@ private sendCmd(type, action, body = []){
 				  action:  action,
 				  body:	body,
 				  headers: [Host: host]]
-	def hubCmd = new hubitat.device.HubSoapAction(params)
-	sendHubCommand(hubCmd)
+	new hubitat.device.HubSoapAction(params)
 }
 
 //	===== WebSocket Communications =====
@@ -271,12 +292,15 @@ def webSocketStatus(message) {
 	logDebug("webSocketStatus: ${message}")
 	if (message == "status: open") {
 		sendEvent(name: "wsDeviceStatus", value: "open")
-		sendEvent(name: "switch", value: "on")
-		logInfo("webSocketStatus: wsDeviceStatus = open")
+		if (device.currentValue("switch") != "on") {
+			sendEvent(name: "switch", value: "on")
+		}
+		unschedule(setOff)
+		logDebug("webSocketStatus: wsDeviceStatus = open")
 	} else if (message == "status: closing") {
 		sendEvent(name: "wsDeviceStatus", value: "closed")
 		state.currentFunction = "close"
-		logInfo("webSocketStatus: wsDeviceStatus = closed")
+		logDebug("webSocketStatus: wsDeviceStatus = closed")
 	}
 }
 
@@ -309,9 +333,6 @@ def parseUpnp(resp) {
 	//	===== Fault Code =====
 	else if (body.Fault.size()){
 		def desc = body.Fault.detail.UPnPError.errorDescription
-		if (desc == "Transition not available") {
-			desc = "TV in incorrect mode."
-		}
 		logInfo("parse: Fault = ${desc}")
 	}
 	//	===== Unhandled response =====
@@ -330,11 +351,18 @@ def parseWebsocket(resp) {
 			logInfo("parseWebsocket: Token updated to ${newToken}")
 			state.token = newToken
 		}
+	} else if (event == "d2d_service_message") {
+		if (resp.data.event == "artmode_status") {
+			sendEvent(name: "artModeStatus", value: resp.data.status)
+			logMsg += ", artMode status = ${resp.data.status}"
+			logInfo("parseWebsocket: artMode status = ${resp.data.status}")
+		}  //	Future events in below else if statements
+		
 	} else if (event == "ms.error") {
 		logMsg += "Error Event.  Closing webSocket"
 		close{}
 	} else {
-		logMsg += ", message = <b>${resp}"
+		logMsg += ", message = ${resp}"
 	}
 	logDebug(logMsg)
 }
@@ -343,17 +371,16 @@ def parseWebsocket(resp) {
 def on() {
 	logDebug("on: desired TV Mode = ${tvPwrOnMode}")
 	def newMac = getDataValue("deviceMac").replaceAll(":","").replaceAll("-","")
-	def result = new hubitat.device.HubAction (
-		"wake on lan $newMac",
-		hubitat.device.Protocol.LAN,
-		null
-	)
-	sendHubCommand(result)
-	connect("remote")
-	pauseExecution(5000)
-	if (tvPwrOnMode == "none" || !tvPwrOnMode) { return }
-	else if(tvPwrOnMode == "ART_MODE") { artModeOn() }
-	else { sendKey(tvPwrOnMode) }
+	def wol = new hubitat.device.HubAction ("wake on lan $newMac",
+											hubitat.device.Protocol.LAN,
+											null)
+	sendHubCommand(wol)
+	if(tvPwrOnMode == "ART_MODE" && getDataValue("frameTv") == "true") {
+		artMode("on") }
+	else if(tvPwrOnMode == "Ambient") { ambientMode() }
+	else { connect("remote") }
+	
+	runIn(1, refresh)
 }
 def off() {
 	sendEvent(name: "switch", value: "off")
@@ -363,23 +390,20 @@ def off() {
 		pauseExecution(3000)
 		sendKey("POWER", "Release")
 	}
-	close()
+	runIn(1, refresh)
+	runIn(3, close)
 }
 
-def mute() { setMute(true) }
-def unmute() { setMute(false) }
-def setMute(muteState) {
-	logDebug("setMute: mute = ${muteState}")
-	mute = "1"
-	if (muteState == false) { mute = "0" }
-	sendCmd("RenderingControl",
-			"SetMute",
-			["InstanceID" :0,
-			 "Channel": "Master",
-			 "DesiredMute": mute])
+def mute() { 
+	sendKey("MUTE")
+	getMute()
+}
+def unmute() {
+	sendKey("MUTE")
+	getMute()
 }
 def getMute(muteState) {
-	logDebug("setMute: mute = ${muteState}")
+	logDebug("gsetMute:")
 	sendCmd("RenderingControl",
 			"GetMute",
 			["InstanceID" :0,
@@ -402,7 +426,6 @@ def setVolume(volume) {
 			["InstanceID" :0,
 			 "Channel": "Master",
 			 "DesiredVolume": volume])
-//	runIn(1, getLevel)
 }
 def volumeUp() {
 	sendKey("VOLUP")
@@ -423,6 +446,44 @@ def updateVolume(body) {
 	def status = body.CurrentVolume.text()
 	sendEvent(name: "volume", value: status.toInteger())
 	logDebug("updateVolume: volume = ${status}")
+//	if (state.quickPoll == true) {
+//		unschedule(setOff)
+//	}
+}
+
+//	===== Quick Polling Capability =====
+def setPollInterval(interval) {
+	logDebug("setPollInterval: interval = ${interval}")
+	if (interval == "off") {
+		state.quickPoll = false
+		state.remove("WARNING")
+		unschedule(quickPoll)
+	} else {
+		state.quickPoll = true
+		schedule("*/${interval} * * * * ?",  quickPoll)
+		logWarn("setPollInterval: polling interval set to ${interval} seconds.\n" +
+				"Quick Polling can have negative impact on the Hubitat Hub performance. " +
+			    "If you encounter performance problems, try turning off quick polling.")
+		state.WARNING = "<b>Quick Polling can have negative impact on the Hubitat " +
+						"Hub and network performance.</b>  If you encounter performance " +
+				    	"problems, <b>before contacting Hubitat support</b>, turn off quick " +
+				    	"polling and check your sysem out."
+	}
+}
+def quickPoll() {
+	if (device.currentValue("switch") == "on") {
+		log.trace "quickPoll: getVolume"
+		runIn(2, setOff)
+		getVolume()
+	} else {
+		log.trace "quickPoll: connect"
+		connect("remote")
+	}
+}
+def setOff() {
+	if (device.currentValue("switch") == "on") {
+		sendEvent(name: "switch", value: "off")
+	}
 }
 
 def setPictureMode(data) { logDebug("setPictureMode: not implemented") }
@@ -431,22 +492,36 @@ def showMessage(d,d1,d2,d3) { logDebug("showMessage: not implemented") }
 
 def play() {
 	logDebug("play")
-	sendCmd("AVTransport",
-			"Play",
-			["InstanceID" :0,
-			 "Speed": "1"])
+	if (device.currentValue("status") == "no media") {
+		sendKey("ENTER")
+	} else {
+		sendCmd("AVTransport",
+				"Play",
+				["InstanceID" :0,
+				 "Speed": "1"])
+	}
 }
 def pause() {
 	logDebug("pause")
-	sendCmd("AVTransport",
-			"Pause",
-			["InstanceID" :0])
+	if (device.currentValue("status") == "no media") {
+		sendKey("ENTER")
+	} else {
+		sendCmd("AVTransport",
+				"Pause",
+				["InstanceID" :0,
+				 "Speed": "1"])
+	}
 }
 def stop() {
 	logDebug("stop")
-	sendCmd("AVTransport",
-			"Stop",
-			["InstanceID" :0])
+	if (device.currentValue("status") == "no media") {
+		sendKey("ENTER")
+	} else {
+		sendCmd("AVTransport",
+				"Stop",
+				["InstanceID" :0,
+				 "Speed": "1"])
+	}
 }
 def getPlayStatus() {
 	logDebug("getPlayStatus")
@@ -550,10 +625,10 @@ def kickStartQueue() {
 //	========== Capability Refresh ==========
 def refresh() {
 	logDebug("refresh")
+	close()
 	getVolume()
 	getMute()
 	getPlayStatus()
-	artModeStatus()
 }
 
 //	===== Samsung Smart Remote Keys =====
@@ -567,32 +642,32 @@ def sendKey(key, cmd = "Click") {
 }
 //	TV Art Display
 def artMode() {
-	def newStatus
 	if(getDataValue("frameTv") == "false") {
 		logWarn("artModeOn: notFrame")
 		return
 	}
-	if (getDataValue("artModeStatus") == "off") {
-		newStatus = "on"
-	} else if (getDataValue("artModeStatus") == "on") {
-		newStatus = "off"
+	def onOff = "on"
+	if (getDataValue("artModeStatus") == "on") {
+		onOff = "off"
 	}
+	artMode(onOff)
+}
+def artMode(onOff) {
+	logDebug("artMode: ${onOff}")
+//	Delete sendEvent after confirmation of parse working.
 	sendEvent(name: "artModeStatus", value: newStatus)
-	def data = [value:"${newStatus}",
+	def data = [value:"${onOff}",
 				request:"set_artmode_status",
 				id: "${getDataValue("uuid")}"]
 	data = JsonOutput.toJson(data)
 	artModeCmd(data)
-	runIn(2, artModeStatus)
-	
+	runIn(2, getArtModeStatus)
 }
-def artModeStatus() {
-	if(getDataValue("frameTv") == "true") {
-		def data = [request:"get_artmode_status",
-					id: "${getDataValue("uuid")}"]
-		data = JsonOutput.toJson(data)
-		artModeCmd(data)
-	} else { logWarn("artModeStatus: is notFrame") }
+def getArtModeStatus() {
+	def data = [request:"get_artmode_status",
+				id: "${getDataValue("uuid")}"]
+	data = JsonOutput.toJson(data)
+	artModeCmd(data)
 }
 def artModeCmd(data) {
 	def cmdData = [method:"ms.channel.emit",
