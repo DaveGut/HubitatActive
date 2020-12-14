@@ -45,8 +45,14 @@ Beta 1.3.2	a.	Fixed art mode function.
 				interface.  Also enables play/pause interface on Media Player dashboard tile.
 			c.	Added mute toggle to allow single tile mute in addition to use of Media Play
 				dashboard tile.
+Beta 1.3.3	a.	Created quick poll routine using port 9197 and path /dmr (hard coded response).
+			b.	Created command "setQuickPoll" with enumerated values in seconds to turn on
+				and off quick polling.
+			c.	Modified Refresh to use quick poll to determine on/off state and then update
+				data only if the device is on.
+			d.	Fixed art mode status to attain correct value (requires testing)
 */
-def driverVer() { return "1.3.2" }
+def driverVer() { return "1.3.3" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -108,10 +114,10 @@ metadata {
 		//	===== Button Interface =====
 		capability "PushableButton"
 		command "push", ["NUMBER"]
-//		command "setPollInterval", [[
-//			name: "Poll Interval in seconds",
-//			constraints: ["off", "5", "10", "15", "20", "25", "30"],
-//			type: "ENUM"]]
+		command "setPollInterval", [[
+			name: "Poll Interval in seconds",
+			constraints: ["off", "5", "10", "15", "20", "25", "30"],
+			type: "ENUM"]]
 	}
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip")
@@ -143,7 +149,6 @@ def installed() {
 }
 def updated() {
 	logInfo("updated")
-	unschedule()
 	sendEvent(name: "numberOfButtons", value: "50")
 	sendEvent(name: "wsDeviceStatus", value: "closed")
 	state.playQueue = []
@@ -237,6 +242,9 @@ private sendCmd(type, action, body = []){
 				  body:	body,
 				  headers: [Host: host]]
 	new hubitat.device.HubSoapAction(params)
+}
+def testParse(resp) {
+	log.trace resp
 }
 
 //	===== WebSocket Communications =====
@@ -351,13 +359,10 @@ def parseWebsocket(resp) {
 			logInfo("parseWebsocket: Token updated to ${newToken}")
 			state.token = newToken
 		}
-	} else if (event == "d2d_service_message") {
-		if (resp.data.event == "artmode_status") {
-			sendEvent(name: "artModeStatus", value: resp.data.status)
-			logMsg += ", artMode status = ${resp.data.status}"
-			logInfo("parseWebsocket: artMode status = ${resp.data.status}")
-		}  //	Future events in below else if statements
-		
+	} else if (resp.data.event == "artmode_status") {
+		sendEvent(name: "artModeStatus", value: resp.data.status)
+		logMsg += ", artMode status = ${resp.data.status}"
+		logInfo("parseWebsocket: artMode status = ${resp.data.status}")
 	} else if (event == "ms.error") {
 		logMsg += "Error Event.  Closing webSocket"
 		close{}
@@ -446,9 +451,6 @@ def updateVolume(body) {
 	def status = body.CurrentVolume.text()
 	sendEvent(name: "volume", value: status.toInteger())
 	logDebug("updateVolume: volume = ${status}")
-//	if (state.quickPoll == true) {
-//		unschedule(setOff)
-//	}
 }
 
 //	===== Quick Polling Capability =====
@@ -456,10 +458,12 @@ def setPollInterval(interval) {
 	logDebug("setPollInterval: interval = ${interval}")
 	if (interval == "off") {
 		state.quickPoll = false
+		state.pollInterval = "off"
 		state.remove("WARNING")
 		unschedule(quickPoll)
 	} else {
 		state.quickPoll = true
+		state.pollInterval = interval
 		schedule("*/${interval} * * * * ?",  quickPoll)
 		logWarn("setPollInterval: polling interval set to ${interval} seconds.\n" +
 				"Quick Polling can have negative impact on the Hubitat Hub performance. " +
@@ -471,18 +475,16 @@ def setPollInterval(interval) {
 	}
 }
 def quickPoll() {
-	if (device.currentValue("switch") == "on") {
-		log.trace "quickPoll: getVolume"
-		runIn(2, setOff)
-		getVolume()
-	} else {
-		log.trace "quickPoll: connect"
-		connect("remote")
-	}
-}
-def setOff() {
-	if (device.currentValue("switch") == "on") {
-		sendEvent(name: "switch", value: "off")
+	try {
+		httpGet([uri: "http://${deviceIp}:9197/dmr", timeout: 5]) { resp ->
+			if (device.currentValue("switch") != "on") {
+				sendEvent(name: "switch", value: "on")
+			}
+		}
+	} catch (error) {
+		if (device.currentValue("switch") != "off") {
+			sendEvent(name: "switch", value: "off")
+		}
 	}
 }
 
@@ -625,10 +627,13 @@ def kickStartQueue() {
 //	========== Capability Refresh ==========
 def refresh() {
 	logDebug("refresh")
-	close()
-	getVolume()
-	getMute()
-	getPlayStatus()
+	quickPoll()
+	pauseExecution(15000)
+	if (device.currentState("switch") == "on") {
+		getVolume()
+		getMute()
+		getPlayStatus()
+	}
 }
 
 //	===== Samsung Smart Remote Keys =====
