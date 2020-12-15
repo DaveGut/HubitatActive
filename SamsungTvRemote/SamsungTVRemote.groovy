@@ -51,8 +51,12 @@ Beta 1.3.3	a.	Created quick poll routine using port 9197 and path /dmr (hard cod
 			c.	Modified Refresh to use quick poll to determine on/off state and then update
 				data only if the device is on.
 			d.	Fixed art mode status to attain correct value (requires testing)
+Beta 1.3.4	a.	Added capability Switch
+			b.	Updated save preferences processing to re-acquire settings data on each
+				update.  Test to capture new MAC after changing wired to/from wifi connect.
+			c.	Still working on Art Mode Status.  Next fix attempt (problem parsing data).
 */
-def driverVer() { return "1.3.3" }
+def driverVer() { return "1.3.4" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -62,6 +66,7 @@ metadata {
 			   ){
 		//	===== UPnP Augmentation =====
 		capability "SamsungTV"			//	cmds: on/off, volume, mute. attrs: switch, volume, mute
+		capability "Switch"
 		command "pause"					//	Only work on TV Players
 		command "play"					//	Only work on TV Players
 		command "stop"					//	Only work on TV Players
@@ -144,6 +149,7 @@ metadata {
 //	===== Installation, setup and update =====
 def installed() {
 	state.token = "12345678"
+	def tokenSupport = "false"
 	updateDataValue("name", "Hubitat Samsung Remote")
 	updateDataValue("name64", "Hubitat Samsung Remote".encodeAsBase64().toString())
 }
@@ -154,11 +160,11 @@ def updated() {
 	state.playQueue = []
 	setUpnpData()
 	if (debugLog) { runIn(1800, debugLogOff) }
-	if (!getDataValue("uuid")) {
+//	if (!getDataValue("uuid")) {
 		def tokenSupport = getDeviceData()
 		logInfo("Performing test using tokenSupport = ${tokenSupport}")
-		checkInstall()
-	}
+//		checkInstall()
+//	}
 	pauseExecution(2000)
 	if(getDataValue("frameTv") == "false") {
 		sendEvent(name: "artModeStatus", value: "notFrameTV")
@@ -177,7 +183,6 @@ def updated() {
 }
 def getDeviceData() {
 	logInfo("getDeviceData: Updating Device Data.")
-	def tokenSupport = "false"
 	try{
 		httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
 			updateDataValue("deviceMac", resp.data.device.wifiMac)
@@ -359,10 +364,13 @@ def parseWebsocket(resp) {
 			logInfo("parseWebsocket: Token updated to ${newToken}")
 			state.token = newToken
 		}
-	} else if (resp.data.event == "artmode_status") {
-		sendEvent(name: "artModeStatus", value: resp.data.status)
-		logMsg += ", artMode status = ${resp.data.status}"
-		logInfo("parseWebsocket: artMode status = ${resp.data.status}")
+	} else if (event == "d2d_service_message") {
+		def data = parseJson(resp.data)
+		if (data.event == "artmode_status") {
+			sendEvent(name: "artModeStatus", value: data.status)
+			logMsg += ", artMode status = ${data.status}"
+			logInfo("parseWebsocket: artMode status = ${data.status}")
+		}
 	} else if (event == "ms.error") {
 		logMsg += "Error Event.  Closing webSocket"
 		close{}
@@ -660,7 +668,7 @@ def artMode() {
 def artMode(onOff) {
 	logDebug("artMode: ${onOff}")
 //	Delete sendEvent after confirmation of parse working.
-	sendEvent(name: "artModeStatus", value: newStatus)
+	sendEvent(name: "artModeStatus", value: onOff)
 	def data = [value:"${onOff}",
 				request:"set_artmode_status",
 				id: "${getDataValue("uuid")}"]
