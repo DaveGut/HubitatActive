@@ -56,7 +56,7 @@ Beta 1.3.4	a.	Added capability Switch
 				update.  Test to capture new MAC after changing wired to/from wifi connect.
 			c.	Still working on Art Mode Status.  Next fix attempt (problem parsing data).
 */
-def driverVer() { return "1.3.4" }
+def driverVer() { return "1.3.4.1" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -302,13 +302,11 @@ def close() {
 	interfaces.webSocket.close()
 }
 def webSocketStatus(message) {
-	logDebug("webSocketStatus: ${message}")
 	if (message == "status: open") {
 		sendEvent(name: "wsDeviceStatus", value: "open")
 		if (device.currentValue("switch") != "on") {
 			sendEvent(name: "switch", value: "on")
 		}
-		unschedule(setOff)
 		logDebug("webSocketStatus: wsDeviceStatus = open")
 	} else if (message == "status: closing") {
 		sendEvent(name: "wsDeviceStatus", value: "closed")
@@ -357,7 +355,7 @@ def parseWebsocket(resp) {
 	def event = resp.event
 	def logMsg = "parseWebsocket: event = ${event}"
 	if (event == "ms.channel.connect") {
-		logMsg += ", webSocket Open"
+		logMsg += ", webSocket open"
 		def newToken = resp.data.token
 		if (newToken != null && newToken != state.token) {
 			logMsg += ", token updated to ${newToken}"
@@ -366,11 +364,14 @@ def parseWebsocket(resp) {
 		}
 	} else if (event == "d2d_service_message") {
 		def data = parseJson(resp.data)
-		if (data.event == "artmode_status") {
-			sendEvent(name: "artModeStatus", value: data.status)
-			logMsg += ", artMode status = ${data.status}"
-			logInfo("parseWebsocket: artMode status = ${data.status}")
+		if (data.event == "artmode_status" ||
+			data.event == "art_mode_changed") {
+			sendEvent(name: "artModeStatus", value: data.value)
+			logMsg += ", artMode status = ${data.value}"
+			logInfo("parseWebsocket: artMode status = ${data.value}")
 		}
+	} else if (event == "ms.channel.ready") {
+		logMsg += ", webSocket connected"
 	} else if (event == "ms.error") {
 		logMsg += "Error Event.  Closing webSocket"
 		close{}
@@ -674,7 +675,6 @@ def artMode(onOff) {
 				id: "${getDataValue("uuid")}"]
 	data = JsonOutput.toJson(data)
 	artModeCmd(data)
-	runIn(2, getArtModeStatus)
 }
 def getArtModeStatus() {
 	def data = [request:"get_artmode_status",
