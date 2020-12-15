@@ -56,7 +56,7 @@ Beta 1.3.4	a.	Added capability Switch
 				update.  Test to capture new MAC after changing wired to/from wifi connect.
 			c.	Still working on Art Mode Status.  Next fix attempt (problem parsing data).
 */
-def driverVer() { return "1.3.4.1" }
+def driverVer() { return "1.3.4.2" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -126,11 +126,16 @@ metadata {
 	}
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip")
-		def tvModes = ["ART_MODE", "Ambient", "none"]
+		input ("connectST", "bool", title: "Connect to SmartThings for added functions", defaultValue: false)
+		if (connectST) {
+			input ("stApiKey": "string", title: "SmartThings API Key")
+			input ("stDeviceId": "string", title: "SmartThings TV Device ID")
+		}
 		input ("refreshInterval", "enum",  
 			   title: "Device Refresh Interval (minutes)", 
 			   options: ["1", "5", "10", "15", "30", "60", "180"])
-		input ("tvPwrOnMode", "enum", title: "TV Startup Display", options: tvModes, defalutValue: "none")
+		input ("tvPwrOnMode", "enum", title: "TV Startup Display", 
+			   options: ["ART_MODE", "Ambient", "none"], defalutValue: "none")
 		def ttsLanguages = ["en-au":"English (Australia)","en-ca":"English (Canada)", "en-gb":"English (Great Britain)",
 							"en-us":"English (United States)", "en-in":"English (India)","ca-es":"Catalan",
 							"zh-cn":"Chinese (China)", "zh-hk":"Chinese (Hong Kong)","zh-tw":"Chinese (Taiwan)",
@@ -366,9 +371,11 @@ def parseWebsocket(resp) {
 		def data = parseJson(resp.data)
 		if (data.event == "artmode_status" ||
 			data.event == "art_mode_changed") {
-			sendEvent(name: "artModeStatus", value: data.value)
+			def status = data.value
+			if (status == null) { status = data.status }
+			sendEvent(name: "artModeStatus", value: status)
 			logMsg += ", artMode status = ${data.value}"
-			logInfo("parseWebsocket: artMode status = ${data.value}")
+			logInfo("parseWebsocket: artMode status = ${status}")
 		}
 	} else if (event == "ms.channel.ready") {
 		logMsg += ", webSocket connected"
