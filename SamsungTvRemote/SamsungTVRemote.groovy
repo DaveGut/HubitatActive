@@ -55,8 +55,10 @@ Beta 1.3.4	a.	Added capability Switch
 			b.	Updated save preferences processing to re-acquire settings data on each
 				update.  Test to capture new MAC after changing wired to/from wifi connect.
 			c.	Still working on Art Mode Status.  Next fix attempt (problem parsing data).
+Beta 1.3.5	a.	Added ST Intergation and functions setInputSource and setTvChannel.
+			b.	Next attempt at fixing artMode
 */
-def driverVer() { return "1.3.4.2" }
+def driverVer() { return "1.3.5" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -64,9 +66,9 @@ metadata {
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/SamsungTVRemote.groovy"
 			   ){
-		//	===== UPnP Augmentation =====
 		capability "SamsungTV"			//	cmds: on/off, volume, mute. attrs: switch, volume, mute
 		capability "Switch"
+		//	===== UPnP Augmentation =====
 		command "pause"					//	Only work on TV Players
 		command "play"					//	Only work on TV Players
 		command "stop"					//	Only work on TV Players
@@ -99,11 +101,20 @@ metadata {
 		//	Source Commands
 		command "source"				//	Pops up source window
 		command "hdmi"					//	Direct progression through available sources
+		command "setInputSource", [[	//	Requires SmartThings integration
+			name: "Input Source",
+			constraints: ["digitalTv", "HDMI1", "HDMI2", "HDMI3", "HDMI4", "COMPONENT"],
+			type: "ENUM"]]
+		attribute "inputSource", "string"		//	Requires SmartThings integration
+		attribute "inputSources", "string"		//	Requires SmartThings integration
 		//	TV Channel
 		command "channelList"
 		command "channelUp"
 		command "channelDown"
 		command "previousChannel"
+		command "setTvChannel", ["string"]		//	Requires SmartThings integration
+		attribute "tvChannel", "string"			//	Requires SmartThings integration
+		attribute "tvChannelName", "string"		//	Requires SmartThings integration
 		//	Playing Navigation Commands
 		command "exit"
 		command "Return"
@@ -123,13 +134,14 @@ metadata {
 			name: "Poll Interval in seconds",
 			constraints: ["off", "5", "10", "15", "20", "25", "30"],
 			type: "ENUM"]]
+		command "listStDevices"		//	Used only during ST Integration setup.
 	}
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip")
 		input ("connectST", "bool", title: "Connect to SmartThings for added functions", defaultValue: false)
 		if (connectST) {
-			input ("stApiKey": "string", title: "SmartThings API Key")
-			input ("stDeviceId": "string", title: "SmartThings TV Device ID")
+			input ("stApiKey", "text", title: "SmartThings API Key")
+			input ("stDeviceId", "text", title: "SmartThings TV Device ID")
 		}
 		input ("refreshInterval", "enum",  
 			   title: "Device Refresh Interval (minutes)", 
@@ -165,11 +177,9 @@ def updated() {
 	state.playQueue = []
 	setUpnpData()
 	if (debugLog) { runIn(1800, debugLogOff) }
-//	if (!getDataValue("uuid")) {
 		def tokenSupport = getDeviceData()
 		logInfo("Performing test using tokenSupport = ${tokenSupport}")
-//		checkInstall()
-//	}
+	if (stApiKey && stDeviceId) { getStDeviceData("setup") }
 	pauseExecution(2000)
 	if(getDataValue("frameTv") == "false") {
 		sendEvent(name: "artModeStatus", value: "notFrameTV")
@@ -221,13 +231,6 @@ def setUpnpData() {
 	updateDataValue("avPath", "/upnp/control/AVTransport1")
 	updateDataValue("avPort", "9197")
 }
-def checkInstall() {
-	connect("remote")
-	pauseExecution(10000)
-	menu()
-	pauseExecution(2000)
-	close()
-}
 
 //	========== SEND UPnP Commands to Devices ==========
 private sendCmd(type, action, body = []){
@@ -252,9 +255,6 @@ private sendCmd(type, action, body = []){
 				  body:	body,
 				  headers: [Host: host]]
 	new hubitat.device.HubSoapAction(params)
-}
-def testParse(resp) {
-	log.trace resp
 }
 
 //	===== WebSocket Communications =====
@@ -386,6 +386,102 @@ def parseWebsocket(resp) {
 		logMsg += ", message = ${resp}"
 	}
 	logDebug(logMsg)
+}
+
+//	===== SmartThings Communications / Parsing =====
+private listStDevices(reqType = "status") {
+	if (!stApiKey) {
+		logWarn("listStDevices: no stApiKey")
+		return
+	}
+	logDebug("listDevices")
+	def cmdUri = "https://api.smartthings.com/v1/devices"
+	def sendCmdParams = [
+		uri: cmdUri,
+		requestContentType: 'application/json',
+		contentType: 'application/json',
+		headers: ['Accept':'application/json; version=1, */*; q=0.01',
+				 'Authorization': 'Bearer ' + stApiKey.trim()]
+	]
+	httpGet(sendCmdParams) {resp ->
+		def devicesData = resp.data.items
+		devicesData.each {
+			log.trace "Name = ${it.name} || DeviceId = ${it.deviceId}"
+		}
+	}
+}
+private getStDeviceData(reqType = "status") {
+	if (!stDeviceId || !stApiKey) {
+		logWarn("getStDeviceData: no stApiKey or stDeviceId")
+		return
+	}
+	logDebug("getStDeviceData")
+	def cmdUri = "https://api.smartthings.com/v1/devices/${stDeviceId.trim()}/status"
+	def sendCmdParams = [
+		uri: cmdUri,
+		requestContentType: 'application/json',
+		contentType: 'application/json',
+		headers: ['Accept':'application/json; version=1, */*; q=0.01',
+				 'Authorization': 'Bearer ' + stApiKey.trim()]
+	]
+	httpGet(sendCmdParams) {resp ->
+		def data = resp.data.components.main
+		if (resp.status == 200) {
+			if (reqType == "status") {
+				def inputSource = data.mediaInputSource.inputSource.value
+				if (inputSource != device.currentValue("inputSource")) {
+					sendEvent(name: "inputSource", value: inputSource)
+				}
+				def tvChannel = data.tvChannel.tvChannel.value
+				def tvChannlName = data.tvChannel.tvChannelName.value
+				if (tvChannel != getDataValue("tvChannel")) {
+					sendEvent(name: "tvChannel", value: tvChannel)
+					sendEvent(name: "tvChannelName", value: tvChannelName)
+				}
+			} else if (reqType == "setup") {
+log.trace data.mediaInputSource
+				def inputSources = data.mediaInputSource.supportedInputSources.value
+				sendEvent(name: "inputSources", value: inputSources)
+			}
+		} else { logWarn{"getStDeviceData: Invalid resp status.  Status = ${resp.status}"} }
+	}
+}
+private sendStPost(cap, cmd, args = null){
+	if (!stDeviceId || !stApiKey) {
+		logWarn("sendStPost: no stApiKey or stDeviceId")
+		return
+	}
+	logDebug("sendStGet: ${comp} / ${cap}/ ${cmd}/ ${args} / ${source}")
+	def cmdUri =  "https://api.smartthings.com/v1/devices/${stDeviceId.trim()}/commands"
+	def cmd1 = [
+		component: "main",
+		capability: cap,
+		command: cmd,
+		arguments: args
+	]
+	def cmdBody = [commands: [cmd1]]
+	def sendCmdParams = [
+		uri: cmdUri,
+		requestContentType: 'application/json',
+		contentType: 'application/json',
+		headers: ['Accept':'application/json; version=1, */*; q=0.01',
+				 'Authorization': 'Bearer ' + stApiKey.trim()],
+		body : new groovy.json.JsonBuilder(cmdBody).toString()
+	]
+	try {
+		httpPost(sendCmdParams) {resp ->
+			def data = resp.data
+			if (resp.status == 200) {
+				log.trace data.results[0].status
+				if (data.results[0].status == "ACCEPTED") {
+					getStDeviceData()
+				} else {
+					logWarn("sendStPost: Status = ${data.results.status}")
+				}
+	
+			} else { logWarn{": Invalid resp status.  Status = ${resp.status}"} }
+		}
+	} catch (e) { logWarn("sendStPost: Invalid Argument. error = ${e}") }
 }
 
 //	===== Capability Samsung TV =====
@@ -618,17 +714,17 @@ def playViaQueue() {
 }
 def execPlay(trackUri) {
 	sendCmd("AVTransport",
-				 "SetAVTransportURI",
-				 [InstanceID: 0,
-				  CurrentURI: trackUri,
-				  CurrentURIMetaData: ""])
+			"SetAVTransportURI",
+			[InstanceID: 0,
+			 CurrentURI: trackUri,
+			 CurrentURIMetaData: ""])
 }
 def resumePlayer() {
 	if (state.playQueue.size() > 0) {
 		playViaQueue()
 		return
 	}
-	logDebug("resumePlayer}")
+	logDebug("resumePlayer")
 	state.speaking = false
 }
 def kickStartQueue() {
@@ -649,6 +745,7 @@ def refresh() {
 		getVolume()
 		getMute()
 		getPlayStatus()
+		if (stApiKey && stDeviceId) { getStDeviceData("status") }
 	}
 }
 
@@ -713,11 +810,17 @@ def info() { sendKey("INFO") }
 //	Source Commands
 def source() { sendKey("SOURCE") }
 def hdmi() { sendKey("HDMI") }
+def setInputSource(inputSource) {
+	sendStPost("mediaInputSource", "setInputSource", args = [inputSource])
+}
 //	TV Channel
 def channelList() { sendKey("CH_LIST") }
 def channelUp() { sendKey("CHUP") }
 def channelDown() { sendKey("CHDOWN") }
 def previousChannel() { sendKey("PRECH") }
+def setTvChannel(tvChannel) {
+	sendStPost("tvChannel", "setTvChannel", args = ["11"])
+}
 //	Playing Navigation Commands
 def exit() { sendKey("EXIT") }
 def Return() { sendKey("RETURN") }

@@ -1,11 +1,11 @@
 {
   "packageName": "Samsung TV Remote",
   "author": "David Gutheinz",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "minimumHEVersion": "2.2.3",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/README.md",
   "communityLink": "https://community.hubitat.com/t/samsung-hubitat-tv-integration/55120",
-  "dateReleased": "2020-12-15",
+  "dateReleased": "2020-12-17",
   "drivers": [
     {
       "id": "af921623-3d72-4e86-8f00-cd5879c13c19",
