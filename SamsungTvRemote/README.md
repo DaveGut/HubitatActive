@@ -32,3 +32,7 @@ TV Channel: channelList, channelUp, channelDown, previousChannel
 Navigation Commands: exit, Return, fastBack, fastForward
 
 Application Access/Control: browser, youTube, netflix, appInstall", appOpen, appClose"
+
+# Installation Instruction
+<img src="https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Samsung%20TV%20Remote.pdf" align="center"/>
+
