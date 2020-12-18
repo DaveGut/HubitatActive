@@ -57,8 +57,16 @@ Beta 1.3.4	a.	Added capability Switch
 			c.	Still working on Art Mode Status.  Next fix attempt (problem parsing data).
 Beta 1.3.5	a.	Added ST Intergation and functions setInputSource and setTvChannel.
 			b.	Next attempt at fixing artMode
+1.3.6		a.	Fixed error in refresh causing failure to request important satus data.
+			b.	Fixed mute functions to properly operate and report state.
+			c.	Fixed websocket.  Now auto-closes in 3 minutes after opening.
+				I was unable to reliable capture the close status when closed by tv.
+			d.	Converted ArtMode into artModeOn and artModeOff.  Changed buttons
+				to 5 for artModeOn and 6 for artModeOff
+			e.	Fixed HDMI and Source methods to call ST status 5 - 10 seconds
+				after the update is activated.
 */
-def driverVer() { return "1.3.5" }
+def driverVer() { return "1.3.6" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -83,7 +91,8 @@ metadata {
 		//	===== Remote Control Interface =====
 		command "sendKey", ["string"]	//	Send entered key. eg: HDMI
 		//	TV Art Display
-		command "artMode"				//	Toggles art mode on and off.
+		command "artModeOn"				//	Turns on Art Mode
+		command "artModeOff"			//	Turns off Art Mode
 		attribute "artModeStatus", "string"	//	on/off/notFrame
 		command "ambientMode"			//	non-Frame TVs
 		//	Cursor and Entry Control
@@ -173,7 +182,7 @@ def installed() {
 def updated() {
 	logInfo("updated")
 	sendEvent(name: "numberOfButtons", value: "50")
-	sendEvent(name: "wsDeviceStatus", value: "closed")
+	close()
 	state.playQueue = []
 	setUpnpData()
 	if (debugLog) { runIn(1800, debugLogOff) }
@@ -285,15 +294,14 @@ def connect(funct) {
 		}
 	}
 	state.currentFunction = funct
+	runIn(180, close)
 	interfaces.webSocket.connect(url, ignoreSSLIssues: true)
 }
 def sendMessage(funct, data) {
 	logDebug("sendMessage: function = ${funct} | data = ${data} | connectType = ${state.currentFunction}")
 	if(state.currentFunction != funct) {
 		close()
-		pauseExecution(300)
 	}
-	runIn(300, close)
 	if (device.currentValue("wsDeviceStatus") != "open") {
 		connect(funct)
 		pauseExecution(1000)
@@ -301,7 +309,7 @@ def sendMessage(funct, data) {
 	interfaces.webSocket.sendMessage(data)
 }
 def close() {
-	unschedule(close)
+	//	Set to closed in case device is unreachable
 	sendEvent(name: "wsDeviceStatus", value: "closed")
 	state.currentFunction = "close"
 	interfaces.webSocket.close()
@@ -312,11 +320,14 @@ def webSocketStatus(message) {
 		if (device.currentValue("switch") != "on") {
 			sendEvent(name: "switch", value: "on")
 		}
-		logDebug("webSocketStatus: wsDeviceStatus = open")
+		logInfo("webSocketStatus: wsDeviceStatus = open")
 	} else if (message == "status: closing") {
 		sendEvent(name: "wsDeviceStatus", value: "closed")
 		state.currentFunction = "close"
-		logDebug("webSocketStatus: wsDeviceStatus = closed")
+		logInfo("webSocketStatus: wsDeviceStatus = closed")
+	} else if (message.substring(0,7) == "failure") {
+		logInfo("webSocketStatus: Failure.  Closing Socket.")
+		close()
 	}
 }
 
@@ -389,7 +400,7 @@ def parseWebsocket(resp) {
 }
 
 //	===== SmartThings Communications / Parsing =====
-private listStDevices(reqType = "status") {
+private listStDevices() {
 	if (!stApiKey) {
 		logWarn("listStDevices: no stApiKey")
 		return
@@ -410,12 +421,12 @@ private listStDevices(reqType = "status") {
 		}
 	}
 }
+def getStDeviceStatus() { getStDeviceData("status") }
 private getStDeviceData(reqType = "status") {
 	if (!stDeviceId || !stApiKey) {
 		logWarn("getStDeviceData: no stApiKey or stDeviceId")
 		return
 	}
-	logDebug("getStDeviceData")
 	def cmdUri = "https://api.smartthings.com/v1/devices/${stDeviceId.trim()}/status"
 	def sendCmdParams = [
 		uri: cmdUri,
@@ -438,10 +449,11 @@ private getStDeviceData(reqType = "status") {
 					sendEvent(name: "tvChannel", value: tvChannel)
 					sendEvent(name: "tvChannelName", value: tvChannelName)
 				}
+				logDebug("getStDeviceData: source = ${inputSource}, channel = ${tvChannel}")
 			} else if (reqType == "setup") {
-log.trace data.mediaInputSource
 				def inputSources = data.mediaInputSource.supportedInputSources.value
 				sendEvent(name: "inputSources", value: inputSources)
+				logDebug("getStDeviceData: inputSources = ${inputSources}")
 			}
 		} else { logWarn{"getStDeviceData: Invalid resp status.  Status = ${resp.status}"} }
 	}
@@ -513,14 +525,14 @@ def off() {
 
 def mute() { 
 	sendKey("MUTE")
-	getMute()
+	runIn(5, getMute)
 }
 def unmute() {
 	sendKey("MUTE")
-	getMute()
+	runIn(5, getMute)
 }
-def getMute(muteState) {
-	logDebug("gsetMute:")
+def getMute() {
+	logDebug("getMute")
 	sendCmd("RenderingControl",
 			"GetMute",
 			["InstanceID" :0,
@@ -546,11 +558,11 @@ def setVolume(volume) {
 }
 def volumeUp() {
 	sendKey("VOLUP")
-	runIn(2, getVolume)
+	runIn(3, getVolume)
 }
 def volumeDown() {
 	sendKey("VOLDOWN")
-	runIn(2, getVolume)
+	runIn(3, getVolume)
 }
 def getVolume() {
 	logDebug("getVolume")
@@ -592,11 +604,14 @@ def quickPoll() {
 			if (device.currentValue("switch") != "on") {
 				sendEvent(name: "switch", value: "on")
 			}
+			return "on"
 		}
 	} catch (error) {
 		if (device.currentValue("switch") != "off") {
 			sendEvent(name: "switch", value: "off")
+			close()
 		}
+		return "off"
 	}
 }
 
@@ -738,14 +753,15 @@ def kickStartQueue() {
 
 //	========== Capability Refresh ==========
 def refresh() {
-	logDebug("refresh")
-	quickPoll()
-	pauseExecution(15000)
-	if (device.currentState("switch") == "on") {
-		getVolume()
-		getMute()
-		getPlayStatus()
-		if (stApiKey && stDeviceId) { getStDeviceData("status") }
+	def onOff = quickPoll()
+	logDebug("refresh: device is ${onOff}")
+	if (onOff == "on") {
+		runInMillis(300, getVolume)
+		runInMillis(600, getPlayStatus)
+		runInMillis(900, getMute)
+		if (stApiKey && stDeviceId) {
+			getStDeviceData("status")
+		}
 	}
 }
 
@@ -759,21 +775,14 @@ def sendKey(key, cmd = "Click") {
 	sendMessage("remote", JsonOutput.toJson(data) )
 }
 //	TV Art Display
-def artMode() {
-	if(getDataValue("frameTv") == "false") {
-		logWarn("artModeOn: notFrame")
-		return
-	}
-	def onOff = "on"
-	if (getDataValue("artModeStatus") == "on") {
-		onOff = "off"
-	}
-	artMode(onOff)
+def artModeOn() {
+	artMode("on")
+}
+def artModeOff() {
+	artMode("off")
 }
 def artMode(onOff) {
 	logDebug("artMode: ${onOff}")
-//	Delete sendEvent after confirmation of parse working.
-	sendEvent(name: "artModeStatus", value: onOff)
 	def data = [value:"${onOff}",
 				request:"set_artmode_status",
 				id: "${getDataValue("uuid")}"]
@@ -808,8 +817,14 @@ def menu() { sendKey("MENU") }
 def guide() { sendKey("GUIDE") }
 def info() { sendKey("INFO") }
 //	Source Commands
-def source() { sendKey("SOURCE") }
-def hdmi() { sendKey("HDMI") }
+def source() { 
+	sendKey("SOURCE")
+	runIn(10, getStDeviceStatus)
+}
+def hdmi() {
+	sendKey("HDMI")
+	runIn(5, getStDeviceStatus)
+}
 def setInputSource(inputSource) {
 	sendStPost("mediaInputSource", "setInputSource", args = [inputSource])
 }
@@ -908,7 +923,8 @@ def push(pushed) {
 		case 0 : close(); break
 		//	===== Physical Remote Commands =====
 		case 3 : numericKeyPad(); break
-		case 6 : artMode(); break			//	New command.  Toggles art mode
+		case 5 : artModeOn(); break			//	New command.  Toggles art mode
+		case 6 : artModeOff(); break			//	New command.  Toggles art mode
 		case 7 : ambientMode(); break
 		case 8 : arrowLeft(); break
 		case 9 : arrowRight(); break
