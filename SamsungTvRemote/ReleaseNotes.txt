@@ -1,0 +1,44 @@
+Hubitat - Samsung TV Remote Driver Release Notes
+===== Beta Versions =====
+Beta 1.0	Initial release
+Beta 1.1	Updated to work WITHOUT an external NodeJs Server (2017 + models
+		1.	Changed youTube launch to Home Page.
+		2.	Added Netflix key
+Beta 1.2	1.	Added AppOpen, Install, and Close
+		2.	Added return key as Return
+		3.	Reworked comms area to fix problem with closing port all the time.
+Beta 1.2.1	Fixed Art Mode.  Correct typo in debug mode.
+Beta 1.3.0	1.  Added UPnP commands to set level, mute, playStatus, and notifications.
+		2.  Added artMode (toggle) command and removed access to ArtModeOn, 
+			ArtModeOff, ArtModeStatus
+		3.  Removed Source1, Source1, Source3, Source4, and TV commands. Use HDMI
+			or Source instead.
+		4.	Removed following Button Interface:  on, off, artModeOn, artModeOff,
+			artModeStatus, volumeUp, volumeDown, mute
+Beta 1.3.2	a.	Fixed art mode function.
+		b.	Modified play/pause to work as Enter if no media is present (this 
+			will pause/play external (HDMI) media, if available) by passing 
+			command on HDMI/CEC interface.  Also enables play/pause interface 
+			on Media Player dashboard tile.
+		c.	Added mute toggle to allow single tile mute in addition to use of
+			Media Play dashboard tile.
+Beta 1.3.3	a.	Created quick poll routine using port 9197 and path /dmr.
+		b.	Created command "setQuickPoll" with enumerated values in seconds
+			to turn on and off quick polling.
+		c.	Modified Refresh to use quick poll to determine on/off state and 
+			then update data only if the device is on.
+		d.	Fixed art mode status to attain correct value (requires testing)
+Beta 1.3.4	a.	Added capability Switch
+		b.	Updated save preferences processing to re-acquire settings data on 
+			each update.
+		c.	Still working on Art Mode Status.
+Beta 1.3.5	a.	Added ST Intergation and functions setInputSource and setTvChannel.
+		b.	Next attempt at fixing artMode
+Beta 1.3.6	a.	Fixed error in refresh causing failure to requestatus data.
+		b.	Fixed mute functions to properly operate and report state.
+		c.	Fixed websocket.  Now auto-closes in 3 minutes after opening. 
+			I was unable to reliable capture the close status when closed by tv.
+		d.	Converted ArtMode into artModeOn and artModeOff.  Changed buttons to 
+			5 for artModeOn and 6 for artModeOff
+		e.	Fixed HDMI and Source methods to call ST status 5 - 10 seconds after 
+			the update is activated.
