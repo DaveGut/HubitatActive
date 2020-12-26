@@ -42,3 +42,13 @@ Beta 1.3.6	a.	Fixed error in refresh causing failure to requestatus data.
 			5 for artModeOn and 6 for artModeOff
 		e.	Fixed HDMI and Source methods to call ST status 5 - 10 seconds after 
 			the update is activated.
+Beta 1.3.7	a.	Removed play/pause attribute 'status'.  It only reflected the
+			status, not the status of tv or running apps.
+		b.	Added subscription to volume and mute attributes.  Will update
+			even on physical remote keying of functions.
+		c.	Added method appOpenByName function for named vice number ID apps.
+		d.	Modified refresh.  It now gets only the SmartThings data (if ST
+			integration is enabled) and the art mode status (if Frame TV).
+		e.	Removed Notification and Speak Capabilities (did not work consistently)
+		f.	Changed on/off methods to run quickPoll (one time) to determine switch state.
+		YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
