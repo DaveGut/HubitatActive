@@ -6,7 +6,7 @@
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/README.md",
   "communityLink": "https://community.hubitat.com/t/samsung-hubitat-tv-integration/55120",
   "dateReleased": "2020-12-28",
-  "releaseNotes" : YOU MUST RUN SAVE PREFERENCES.  Notes link: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/ReleaseNotes.txt",
+  "releaseNotes" : "YOU MUST RUN SAVE PREFERENCES.  Notes link: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/ReleaseNotes.txt",
   "drivers": [
     {
       "id": "af921623-3d72-4e86-8f00-cd5879c13c19",
