@@ -51,4 +51,11 @@ Beta 1.3.7	a.	Removed play/pause attribute 'status'.  It only reflected the
 			integration is enabled) and the art mode status (if Frame TV).
 		e.	Removed Notification and Speak Capabilities (did not work consistently)
 		f.	Changed on/off methods to run quickPoll (one time) to determine switch state.
+Beta 1.3.8	a.	Refined Quick Poll for better performance
+		b.	Updated LAN functions to not run when device is off.
+		c.	Updated On command to force a power poll if quickPoll is off.
+		d.	Added path to archive version in the top notes section.
+		e.	Clarified App Method names for clarity.
+		f.	Modified method getDeviceData to create a DNI that is all caps
+		g.	Modified ON wake-on-lan to use device DNI as the MAC
 		YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
