@@ -6,9 +6,11 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 08.25	5.3.1	Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.
 09.08	5.3.1.1	Added KP105 to list of Smart Plugs.
 11.19	5.3.2	Added KP115 to the list of Energy Monitor Smart Plugs.
-11/27	5.3.3	Fixed error handling to properly cancel quick polling and refresh after 10 errors.
+11.27	5.3.3	Fixed error handling to properly cancel quick polling and refresh after 10 errors.
+12.31	5.3.4	a.	Added KL430 as a color bulb
+				b.	Added capability to enter segment other than segment Hubit hub is on.
 =======================================================================================================*/
-def appVersion() { return "5.3.3" }
+def appVersion() { return "5.3.4" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -49,9 +51,9 @@ def uninstalled() {
     }
 }
 
-
 //	Application start-up methods
 def startPage() {
+
 	logInfo("starting Kasa Integration")
 	app?.removeSetting("selectedAddDevices")
 	app?.removeSetting("selectedRemoveDevices")
@@ -62,22 +64,33 @@ def startPage() {
 		app.updateSetting("licenseAcknowledged", false)
 	}
 	state.hs300Error = ""
+
+//	5.3.4
+//	state.devices = [:]
+//	findDevices(25, "parseDeviceData")
+//	if (licenseAcknowledged == true) { return mainPage() }
+	if (!lanSegment) {
+		def hub = location.hubs[0]
+		def hubIpArray = hub.localIP.split('\\.')
+		def networkPrefix = [hubIpArray[0],hubIpArray[1],hubIpArray[2]].join(".")
+		app?.updateSetting("lanSegment", [type:"string", value: networkPrefix])
+	}
 	state.devices = [:]
 	findDevices(25, "parseDeviceData")
+//	5.3.4
 	
-	if (licenseAcknowledged == true) { return mainPage() }
 	return dynamicPage(name:"mainPage",
 					   title:"<b>Kasa Local Hubitat Integration, Version ${appVersion()}</b>",
 					   uninstall: false,
 					   install: false) {
 		section() {
 			paragraph "<textarea rows=15 cols=50 readonly='true'>${license()}</textarea>"
-			input "licenseAcknowledged", "bool", 
-				title: "ACKNOWLEDGE READING LICENSE", 
+			input "lanSegment", "string", 
+				title: "<b>Device Lan Segment.</b>  Change if Device is on differnt segment from Hub.", 
 				submitOnChange: true,
 				defaultValue: true
 			href "mainPage",
-				title: "<bGo to the Next Page</b>",
+				title: "<b>Go to the Next Page</b>",
 				description: "Goes to the Application Main Page."
 		}
 	}
@@ -172,6 +185,7 @@ def getType(model) {
 		case "LB130" :
 		case "KL130" :
 		case "LB230" :
+		case "KL430" :
 			return "Color Bulb"
 			break
 		default :
@@ -206,12 +220,13 @@ def updateDevices(dni, ip, alias, model, type, plugNo, plugId, ledOff) {
 
 //	Main page
 def mainPage() {
+	if(state.devices == [:]) { startPage() }
 	logDebug("mainPage")
 	if (selectedAddDevices) { addDevices() }
 	if (selectedRemoveDevices) { removeDevices() }
 	if (debugLog == true) { runIn(1800, debugOff) }
+
 	def devices = state.devices
-	
 	def foundDevices = "Kasa App Alias  Inst Hubitat Driver ID"
 	def count = 0
 	devices.each {
@@ -790,20 +805,27 @@ def updateDeviceIps(response) {
 //	Communications Methods
 def findDevices(pollInterval, action) {
 	logInfo("findDevices: Searching the LAN for your Kasa Devices")
-	def hub
-	try { hub = location.hubs[0] }
-	catch (error) { 
-		logWarn "Hub not detected.  You must have a hub to install this app."
-		return
-	}
-	def hubIpArray = hub.localIP.split('\\.')
-	def networkPrefix = [hubIpArray[0],hubIpArray[1],hubIpArray[2]].join(".")
-	logInfo("findDevices: IP Segment = ${networkPrefix}")
+//	5.3.4
+//	def hub
+//	try { hub = location.hubs[0] }
+//	catch (error) { 
+//		logWarn "Hub not detected.  You must have a hub to install this app."
+//		return
+//	}
+//	def hubIpArray = hub.localIP.split('\\.')
+//	def networkPrefix = [hubIpArray[0],hubIpArray[1],hubIpArray[2]].join(".")
+//	5.3.4	
+	
+//	5.3.4	
+//	logInfo("findDevices: IP Segment = ${networkPrefix}")
+	logInfo("findDevices: IP Segment = ${lanSegment}")
 	for(int i = 2; i < 255; i++) {
-		def deviceIP = "${networkPrefix}.${i.toString()}"
+//		def deviceIP = "${networkPrefix}.${i.toString()}"
+		def deviceIP = "${lanSegment}.${i.toString()}"
 		sendCmd(deviceIP, action)
 		pauseExecution(pollInterval)
 	}
+//	5.3.4
 	pauseExecution(3000)
 }
 

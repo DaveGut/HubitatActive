@@ -3,8 +3,12 @@ Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== 2020 History =====
 08.01	Release on new version 5.3.  Minor updates supporting 5.3.
+08.25	5.3.1	Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.
+09.08	5.3.1.1	Added KP105 to list of Smart Plugs.
+11.19	5.3.2	Added KP115 to the list of Energy Monitor Smart Plugs.
+11/27	5.3.3	Fixed error handling to properly cancel quick polling and refresh after 10 errors.
 =======================================================================================================*/
-def appVersion() { return "5.3.0" }
+def appVersion() { return "5.3.3" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -132,9 +136,11 @@ def getType(model) {
 		case "HS200" :
 		case "HS210" :
 		case "KP100" :
+		case "KP105" :
 			return "Plug Switch"
 			break
 		case "HS110" :
+		case "KP115" :
 			return "EM Plug"
 			break
 		case "KP200" :
@@ -741,21 +747,23 @@ def rebootResponse(response) {
 
 
 //	Device Communications Failure Methods
-def requestDataUpdate() {
+def updateIpData() {
 	logInfo("requestDataUpdate: Received device IP request from a Kasa device.")
 	runIn(5, pollForIps)
 }
 
 def pollForIps() {
 	if (pollEnabled == false) {
-		logWarn("pollForIps: a poll was run within the last hour.  Poll not run.  Try running manually through the application.")
+		logWarn("pollForIps: a poll was run within the 15 min.  Poll not run.  Try running manually through the application.")
+		return
 	} else {
 		logInfo("pollForIps: Diabling poll capability for one hour")
 		app?.updateSetting("pollEnabled", [type:"bool", value: false])
-		runIn(3600, pollEnable)
+		runIn(900, pollEnable)
 		logInfo("pollForIps: starting poll for Kasa Device IPs.")
 		findDevices(25, updateDeviceIps)
 	}
+	return pollEnabled
 }
 
 def pollEnable() {
