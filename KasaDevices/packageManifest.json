@@ -8,7 +8,6 @@
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
-  "releaseNotes": "Hubitat Kasa Device Integration. Fixed error processing to stop Quick Poll and Refresh after 10 consecutive errors",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
