@@ -115,7 +115,7 @@ def parseDeviceData(response) {
 	cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
 	def ip = convertHexToIP(resp.ip)
 	logDebug("parseDeviceData: ${ip} // ${cmdResp}")
-	def dni = resp.mac
+	def dni = cmdResp.mac.replace(/:/, "")
 	def alias = cmdResp.alias
 	def model = cmdResp.model.substring(0,5)
 	def type = getType(model)
@@ -437,6 +437,7 @@ def getDeviceBinding() {
 			it.value.type == "Mono Bulb") {
 			preamble = "smartlife.iot.common.cloud"
 		}
+		logInfo("Binding device: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
 		sendDeviceCmd(it.value.ip,
 					  """{"${preamble}":{"get_info":{}}}""",
 					  "deviceBindingResponse")
@@ -461,10 +462,7 @@ def deviceBindingResponse(response) {
 	
 	def devicesBindingData = state.devicesBindingData
 	def deviceBindData = [:]
-	def device = state.devices.find { it.value.dni == resp.mac }
-	if (!device) {
-		device = state.devices.find { it.value.dni == "${resp.mac}00" }
-	}
+	def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 	deviceBindData["dni"] = device.value.dni
 	deviceBindData["ip"] = device.value.ip
 	deviceBindData["alias"] = device.value.alias
@@ -528,10 +526,11 @@ def unbindResponse(response) {
 	} else {
 		binded = cmdResp["smartlife.iot.common.cloud"].get_info.binded
 	}
-	if (binded == 0) {
-		logInfo("SUCCESS: Device with DNI = ${resp.mac} is ubbound from the Kasa Cloud")
+    def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
+    if (binded == 0) {
+		logInfo("SUCCESS: Device with DNI = ${device.dni} is ubbound from the Kasa Cloud")
 	} else {
-		logWarn("FAILED: DNI: ${resp.mac} unbind failed. Error = ${cmdResp}")
+		logWarn("FAILED: DNI: ${device.dni} unbind failed. Error = ${cmdResp}")
 	}
 }
 
@@ -598,10 +597,11 @@ def bindResponse(response) {
 	} else {
 		binded = cmdResp["smartlife.iot.common.cloud"].get_info.binded
 	}
+    def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 	if (binded == 1) {
-		logInfo("SUCCESS: Device with DNI = ${resp.mac} is bound to the Kasa Cloud")
+		logInfo("SUCCESS: Device with DNI = ${device.dni} is bound to the Kasa Cloud")
 	} else {
-		logWarn("FAILED: DNI: ${resp.mac} bind failed. Error = ${cmdResp}")
+		logWarn("FAILED: DNI: ${device.dni} bind failed. Error = ${cmdResp}")
 	}
 }
 
@@ -657,7 +657,7 @@ def ledOffPage() {
 		}
 	}
 	return dynamicPage(name:"ledOnPage",
-		title:"<b>Turn On the Device LED (set led_off to true)</b>",
+		title:"<b>Turn Off the Device LED (set led_off to true)</b>",
 		install: false) {
 	 	section("<b>Select Devices to turn on LED</b>") {
 			input ("selectedLedOffDevices", "enum",
@@ -685,15 +685,14 @@ def ledOff() {
 
 def ledOnOffResponse(response) {
 	def resp = parseLanMessage(response.description)
-	def dni = resp.mac
 	def parser = new JsonSlurper()
 	def cmdResp = parser.parseText(inputXOR(resp.payload))
 	logDebug("ledOnOff: cmdResp = ${cmdResp}")
 	if (cmdResp.system.set_led_off.err_code == 0) {
-		def device = state.devices.find { it.value.dni == dni }
+		def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 		if (device.value.ledOff == true) { device.value.ledOff = false }
 		else if (device.value.ledOff == false) { device.value.ledOff = true }
-		logInfo("ledOnOffResponse: device ${dni} ledOff state set to ${device.value.ledOff}")
+		logInfo("ledOnOffResponse: device ${device.dni} ledOff state set to ${device.value.ledOff}")
 	}
 	else { logWarn("ledOnOffResponse: Error returned from device.") }
 }
@@ -731,7 +730,7 @@ def deviceReboot() {
 		device.value.type == "Mono Bulb") {
 		preamble = preamble = "smartlife.iot.common.system"
 	}
-	logInfo("Unbinding device: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
+	logInfo("Rebooting device: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
 	sendDeviceCmd(device.value.ip,
 				  """{"${preamble}":{"reboot":{"delay":3}}}""",
 				  "rebootResponse")
@@ -740,6 +739,7 @@ def deviceReboot() {
 
 def rebootResponse(response) {
 	def resp = parseLanMessage(response.description)
+    def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 	def parser = new JsonSlurper()
 	def cmdResp = parser.parseText(inputXOR(resp.payload))
 	logDebug("rebootResponse: cmdResp = ${cmdResp}")
@@ -752,11 +752,11 @@ def rebootResponse(response) {
 		catch (error) { err_code = -1 }
 	}
 	if (err_code == 0) {
-		logInfo("SUCCESS. Device with DNI = ${resp.mac} rebooting.")
-		state.currMsg = "SUCCESS. Device with DNI = ${resp.mac} rebooting."
+		logInfo("SUCCESS. Device with DNI = ${device.dni} rebooting.")
+		state.currMsg = "SUCCESS. Device with DNI = ${device.dni} rebooting."
 	} else {
-		logWarn("FAILED.  DNI: ${resp.mac} reboot command failed.  Error = ${cmdResp}")
-		state.currMsg = "FAILED.  DNI: ${resp.mac} reboot command failed.  Error = ${cmdResp}"
+		logWarn("FAILED.  DNI: ${device.dni} reboot command failed.  Error = ${cmdResp}")
+		state.currMsg = "FAILED.  DNI: ${device.dni} reboot command failed.  Error = ${cmdResp}"
 	}
 }
 
