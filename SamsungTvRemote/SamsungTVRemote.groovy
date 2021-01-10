@@ -24,30 +24,24 @@ a.	For model years 2017 and later, a stand-alone node.js server installed IAW pr
 b.	This driver installed and configured IAW provided instructions.
 ===== Changes in this version =============================================================
 (For earlier release note, see "https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Samsung%20Apps.txt")
-1.3.7	a.	Removed play/pause attribute 'status'.  It only reflected the
-			status, not the status of tv or running apps.
-		b.	Added subscription to volume and mute attributes.  Will update
-			even on physical remote keying of functions.
-		c.	Added method appOpenByName function for named vice number ID apps.
-		d.	Modified refresh.  It now gets only the SmartThings data (if ST
-			integration is enabled) and the art mode status (if Frame TV).
-		e.	Removed Notification and Speak Capabilities (did not work consistently)
-		f.	Changed on/off methods to run quickPoll (one time) to determine switch state.
-1.3.8	a.	Refined Quick Poll for better performance
-		b.	Updated LAN functions to not run when device is off.
-		c.	Updated On command to force a power poll if quickPoll is off.
-		d.	Added path to archive version in the top notes section.
-		e.	Clarified App Method names for clarity.
-		f.	Modified method getDeviceData to create a DNI that is all caps
-		g.	Modified ON wake-on-lan to use device DNI as the MAC
-		YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
+1.3.9	a.	Poll Interval
+			1)	Moved setting to Preference
+			2)	Set to always on with maximum of 30 seconds default, minimum of 5 seconds.
+			3)	Update preferences to capture existing ping then remove ping stata
+			4)	Updated using methods as required.
+		b.	Save preferences processing updated.
+			1)	Notify and terminate if deviceIp is not set.
+			2)	Notify and terminate if power is not detected as on.
+			3)	Run certain line only when the Driver Version is updated.
+		c.	Cleaned up button numbers to removed unused methods and add unaccounted methods.
+YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
 ===== Issues with this version? =====
 a.	Notify on Hubitat thread: 
 	https://community.hubitat.com/t/samsung-hubitat-tv-integration-2016-and-later/55120/167
 b.	Previous Ver URL:  
 	https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/Archive/SamsungTVRemote.groovy
 */
-def driverVer() { return "1.3.8" }
+def driverVer() { return "1.3.9" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -113,30 +107,29 @@ metadata {
 		command "appRunNetflix"
 		command "appRunPrimeVideo"
 		command "appRunYouTubeTV"
+		command "appRunHulu"
 		command "appInstallByCode", ["string"]
 		command "appOpenByCode", ["string"]
 		command "appCloseNamedApp"
 		//	===== Button Interface =====
 		capability "PushableButton"
 		command "push", ["NUMBER"]
-		command "setPollInterval", [[
-			name: "Poll Interval in seconds",
-			constraints: ["off", "5", "10", "15", "20", "25", "30"],
-			type: "ENUM"]]
 		command "listStDevices"		//	Used only during ST Integration setup.
+		attribute "driverError", "string"
 	}
 	preferences {
-		input ("deviceIp", "text", title: "Samsung TV Ip")
+		input ("deviceIp", "text", title: "Samsung TV Ip", defaultValue: "")
 		input ("connectST", "bool", title: "Connect to SmartThings for added functions", defaultValue: false)
 		if (connectST) {
-			input ("stApiKey", "text", title: "SmartThings API Key")
-			input ("stDeviceId", "text", title: "SmartThings TV Device ID")
+			input ("stApiKey", "text", title: "SmartThings API Key", defaultValue: "")
+			input ("stDeviceId", "text", title: "SmartThings TV Device ID", defaultValue: "")
 		}
-		input ("refreshInterval", "enum",  
-			   title: "Device Refresh Interval (minutes)", 
+		input ("pollInterval","enum", title: "Quick Power Polling Interval (seconds)",
+			   options: ["5", "10", "15", "20", "30", "60"], defaultValue: "30")
+		input ("refreshInterval", "enum", title: "Device Refresh Interval (minutes)", 
 			   options: ["1", "5", "10", "15", "30"], defaultValue: "5")
 		input ("tvPwrOnMode", "enum", title: "TV Startup Display", 
-			   options: ["ART_MODE", "Ambient", "none"], defalutValue: "none")
+			   options: ["ART_MODE", "Ambient", "none"], defaultValue: "none")
 		input ("debugLog", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: true)
 		input ("infoLog", "bool",  title: "Enable description text logging", defaultValue: true)
 	}
@@ -146,25 +139,57 @@ metadata {
 def installed() {
 	state.token = "12345678"
 	def tokenSupport = "false"
-	updateDataValue("name", "Hubitat Samsung Remote")
-	updateDataValue("name64", "Hubitat Samsung Remote".encodeAsBase64().toString())
+	sendEvent(name: "driverError", value: "Initial Installation")
 }
 def updated() {
 	logInfo("updated")
-	sendEvent(name: "numberOfButtons", value: "50")
+	def onOff = "off"
+	if (deviceIp) { onOff = powerTest() }
+	if (onOff == "off") {
+		logWarn("updated: Failed.  Power off or the Device IP is incorrect.")
+		sendEvent(name: "driverError", value: "Updated failed connect test.  Rerun Save Preferences.")
+		return
+	} else {
+		sendEvent(name: "driverError", value: "none")
+	}
+	unschedule()
 	close()
-	state.playQueue = []
-	setUpnpData()
-	def tokenSupport = getDeviceData()
-	if (stApiKey && stDeviceId) {
+	def validDeviceData = getDeviceData()
+	if (validDeviceData == false) { return }
+	if (connectST) {
 		def stStatus = getStDeviceData("setup")
 	}
+	if (debugLog) { runIn(1800, debugLogOff) }
+	def interval = pollInterval
+	if (!getDataValue("driverVersion") || getDataValue("driverVersion") != driverVer()) {
+		logInfo("updated:  Version-specific updates, updating device data and poll interval.")
+		removeDataValue("name")
+		removeDataValue("name64")
+		removeDataValue("rcUrn")
+		removeDataValue("rcPath")
+		removeDataValue("rcEvent")
+		removeDataValue("rcPort")
+		removeDataValue("avUrn")
+		removeDataValue("avPath")
+		removeDataValue("avEvent")
+		removeDataValue("avPort")
+		state.remove("playQueue")
+		if (state.pollInterval && state.pollInterval != "off") {
+			interval = state.pollInterval
+		}
+		state.remove("quickPoll")
+		state.remove("pollInterval")
+		state.remove("WARNING")
+		updateDataValue("driverVersion", driverVer())
+	}
+	
+	resubscribe()
+	runEvery3Hours(resubscribe)
+	schedule("*/${interval} * * * * ?",  quickPoll)
+	sendEvent(name: "numberOfButtons", value: "50")
 	if(getDataValue("frameTv") == "false") {
 		sendEvent(name: "artModeStatus", value: "notFrameTV")
 	} else { getArtModeStatus() }
-	if (debugLog) { runIn(1800, debugLogOff) }
-	resubscribe()
-	runEvery3Hours(resubscribe)
 	switch(refreshInterval) {
 		case "1" : runEvery1Minute(refresh); break
 		case "5" : runEvery5Minutes(refresh); break
@@ -174,21 +199,20 @@ def updated() {
 		default:
 			runEvery5Minutes(refresh); break
 	}
+	logInfo("updated: pollInterval = ${pollInterval}, refresh = ${refreshInterval}")
 	runIn(2, refresh)
 }
 def getDeviceData() {
-	logInfo("getDeviceData: Updating Device Data.")
-	def onOff = powerTest()
-	if (onOff == "off") {
-		logWarn("getDeviceData:  Update not completed.  TV is OFF")
-		return
-	}
+	def validDeviceData = false
 	try{
 		httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
 			def wifiMac = resp.data.device.wifiMac
 			updateDataValue("deviceMac", wifiMac)
 			def newDni = wifiMac.replaceAll(":","").toUpperCase()
-			device.setDeviceNetworkId(newDni)
+			if (device.deviceNetworkId != newDni) {
+				device.setDeviceNetworkId(newDni)
+				logInfo("getDeviceData: Updated DNI to ${newDni}")
+			}
 			def modelYear = "20" + resp.data.device.model[0..1]
 			updateDataValue("modelYear", modelYear)
 			def frameTv = "false"
@@ -203,44 +227,23 @@ def getDeviceData() {
 			updateDataValue("uuid", uuid)
 			updateDataValue("tokenSupport", tokenSupport)
 			logInfo("getDeviceData: year = $modelYear, frameTv = $frameTv, tokenSupport = $tokenSupport")
-		} 
+		}
+		logInfo("getDeviceData: Updated Device Data.")
+		sendEvent(name: "driverError", value: "none")
+		validDeviceData = true
 	} catch (error) {
-		logWarn("getDeviceData: Failed.  TV may be powered off.  Error = ${error}")
+		logWarn("getDeviceData: Failed.  Error = ${error}")
+		sendEvent(name: "driverError", value: "getDeviceData failed. Rerun Save Preferences.")
 	}
-		
-	return tokenSupport
-}
-def setUpnpData() {
-	logInfo("setUpnpData")
-	updateDataValue("rcUrn", "urn:schemas-upnp-org:service:RenderingControl:1")
-	updateDataValue("rcPath", "/upnp/control/RenderingControl1")
-	updateDataValue("rcEvent", "/upnp/event/RenderingControl1")
-	updateDataValue("rcPort", "9197")
-	updateDataValue("avUrn", "urn:schemas-upnp-org:service:AVTransport:1")
-	updateDataValue("avPath", "/upnp/control/AVTransport1")
-	updateDataValue("avEvent", "/upnp/event/AVTransport1")
-	updateDataValue("avPort", "9197")
+	return validDeviceData
 }
 
 //	========== UPnP Communications Functions ==========
-private sendCmd(type, action, body = []){
-	logDebug("sendCmd: type = ${type}, upnpAction = ${action}, upnpBody = ${body}")
-	def cmdPort
-	def cmdPath
-	def cmdUrn
-	if (type == "AVTransport") {
-		cmdPort = getDataValue("avPort")
-		cmdUrn = getDataValue("avUrn")
-		cmdPath = getDataValue("avPath")
-	} else if (type == "RenderingControl") {
-		cmdPort = getDataValue("rcPort")
-		cmdUrn = getDataValue("rcUrn")
-		cmdPath = getDataValue("rcPath")
-	} else { logWarn("sendCmd: Invalid UPnP Type = ${type}") }
-	
-	def host = "${deviceIp}:${cmdPort}"
-	Map params = [path:	cmdPath,
-				  urn:	 cmdUrn,
+private sendUpnpCmd(type, action, body = []){
+	logDebug("sendUpnpCmd: type = ${type}, upnpAction = ${action}, upnpBody = ${body}")
+	def host = "${deviceIp}:9197"
+	Map params = [path: "/upnp/control/RenderingControl1",
+				  urn: "urn:schemas-upnp-org:service:RenderingControl:1",
 				  action:  action,
 				  body:	body,
 				  headers: [Host: host]]
@@ -251,9 +254,9 @@ def subscribe() {
 	def address = device.hub.getDataValue("localIP") + ":" + device.hub.getDataValue("localSrvPortTCP")
 	def result = new hubitat.device.HubAction(
 		method: "SUBSCRIBE",
-		path: getDataValue("rcEvent"),
+		path: "/upnp/event/RenderingControl1",
 		headers: [
-			HOST: "${deviceIp}:${getDataValue("rcPort")}",
+			HOST: "${deviceIp}:9197",
 			CALLBACK: "<http://${address}/rcParse",
 			NT: "upnp:event",
 			TIMEOUT: "Second-28800"])
@@ -261,21 +264,19 @@ def subscribe() {
 }
 def unsubscribe() {
 	logDebug("unsubscribe: rcSid = ${getDataValue("rcSid")}")
-	//	Will not work with rcSid = "", so exit
 	if (device.currentValue("rcSid") == "") { return }
 	def address = device.hub.getDataValue("localIP") + ":" + device.hub.getDataValue("localSrvPortTCP")
 	def result = new hubitat.device.HubAction(
 		method: "UNSUBSCRIBE",
-		path: getDataValue("rcEvent"),
+		path: "/upnp/event/RenderingControl1",
 		headers: [
-			HOST: "${deviceIp}:${getDataValue("rcPort")}",
+			HOST: "${deviceIp}:9197",
 			SID: getDataValue("rcSid")])
 	sendHubCommand(result)
 	updateDataValue("rcSid", "")
 }
 def resubscribe() {
 	logDebug("resubscribe: switch = ${device.currentValue("switch")}")
-	//	If off, unsubscribe will not work.  However, need to set rcSid to "")
 	if (device.currentValue("switch") == "off") {
 		updateDataValue("rcSid", "")
 		return
@@ -288,13 +289,12 @@ def resubscribe() {
 def connect(funct) {
 	logDebug("connect: function = ${funct}")
 	def url
-	def name = getDataValue("name64")
+	def name = "SHViaXRhdCBTYW1zdW5nIFJlbW90ZQ=="
 	if (getDataValue("tokenSupport") == "true") {
-		def token = state.token
 		if (funct == "remote") {
-			url = "wss://${deviceIp}:8002/api/v2/channels/samsung.remote.control?name=${name}&token=${token}"
+			url = "wss://${deviceIp}:8002/api/v2/channels/samsung.remote.control?name=${name}&token=${state.token}"
 		} else if (funct == "frameArt") {
-			url = "wss://${deviceIp}:8002/api/v2/channels/com.samsung.art-app?name=${name}&token=${token}"
+			url = "wss://${deviceIp}:8002/api/v2/channels/com.samsung.art-app?name=${name}&token=${state.token}"
 		} else if (funct == "application") {
 			url = "ws://${deviceIp}:8001/api/v2/applications?name=${name}"
 		} else {
@@ -439,7 +439,10 @@ private listStDevices() {
 }
 def getStDeviceStatus() { getStDeviceData("status") }
 private getStDeviceData(reqType = "status") {
-	if (!stDeviceId || !stApiKey) {
+	if (connectST == false) {
+		logDebug("getStDeviceData failed.  Data not updated. Preference connectST is false")
+		return
+	}else if (stDeviceId == "" || stApiKey == "") {
 		logWarn("getStDeviceData: Missing ID or Key.")
 		return
 	}
@@ -476,7 +479,7 @@ private getStDeviceData(reqType = "status") {
 }
 private sendStPost(cap, cmd, args = null){
 	if (!stDeviceId || !stApiKey) {
-		logWarn("sendStPost: no stApiKey or stDeviceId")
+		logWarn("sendStPost: stApiKey or stDeviceId missing")
 		return
 	}
 	logDebug("sendStGet: ${comp} / ${cap}/ ${cmd}/ ${args} / ${source}")
@@ -500,7 +503,6 @@ private sendStPost(cap, cmd, args = null){
 		httpPost(sendCmdParams) {resp ->
 			def data = resp.data
 			if (resp.status == 200) {
-				log.trace data.results[0].status
 				if (data.results[0].status == "ACCEPTED") {
 					getStDeviceData()
 				} else {
@@ -519,7 +521,6 @@ def on() {
 											hubitat.device.Protocol.LAN,
 											null)
 	sendHubCommand(wol)
-	runIn(30, quickPoll)
 }
 def off() {
 	logDebug("off: frameTv = ${getDataValue("frameTV")}")
@@ -529,64 +530,37 @@ def off() {
 		pauseExecution(3000)
 		sendKey("POWER", "Release")
 	}
-	runIn(10, quickPoll)
 }
-
-def mute() { 
-	sendKey("MUTE")
-}
-def unmute() {
-	sendKey("MUTE")
-}
+def mute() { sendKey("MUTE") }
+def unmute() { sendKey("MUTE") }
 def setVolume(volume) {
 	logDebug("setVolume: volume = ${volume}")
 	volume = volume.toInteger()
 	if (volume <= 0 || volume >= 100) { return }
-	sendCmd("RenderingControl",
+	sendUpnpCmd("RenderingControl",
 			"SetVolume",
 			["InstanceID" :0,
 			 "Channel": "Master",
 			 "DesiredVolume": volume])
 }
-def volumeUp() {
-	sendKey("VOLUP")
-}
-def volumeDown() {
-	sendKey("VOLDOWN")
-}
+def volumeUp() { sendKey("VOLUP") }
+def volumeDown() { sendKey("VOLDOWN") }
 def play() { sendKey("PLAY") }
 def pause() { sendKey("PAUSE") }
 def stop() { sendKey("STOP") }
+//	Not Implemented Capability TV Commands
 def setPictureMode(data) { logDebug("setPictureMode: not implemented") }
 def setSoundMode(data) { logDebug("setSoundMode: not implemented") }
 def showMessage(d,d1,d2,d3) { logDebug("showMessage: not implemented") }
 
-//	===== Quick Polling Capability =====
-def setPollInterval(interval) {
-	logDebug("setPollInterval: interval = ${interval}")
-	if (interval == "off") {
-		state.quickPoll = false
-		state.pollInterval = "off"
-		state.remove("WARNING")
-		unschedule(quickPoll)
-	} else {
-		state.quickPoll = true
-		state.pollInterval = interval
-		schedule("*/${interval} * * * * ?",  quickPoll)
-		logWarn("setPollInterval: polling interval set to ${interval} seconds.\n" +
-				"Quick Polling can have negative impact on the Hubitat Hub performance. " +
-			    "If you encounter performance problems, try turning off quick polling.")
-		state.WARNING = "<b>Quick Polling can have negative impact on the Hubitat " +
-						"Hub and network performance.</b>  If you encounter performance " +
-				    	"problems, <b>before contacting Hubitat support</b>, turn off quick " +
-				    	"polling and check your sysem out."
-	}
-}
+//	===== Quick Polling/Refresh Capability =====
 def quickPoll() {
 	def onOff = powerTest()
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff)
-		powerOnActions()
+		if (onOff == "on") {
+			powerOnActions()
+		}
 	}
 }
 def powerTest() {
@@ -599,17 +573,15 @@ def powerTest() {
 	}
 }
 def powerOnActions() {
+	logDebug("powerOnActions: tvPowerOnMode = ${tvPowerOnMode}")
+	pauseExecution(5000)
 	if(tvPwrOnMode == "ART_MODE" && getDataValue("frameTv") == "true") {
 		artMode("on") }
 	else if(tvPwrOnMode == "Ambient") { ambientMode() }
 	else { connect("remote") }
 	runIn(5, resubscribe)
 }
-
-//	========== Capability Refresh ==========
 def refresh() {
-	def onOff = quickPoll()
-	pauseExecution(5000)
 	if (device.currentValue("switch") == "off") {
 		logDebug("refresh: TV is off.  Refresh methods not run.")
 		return
@@ -619,7 +591,7 @@ def refresh() {
 	runIn(1, getStDeviceStatus)
 }
 
-//	===== Samsung Smart Remote Keys =====
+//	===== Samsung Remote Keys =====
 def sendKey(key, cmd = "Click") {
 	key = "KEY_${key.toUpperCase()}"
 	def data = [method:"ms.remote.control",
@@ -694,7 +666,7 @@ def channelUp() { sendKey("CHUP") }
 def channelDown() { sendKey("CHDOWN") }
 def previousChannel() { sendKey("PRECH") }
 def setTvChannel(tvChannel) {
-	sendStPost("tvChannel", "setTvChannel", args = ["11"])
+	sendStPost("tvChannel", "setTvChannel", args = [tvChannel])
 }
 //	Playing Navigation Commands
 def exit() { sendKey("EXIT") }
@@ -709,37 +681,21 @@ def fastForward() {
 	pauseExecution(1000)
 	sendKey("RIGHT", "Release")
 }
-//	Application Access/Control
+
+//	===== Application Control and Hardcoded Apps =====
 def appOpenByName(appName) {
 	def url = "http://${deviceIp}:8080/ws/apps/${appName}"
 	httpPost(url, "") { resp ->
 		logDebug("#{appName}:  ${resp.status}  ||  ${resp.data}")
 	}
 }
-def appRunBrowser() { sendKey("CONVERGENCE") }
-def appRunYouTube() {
-	def url = "http://${deviceIp}:8080/ws/apps/YouTube"
-	httpPost(url, "") { resp ->
-		logDebug("youTube:  ${resp.status}  ||  ${resp.data}")
-	}
-}
-def appRunNetflix() {
-	def url = "http://${deviceIp}:8080/ws/apps/Netflix"
-	httpPost(url, "") { resp ->
-		logDebug("netflix:  ${resp.status}  ||  ${resp.data}")
-	}
-}
-def appRunPrimeVideo() {
-	def url = "http://${deviceIp}:8080/ws/apps/AmazonInstantVideo"
-	httpPost(url, "") { resp ->
-		logDebug("primeVideo:  ${resp.status}  ||  ${resp.data}")
-	}
-}
-def appRunYouTubeTV() {
-	def url = "http://${deviceIp}:8080/ws/apps/YouTubeTV"
-	httpPost(url, "") { resp ->
-		logDebug("primeVideo:  ${resp.status}  ||  ${resp.data}")
-	}
+def appCloseNamedApp() {
+	def appId = state.currentAppId
+	logDebug("appClose: appId = ${appId}")
+	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
+	try { httpDelete([uri: uri]) { resp -> }
+	} catch (e) {}
+	state.currentAppId = null
 }
 def appInstallByCode(appId) {
 	logDebug("appInstall: appId = ${appId}")
@@ -779,14 +735,13 @@ def appGetData(appId) {
 		logWarn("appGetData: appId = ${appId}, FAILED: ${e}")
 	}
 }
-def appCloseNamedApp() {
-	def appId = state.currentAppId
-	logDebug("appClose: appId = ${appId}")
-	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
-	try { httpDelete([uri: uri]) { resp -> }
-	} catch (e) {}
-	state.currentAppId = null
-}
+//	Hardcoded Applications
+def appRunBrowser() { appOpenByCode("org.tizen.browser") }
+def appRunYouTube() { appOpenByName("YouTube") }
+def appRunNetflix() { appOpenByName("Netflix") }
+def appRunPrimeVideo() { appOpenByName("AmazonInstantVideo") }
+def appRunYouTubeTV() { appOpenByName("YouTubeTV") }
+def appRunHulu() { appOpenByCode("3201601007625") }
 
 //	===== Button Interface (facilitates dashboard integration) =====
 def push(pushed) {
@@ -840,7 +795,7 @@ def push(pushed) {
 //	===== Logging =====
 def logInfo(msg) { 
 	if (infoLog == true) {
-		log.info "${device.deviceNetworkId}, ${driverVer()} || ${msg}"
+		log.info "${device.deviceNetworkId}, ${state.updVer} || ${msg}"
 	}
 }
 def debugLogOff() {
@@ -849,7 +804,7 @@ def debugLogOff() {
 }
 def logDebug(msg) {
 	if (debugLog == true) {
-		log.debug "${device.deviceNetworkId}, ${driverVer()} || ${msg}"
+		log.debug "${device.deviceNetworkId}, ${state.updVer} || ${msg}"
 	}
 }
-def logWarn(msg) { log.warn "${device.deviceNetworkId}, ${driverVer()} || ${msg}" }
+def logWarn(msg) { log.warn "${device.deviceNetworkId}, ${state.updVer} || ${msg}" }
