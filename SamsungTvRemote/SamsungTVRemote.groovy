@@ -34,6 +34,7 @@ b.	This driver installed and configured IAW provided instructions.
 			2)	Notify and terminate if power is not detected as on.
 			3)	Run certain line only when the Driver Version is updated.
 		c.	Cleaned up button numbers to removed unused methods and add unaccounted methods.
+1.3.9.1	Changed method for defining DNI to getMACFromDNI(deviceIp)
 YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
 ===== Issues with this version? =====
 a.	Notify on Hubitat thread: 
@@ -41,7 +42,7 @@ a.	Notify on Hubitat thread:
 b.	Previous Ver URL:  
 	https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/Archive/SamsungTVRemote.groovy
 */
-def driverVer() { return "1.3.9" }
+def driverVer() { return "1.3.9.1" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -208,7 +209,7 @@ def getDeviceData() {
 		httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
 			def wifiMac = resp.data.device.wifiMac
 			updateDataValue("deviceMac", wifiMac)
-			def newDni = wifiMac.replaceAll(":","").toUpperCase()
+			def newDni = getMACFromIP(deviceIp)
 			if (device.deviceNetworkId != newDni) {
 				device.setDeviceNetworkId(newDni)
 				logInfo("getDeviceData: Updated DNI to ${newDni}")
@@ -645,7 +646,10 @@ def enter() { sendKey("ENTER") }
 def numericKeyPad() { sendKey("MORE") }
 //	Menu Access
 def home() { sendKey("HOME") }
-def menu() { sendKey("MENU") }
+def menu() { sendKey("MENU") 
+log.trace getMACFromIP(deviceIp)
+log.trace device.getData()
+		   }
 def guide() { sendKey("GUIDE") }
 def info() { sendKey("INFO") }
 //	Source Commands
