@@ -35,6 +35,8 @@ b.	This driver installed and configured IAW provided instructions.
 			3)	Run certain line only when the Driver Version is updated.
 		c.	Cleaned up button numbers to removed unused methods and add unaccounted methods.
 1.3.9.1	Changed method for defining DNI to getMACFromDNI(deviceIp)
+1.3.9.2	Added preference "altWoLMac.  Create an alternate on startup using devices info page
+		to create the alternate.  Can select with power on or off.
 YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
 ===== Issues with this version? =====
 a.	Notify on Hubitat thread: 
@@ -131,8 +133,9 @@ metadata {
 			   options: ["1", "5", "10", "15", "30"], defaultValue: "5")
 		input ("tvPwrOnMode", "enum", title: "TV Startup Display", 
 			   options: ["ART_MODE", "Ambient", "none"], defaultValue: "none")
-		input ("debugLog", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: true)
+		input ("debugLog", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
 		input ("infoLog", "bool",  title: "Enable description text logging", defaultValue: true)
+		input ("altWolMac", "bool", title: "Use alternate WOL MAC", defaultValue: false)
 	}
 }
 
@@ -209,6 +212,8 @@ def getDeviceData() {
 		httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
 			def wifiMac = resp.data.device.wifiMac
 			updateDataValue("deviceMac", wifiMac)
+			def alternateWolMac = wifiMac.replaceAll(":", "").toUpperCase()
+			updateDataValue("alternateWolMac", alternateWolMac)
 			def newDni = getMACFromIP(deviceIp)
 			if (device.deviceNetworkId != newDni) {
 				device.setDeviceNetworkId(newDni)
@@ -517,8 +522,12 @@ private sendStPost(cap, cmd, args = null){
 
 //	===== Capability Samsung TV =====
 def on() {
-	logDebug("on: desired TV Mode = ${tvPwrOnMode}")
-	def wol = new hubitat.device.HubAction ("wake on lan ${device.deviceNetworkId}",
+	def wolMac = device.deviceNetworkId
+	if (altWolMac) {
+		wolMac = getDataValue("alternateWolMac")
+	}
+	logDebug("on: wolMac = ${wolMac}")
+	def wol = new hubitat.device.HubAction ("wake on lan ${wolMac}",
 											hubitat.device.Protocol.LAN,
 											null)
 	sendHubCommand(wol)
@@ -799,7 +808,7 @@ def push(pushed) {
 //	===== Logging =====
 def logInfo(msg) { 
 	if (infoLog == true) {
-		log.info "${device.deviceNetworkId}, ${state.updVer} || ${msg}"
+		log.info "${device.deviceNetworkId}, ${driverVer()} || ${msg}"
 	}
 }
 def debugLogOff() {
@@ -808,7 +817,7 @@ def debugLogOff() {
 }
 def logDebug(msg) {
 	if (debugLog == true) {
-		log.debug "${device.deviceNetworkId}, ${state.updVer} || ${msg}"
+		log.debug "${device.deviceNetworkId}, ${driverVer()} || ${msg}"
 	}
 }
-def logWarn(msg) { log.warn "${device.deviceNetworkId}, ${state.updVer} || ${msg}" }
+def logWarn(msg) { log.warn "${device.deviceNetworkId}, ${driverVer()} || ${msg}" }
