@@ -1,9 +1,9 @@
-/*	Kasa Local Integration
+/*	Kasa Cloud Integration
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 Special Cloud Version to handle updated firmware where port 9999 is removed.
 =======================================================================================================*/
-def appVersion() { return "1.0.0" }
+def appVersion() { return "1.0.0.1" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -33,12 +33,9 @@ def updated() { initialize() }
 
 def initialize() {
 	logInfo("initialize")
-	unsubscribe()
+//	unsubscribe()
 	unschedule()
 	schedule("0 30 2 ? * WED", getToken)
-//	if (selectedAddDevices) { addDevices() }
-//    else if (selectedUpdateDevices) { updatePreferences() }
-//    else { flowDirector() }
 }
 def uninstalled() {
     getAllChildDevices().each { 
@@ -57,7 +54,7 @@ def startPage() {
 	}
 	
 	if (licenseAcknowledged == true) { return mainPage() }
-	return dynamicPage(name:"mainPage",
+	return dynamicPage(name:"startPage",
 					   title:"<b>Kasa Cloud Integration, Version ${appVersion()}</b>",
 					   uninstall: false,
 					   install: false) {
@@ -231,11 +228,12 @@ def kasaGetDevices() {
 	currentDevices.each {
 		def deviceModel = it.deviceModel.substring(0,5)
         def plugId = ""
- 		if (deviceModel == "HS107" || deviceModel == "HS300" || deviceModel == "KP200" || deviceModel == "KP400") {
+ 		if (deviceModel == "HS107" || deviceModel == "HS300" || 
+			deviceModel == "KP200" || deviceModel == "KP400" ||
+		   deviceModel == "KP303") {
 			def totalPlugs = 2
-			if (deviceModel == "HS300") {
-				totalPlugs = 6
-			}
+			if (deviceModel == "HS300") { totalPlugs = 6 }
+			else if (deviceModel == "KP303")  { totalPlugs = 3 }
 			for (int i = 0; i < totalPlugs; i++) {
 				def deviceNetworkId = "${it.deviceMac}_0${i}"
 				plugId = "${it.deviceId}0${i}"
