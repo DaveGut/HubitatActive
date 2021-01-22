@@ -1,4 +1,0 @@
-Cloud Hubitat Kasa Device Integration Changes:\n
-a.\tNew to support non-local-capable devices \n
-b.\tRemoved quick polling..\n\n
-<b>Installation Instructions</b>:  After HPM installation is complete, run the Kasa Integration app.
