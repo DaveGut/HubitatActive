@@ -134,7 +134,7 @@ def updateDriverData() {
 }
 def setPollInterval() {
 	def message = "Setting poll interval."
-	interval = refreshInterval.toInteger()
+	def interval = refreshInterval.toInteger()
 	if (useCloud) {
 		if (interval < 60) {
 			interval = 60
