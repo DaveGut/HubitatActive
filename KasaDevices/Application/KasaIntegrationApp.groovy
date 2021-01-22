@@ -472,7 +472,6 @@ def updateChildDeviceData() {
 			child.updateDataValue("deviceId", it.value.deviceId)
 			child.updateDataValue("plugNo", it.value.plugNo)
 			child.updateDataValue("plugId", it.value.plugId)
-			child.updated()
 			logDebug("updateChildDeviceData: ${it.value.alias} updated using ${it}")
 		}
 	}
