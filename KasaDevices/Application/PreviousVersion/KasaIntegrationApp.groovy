@@ -9,8 +9,10 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 11.27	5.3.3	Fixed error handling to properly cancel quick polling and refresh after 10 errors.
 12.31	5.3.4	a.	Added KL430 as a color bulb
 				b.	Added capability to enter segment other than segment Hubit hub is on.
+===== 2021 History =====
+01.03	5.3.5	Fixed the other subnet integration issues.
 =======================================================================================================*/
-def appVersion() { return "5.3.4" }
+def appVersion() { return "5.3.5" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -25,7 +27,6 @@ definition(
 	documentationLink: "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
 	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy"
 )
-
 preferences {
 	page(name: "startPage")
 	page(name: "mainPage")
@@ -38,13 +39,10 @@ preferences {
 	page(name: "ledOffPage")
 	page(name: "rebootSingleDevicePage")
 }
-
 def installed() {
 	log.info "installed"
 }
-
 def updated() { logDebug("updated") }
-
 def uninstalled() {
     getAllChildDevices().each { 
         deleteChildDevice(it.deviceNetworkId)
@@ -65,10 +63,6 @@ def startPage() {
 	}
 	state.hs300Error = ""
 
-//	5.3.4
-//	state.devices = [:]
-//	findDevices(25, "parseDeviceData")
-//	if (licenseAcknowledged == true) { return mainPage() }
 	if (!lanSegment) {
 		def hub = location.hubs[0]
 		def hubIpArray = hub.localIP.split('\\.')
@@ -77,7 +71,6 @@ def startPage() {
 	}
 	state.devices = [:]
 	findDevices(25, "parseDeviceData")
-//	5.3.4
 	
 	return dynamicPage(name:"mainPage",
 					   title:"<b>Kasa Local Hubitat Integration, Version ${appVersion()}</b>",
@@ -95,7 +88,6 @@ def startPage() {
 		}
 	}
 }
-
 def parseDeviceData(response) {
 	def resp = parseLanMessage(response.description)
 	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
@@ -115,7 +107,14 @@ def parseDeviceData(response) {
 	cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
 	def ip = convertHexToIP(resp.ip)
 	logDebug("parseDeviceData: ${ip} // ${cmdResp}")
-	def dni = resp.mac
+//	5.3.5
+	def dni
+	if (cmdResp.mic_mac == null) {
+		dni = cmdResp.mac.replace(/:/, "")
+	} else {
+		dni = cmdResp.mic_mac
+	}
+//	5.3.5
 	def alias = cmdResp.alias
 	def model = cmdResp.model.substring(0,5)
 	def type = getType(model)
@@ -192,7 +191,6 @@ def getType(model) {
 			logWarn("getType: Model not on current list.  Contact developer.")
 	}
 }
-
 def updateDevices(dni, ip, alias, model, type, plugNo, plugId, ledOff) {
 	logDebug("updateDevices")
 	def devices = state.devices
@@ -216,7 +214,6 @@ def updateDevices(dni, ip, alias, model, type, plugNo, plugId, ledOff) {
 	}		
 	logInfo("updateDevices: ${alias} added to devices array")
 }
-
 
 //	Main page
 def mainPage() {
@@ -265,7 +262,6 @@ def mainPage() {
 	}
 }
 
-
 //	Add Devices
 def addDevicesPage() {
 	logDebug("addDevicesPage")
@@ -297,7 +293,6 @@ def addDevicesPage() {
 		}
 	}
 }
-
 def addDevices() {
 	logDebug("addDevices: ${selectedAddDevices}")
 	def hub
@@ -364,7 +359,6 @@ def removeDevicesPage() {
 		}
 	}
 }
-
 def removeDevices() {
 	logDebug("removeDevices: ${selectedRemoveDevices}")
 	selectedRemoveDevices.each { dni ->
@@ -381,7 +375,6 @@ def removeDevices() {
 	}
 	app?.removeSetting("selectedRemoveDevices")
 }
-
 
 //	Access Advanced Kasa Tools
 def kasaToolsPage() {
@@ -425,7 +418,6 @@ def kasaToolsPage() {
 		}
 	}
 }
-
 def getDeviceBinding() {
 	logDebug("getDeviceBinding")
 	state.devicesBindingData = [:]
@@ -444,7 +436,6 @@ def getDeviceBinding() {
 	}
 	pauseExecution(5000)
 }
-
 def deviceBindingResponse(response) {
 	logDebug("deviceBindingResponse")
 	def resp = parseLanMessage(response.description)
@@ -461,10 +452,14 @@ def deviceBindingResponse(response) {
 	
 	def devicesBindingData = state.devicesBindingData
 	def deviceBindData = [:]
-	def device = state.devices.find { it.value.dni == resp.mac }
-	if (!device) {
-		device = state.devices.find { it.value.dni == "${resp.mac}00" }
-	}
+//	5.3.5
+//	def device = state.devices.find { it.value.dni == resp.mac }
+//	if (!device) {
+//		device = state.devices.find { it.value.dni == "${resp.mac}00" }
+//	}
+	def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
+//	5.3.5
+
 	deviceBindData["dni"] = device.value.dni
 	deviceBindData["ip"] = device.value.ip
 	deviceBindData["alias"] = device.value.alias
@@ -473,7 +468,6 @@ def deviceBindingResponse(response) {
 	devicesBindingData << ["${device.value.dni}" : deviceBindData]
 	logDebug("deviceBindingResponse: ${device.value.alias} added to devicesBindingData array")
 }
-
 
 //	Unbind Devices
 def unbindDevicesPage() {
@@ -499,7 +493,6 @@ def unbindDevicesPage() {
 		}
 	}
 }
-
 def deviceUnbind() {
 	logInfo("deviceUnbind")
 	unbindDevices.each { dni ->
@@ -517,7 +510,6 @@ def deviceUnbind() {
 	pauseExecution(4000)
 	app?.removeSetting("unbindDevices")
 }
-
 def unbindResponse(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
@@ -528,11 +520,16 @@ def unbindResponse(response) {
 	} else {
 		binded = cmdResp["smartlife.iot.common.cloud"].get_info.binded
 	}
+//	5.3.5
+	def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 	if (binded == 0) {
-		logInfo("SUCCESS: Device with DNI = ${resp.mac} is ubbound from the Kasa Cloud")
+//		logInfo("SUCCESS: Device with DNI = ${resp.mac} is ubbound from the Kasa Cloud")
+		logInfo("SUCCESS: Device with DNI = ${device.dni} is ubbound from the Kasa Cloud")
 	} else {
-		logWarn("FAILED: DNI: ${resp.mac} unbind failed. Error = ${cmdResp}")
+//		logWarn("FAILED: DNI: ${resp.mac} unbind failed. Error = ${cmdResp}")
+		logWarn("FAILED: DNI: ${device.dni} unbind failed. Error = ${cmdResp}")
 	}
+//	5.3.5
 }
 
 
@@ -568,7 +565,6 @@ def bindDevicesPage() {
 		}
 	}
 }
-
 def deviceBind() {
 	logInfo("deviceBind")
 	bindDevices.each { dni ->
@@ -586,7 +582,6 @@ def deviceBind() {
 	pauseExecution(4000)
 	app?.removeSetting("bindDevices")
 }
-
 def bindResponse(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
@@ -598,13 +593,17 @@ def bindResponse(response) {
 	} else {
 		binded = cmdResp["smartlife.iot.common.cloud"].get_info.binded
 	}
+//	5.3.5
+	def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 	if (binded == 1) {
-		logInfo("SUCCESS: Device with DNI = ${resp.mac} is bound to the Kasa Cloud")
+//		logInfo("SUCCESS: Device with DNI = ${resp.mac} is bound to the Kasa Cloud")
+		logInfo("SUCCESS: Device with DNI = ${device.dni} is bound to the Kasa Cloud")
 	} else {
-		logWarn("FAILED: DNI: ${resp.mac} bind failed. Error = ${cmdResp}")
+//		logWarn("FAILED: DNI: ${resp.mac} bind failed. Error = ${cmdResp}")
+		logWarn("FAILED: DNI: ${device.dni} bind failed. Error = ${cmdResp}")
 	}
+//	5.3.5
 }
-
 
 //	Turn LedOff On or Off
 def ledOnPage() {
@@ -631,7 +630,6 @@ def ledOnPage() {
 		}
 	}
 }
-
 def ledOn() {
 	logInfo("ledOn: ${selectedLedOnDevices}")
 	selectedLedOnDevices.each { dni ->
@@ -644,7 +642,6 @@ def ledOn() {
 	pauseExecution(4000)
 	app?.removeSetting("selectedLedOnDevices")
 }
-			
 def ledOffPage() {
 	logDebug("ledOffPage")
 	def devices = state.devices
@@ -657,7 +654,10 @@ def ledOffPage() {
 		}
 	}
 	return dynamicPage(name:"ledOnPage",
-		title:"<b>Turn On the Device LED (set led_off to true)</b>",
+//	5.3.5
+//		title:"<b>Turn On the Device LED (set led_off to true)</b>",
+		title:"<b>Turn Off the Device LED (set led_off to true)</b>",
+//	5.3.5
 		install: false) {
 	 	section("<b>Select Devices to turn on LED</b>") {
 			input ("selectedLedOffDevices", "enum",
@@ -669,7 +669,6 @@ def ledOffPage() {
 		}
 	}
 }
-
 def ledOff() {
 	logInfo("ledOn: ${selectedLedOffDevices}")
 	selectedLedOffDevices.each { dni ->
@@ -682,22 +681,24 @@ def ledOff() {
 	pauseExecution(4000)
 	app?.removeSetting("selectedLedOffDevices")
 }
-
 def ledOnOffResponse(response) {
 	def resp = parseLanMessage(response.description)
-	def dni = resp.mac
+//	5.3.5
+//	def dni = resp.mac
 	def parser = new JsonSlurper()
 	def cmdResp = parser.parseText(inputXOR(resp.payload))
 	logDebug("ledOnOff: cmdResp = ${cmdResp}")
 	if (cmdResp.system.set_led_off.err_code == 0) {
-		def device = state.devices.find { it.value.dni == dni }
+//		def device = state.devices.find { it.value.dni == dni }
+		def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 		if (device.value.ledOff == true) { device.value.ledOff = false }
 		else if (device.value.ledOff == false) { device.value.ledOff = true }
-		logInfo("ledOnOffResponse: device ${dni} ledOff state set to ${device.value.ledOff}")
+//		logInfo("ledOnOffResponse: device ${dni} ledOff state set to ${device.value.ledOff}")
+		logInfo("ledOnOffResponse: device ${device.dni} ledOff state set to ${device.value.ledOff}")
 	}
+//	5.3.5
 	else { logWarn("ledOnOffResponse: Error returned from device.") }
 }
-
 
 //	Reboot Single Device
 def rebootSingleDevicePage() {
@@ -722,7 +723,6 @@ def rebootSingleDevicePage() {
 		}
 	}
 }
-
 def deviceReboot() {
 	logInfo("deviceReboot")
 	def device = state.devices.find { it.value.dni == rebootDevice }
@@ -731,13 +731,15 @@ def deviceReboot() {
 		device.value.type == "Mono Bulb") {
 		preamble = preamble = "smartlife.iot.common.system"
 	}
-	logInfo("Unbinding device: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
+//	5.3.5
+//	logInfo("Unbinding device: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
+	logInfo("Rebooting device: dni = ${device.value.dni}, alias = ${device.value.alias}, ip = ${device.value.ip}")
+//	5.3.5
 	sendDeviceCmd(device.value.ip,
 				  """{"${preamble}":{"reboot":{"delay":3}}}""",
 				  "rebootResponse")
 	app?.removeSetting("removeDevice")
 }
-
 def rebootResponse(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
@@ -751,22 +753,25 @@ def rebootResponse(response) {
 		try { err_code = cmdResp["smartlife.iot.common.system"].reboot.err_code }
 		catch (error) { err_code = -1 }
 	}
+//	5.3.5
+	def device = state.devices.find { it.value.ip == convertHexToIP(resp.ip) }
 	if (err_code == 0) {
-		logInfo("SUCCESS. Device with DNI = ${resp.mac} rebooting.")
-		state.currMsg = "SUCCESS. Device with DNI = ${resp.mac} rebooting."
+//		logInfo("SUCCESS. Device with DNI = ${resp.mac} rebooting.")
+//		state.currMsg = "SUCCESS. Device with DNI = ${resp.mac} rebooting."
+		logInfo("SUCCESS. Device with DNI = ${device.dni} rebooting.")
 	} else {
-		logWarn("FAILED.  DNI: ${resp.mac} reboot command failed.  Error = ${cmdResp}")
-		state.currMsg = "FAILED.  DNI: ${resp.mac} reboot command failed.  Error = ${cmdResp}"
+//		logWarn("FAILED.  DNI: ${resp.mac} reboot command failed.  Error = ${cmdResp}")
+//		state.currMsg = "FAILED.  DNI: ${resp.mac} reboot command failed.  Error = ${cmdResp}"
+		logWarn("FAILED.  DNI: ${device.dni} reboot command failed.  Error = ${cmdResp}")
 	}
+//	5.3.5
 }
-
 
 //	Device Communications Failure Methods
 def updateIpData() {
 	logInfo("requestDataUpdate: Received device IP request from a Kasa device.")
 	runIn(5, pollForIps)
 }
-
 def pollForIps() {
 	if (pollEnabled == false) {
 		logWarn("pollForIps: a poll was run within the 15 min.  Poll not run.  Try running manually through the application.")
@@ -780,12 +785,10 @@ def pollForIps() {
 	}
 	return pollEnabled
 }
-
 def pollEnable() {
 	logInfo("pollEnable: polling capability enabled.")
 	app?.updateSetting("pollEnabled", [type:"bool", value: true])
 }
-
 def updateDeviceIps(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
@@ -800,7 +803,6 @@ def updateDeviceIps(response) {
 		logInfo("updateDeviceIps: updated IP for device ${dni} to ${ip}.")
 	}		
 }
-
 
 //	Communications Methods
 def findDevices(pollInterval, action) {
@@ -828,7 +830,6 @@ def findDevices(pollInterval, action) {
 //	5.3.4
 	pauseExecution(3000)
 }
-
 private sendCmd(ip, action) {
 	def myHubAction = new hubitat.device.HubAction(
 		"d0f281f88bff9af7d5f5cfb496f194e0bfccb5c6afc1a7c8eacaf08bf68bf6",
@@ -841,7 +842,6 @@ private sendCmd(ip, action) {
 		 callback: action])
 	sendHubCommand(myHubAction)
 }
-
 private sendDeviceCmd(ip, command, action) {
 	logDebug("sendDeviceCmd: ip = ${ip}, command = ${command}")
 	def myHubAction = new hubitat.device.HubAction(
@@ -856,7 +856,6 @@ private sendDeviceCmd(ip, command, action) {
 	sendHubCommand(myHubAction)
 }
 
-
 //	Utility Methods
 private outputXOR(command) {
 	def str = ""
@@ -869,7 +868,6 @@ private outputXOR(command) {
 	}
    	return encrCmd
 }
-
 private inputXOR(encrResponse) {
 	String[] strBytes = encrResponse.split("(?<=\\G.{2})")
 	def cmdResponse = ""
@@ -888,21 +886,14 @@ private inputXOR(encrResponse) {
 private String convertHexToIP(hex) {
 	[convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
 }
-
 private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
-
 def debugOff() { app.updateSetting("debugLog", false) }
-
 def logTrace(msg){ log.trace "${device.label} ${msg}" }
-
 def logDebug(msg){
 	if(debugLog == true) { log.debug "${appVersion()} ${msg}" }
 }
-
 def logInfo(msg){ log.info "${appVersion()} ${msg}" }
-
 def logWarn(msg) { log.warn "${appVersion()} ${msg}" }
-
 def license() {
 	def licText = "Copyright 2020, Dave Gutheinz\n\n"
 	licText += "DISCLAIMER:  This Applicaion and the associated Device "
