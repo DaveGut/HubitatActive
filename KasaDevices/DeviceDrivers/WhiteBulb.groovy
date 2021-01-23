@@ -15,8 +15,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		e.	Added preferences for Reboot Device.
 		f.	Removed option for a manual installation.  With segment selection in App,
 			no longer necessary.
-====================================================================================================*/
-def driverVer() { return "6.0.0" }
+6.0.0.1	Quick fix for not properly creating state.lastCommand in sendLanCmd.
+===================================================================================================*/
+def driverVer() { return "6.0.0.1" }
 metadata {
 	definition (name: "Kasa Mono Bulb",
 				namespace: "davegut",
@@ -296,6 +297,7 @@ private sendCmd(command) {
 //	===== LAN Communications Code =====
 private sendLanCmd(command) {
 	logDebug("sendLanCmd: ${command}")
+	runIn(4, rawSocketTimeout, [data: command])
 	command = outputXOR(command)
 	runIn(4, rawSocketTimeout, [data: command])
 	if (now() - state.lastConnect > 35000 ||
