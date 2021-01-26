@@ -169,6 +169,11 @@ def setPollInterval() {
 	}
 	return message
 }
+def updateEmStats() {
+	logDebug("updateEmStats: Updating daily energy monitor data.")
+	def year = new Date().format("yyyy").toInteger()
+	sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""")
+}
 
 //	===== Device Command Methods =====
 def on() {
