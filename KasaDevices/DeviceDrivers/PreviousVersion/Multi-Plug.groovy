@@ -1,19 +1,22 @@
 /*	Kasa Device Driver Series
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
-===== 2020 History =====
-02.28	New version 5.0.  Deprecated with this version
-04.20	5.1.0	Update for Hubitat Program Manager
-05,17	5.2.0	UDP Comms Update.  Deprecated with this version.
-08.01	5.3.0	Major rewrite of LAN communications using rawSocket.  Other edit improvements.
-				a.	implemented rawSocket for communications to address UPD errors and
-					the issue that Hubitat UDP not supporting Kasa return lengths > 1024.
-				b.	Use encrypted version of refresh / quickPoll commands
-08.25	5.3.1	Update Error Process to check for IPs on comms error.  Limited to once ever 15 min.
-11/27	5.3.3	Fixed error handling to properly cancel quick polling and refresh after 10 errors.
+===== 2021 History =====
+01-25	Version 6.0.0 Update.  Combine Cloud and LAN Driver code to one driver/app set.
+		a.	Add Preferece useCloud.  When true, all communications will be via the Kasa
+			cloud, using methods embedded in the application.
+			1.	Will not be availalbe based on the following application-set dataValues
+				a.	"appServerUrl" is not in the data section
+				b.	"boundToKasa" is false
+			2.	When true, refresh/polling interval is limited to a minimum of 1 minute.
+		b.	Removed quick poll command and merged functions into preference refresh interval.
+		c.	Removed preference pollTest.
+		d.	Modified options for preference refreshInterval.
+		e.	Added preferences for ledState and Reboot Device.
+		f.	Removed option for a manual installation.  With segment selection in App,
+			no longer necessary.
 ===================================================================================================*/
-def driverVer() { return "5.3.3" }
-
+def driverVer() { return "6.0.0" }
 metadata {
 	definition (name: "Kasa Multi Plug",
     			namespace: "davegut",
@@ -23,37 +26,39 @@ metadata {
 		capability "Switch"
 		capability "Actuator"
 		capability "Refresh"
-		command "setPollInterval", [[
-			name: "Poll Interval in seconds",
-			constraints: ["off", "5", "10", "15", "20", "25", "30"],
-			type: "ENUM"]]
 	}
-
 	preferences {
-		if (!getDataValue("applicationVersion")) {
-			input ("device_IP", "text", 
-				   title: "Device IP", 
-				   defaultValue: getDataValue("deviceIP"))
-			input ("plug_No", "enum", 
-				   title: "Plug Number",
-				   options: ["00", "01", "02", "03", "04", "05"])
+		if (getDataValue("appServerUrl")) {
+			input ("useCloud", "bool",
+				   title: "Use Kasa Cloud for device control",
+				   description: "(Must be bound to Kasa Cloud)",
+				   defaultValue: false)
 		}
-		input ("refresh_Rate", "enum",  
-			   title: "Device Refresh Interval (minutes)", 
-			   options: ["1", "5", "10", "15", "30", "60", "180"], 
-			   defaultValue: "60")
-		input ("debug", "bool", 
+		def refreshIntervals = ["5": "5 seconds", "10": "10 seconds", "15": "15 seconds",
+								"20": "20 seconds", "25": "25 seconds",
+								"30": "30 seconds", "60": "1 minute", "300": "5 minutes"]
+		input ("refreshInterval", "enum",
+			   title: "Refresh / Poll Interval",
+			   options: refreshIntervals,
+			   defaultValue: "300")
+		input ("debug", "bool",
 			   title: "Enable debug logging", 
 			   defaultValue: false)
 		input ("descriptionText", "bool", 
 			   title: "Enable description text logging", 
 			   defaultValue: true)
-		input ("pollTest", "bool", 
-			   title: "Enable 5 minute quick poll trace logging", 
+		input ("bind", "enum",
+			   options: ["0": "Unbound from Cloud", "1": "Bound to Cloud"],
+			   title: "Kasa Cloud Binding <b>[Caution]</b>")
+		input ("ledStatus", "enum",
+			   options: ["0": "on", "1": "off"],
+			   title: "Led On/Off",
+			   defaultValue: "0")
+		input ("rebootDev", "bool",
+			   title: "Reboot device <b>[Caution]</b>",
 			   defaultValue: false)
 	}
 }
-
 def installed() {
 	logInfo("Installing Device....")
 	runIn(2, updated)
@@ -63,166 +68,107 @@ def installed() {
 def updated() {
 	logInfo("Updating device preferences....")
 	unschedule()
-	state.respLength = 0
-	state.response = ""
-	state.lastConnect = 0
-	state.errorCount = 0
-	if (!state.pollInterval) { state.pollInterval = "off" }
-	
-	//	Manual installation support.  Get IP and Plug Number
-	if (!getDataValue("applicationVersion")) {
-		if (!device_IP || !plug_No) {
-			logWarn("updated: Device IP or Plug Number is not set.")
-			return
-		}
-		if (getDataValue("deviceIP") != device_IP.trim()) {
-			updateDataValue("deviceIP", device_IP.trim())
-			logInfo("updated: Device IP set to ${device_IP.trim()}")
-		}
-		if (!getDataValue("plugNo")) {
-			updateDataValue("plugNo", plug_No)
-			logInfo("updated: Plug Number set to ${plug_No}")
-			def command = "0000001dd0f281f88bff9af7d5ef94b6d1b4c09" +
-				"fec95e68fe187e8caf08bf68bf6"
-			sendCmd(command)
-		}
+	if (rebootDev) {
+		logInfo("updated: ${rebootDevice()}")
 	}
 
-	//	Update various preferences.
-	if (debug == true) { 
+	//	Set cloud to false if no appServerUrl, true if no IP address
+	if (!getDataValue("appServerUrl")) {
+		device.updateSetting("useCloud", [type:"bool", value: false])
+	} else if (!getDataValue("deviceIP")){
+		device.updateSetting("useCloud", [type:"bool", value: true])
+	}
+	logInfo("updated: useCloud set to ${useCloud}")
+	if (useCloud && bind == "1") {
+		state.remove("respLength")
+		state.remove("response")
+		state.remove("lastConnect")
+		state.remove("errorCount")
+	} else if (useCloud && bind == "0") {
+		logWarn("updated: useCloud not available if not bound to Kasa Cloud.")
+		device.updateSetting("useCloud", [type:"bool", value: "false"])
+		state.respLength = 0
+		state.response = ""
+		state.lastConnect = 0
+		state.errorCount = 0
+	} else {
+		state.respLength = 0
+		state.response = ""
+		state.lastConnect = 0
+		state.errorCount = 0
+	}
+
+	logInfo("updated: ${updateDriverData()}")
+	if (debug == true) {
 		runIn(1800, debugLogOff)
 		logInfo("updated: Debug logging enabled for 30 minutes.")
-	} else {
-		unschedule(debugLogOff)
-		logInfo("updated: Debug logging is off.")
-	}
-	if (pollTest) { 
-		runIn(300, pollTestOff)
-		logInfo("updated: Poll Testing enabled for 5 minutes")
-	} else {
-		unschedule(pollTestOff)
-		logInfo("updated: Poll Testing is off")
 	}
 	logInfo("updated: Description text logging is ${descriptionText}.")
-	logInfo("updated: ${updateDriverData()}")
-	setRefresh()
 
-	runIn(5, refresh)
+	logInfo("updated: ${getBindState()}.")
+	pauseExecution(2000)
+	logInfo("updated: LED Off Status is ${ledOnOff()}.")
+	logInfo("updated: ${setPollInterval()}")
+
+	refresh()
 }
-
-def setPlugId(resp) {
-	def plugNo = getDataValue("plugNo")
-	def plugId = "${resp.system.get_sysinfo.deviceId}${plugNo}"
-	updateDataValue("plugId", plugId)
-	logInfo("setPlugId: Plug ID = ${plugId}")
-}
-
 def updateDriverData() {
-	//	Version 5.2 to 5.3 updates
 	if (getDataValue("driverVersion") != driverVer()) {
 		updateDataValue("driverVersion", driverVer())
-		if (state.pollFreq) {
-			def interval = state.pollFreq
-			if (interval == 0) {
-				interval = "off"
-			} else if (interval < 5) {
-				interval = 5
-			} else if (interval > 30) {
-				interval = 30
-			}
-			setPollInterval(interval.toString())
+		state.remove("WARNING")
+		if (state.pollInterval && state.pollInterval != "off") {
+			interval = state.pollInterval.toInteger()
+			message += "\n\t\t\t\tCapturing existing poll interval of ${interval}."
+			device.updateSetting("refreshInterval", 
+								 [type:"enum", 
+								  value: interval.toString()])
+			state.remove("pollInterval")	
 		}
-		state.remove("pollFreq")
-		pauseExecution(1000)
-		state.remove("lastCommand")
 		return "Driver data updated to latest values."
 	} else {
 		return "Driver version and data already correct."
 	}
 }
-
-def setRefresh() {
-	logDebug("setRefresh: pollInterval = ${state.pollInterval}, refreshRate = ${refresh_Rate}")
-	if (state.pollInterval != "off") {
-		setPollInterval(state.pollInterval)
-		return "Preference Refresh is disabled.  Using quickPoll"
-	} else {
-		switch(refresh_Rate) {
-			case "1" : runEvery1Minute(refresh); break
-			case "5" : runEvery5Minutes(refresh); break
-			case "10" : runEvery10Minutes("refresh"); break
-			case "15" : runEvery15Minutes(refresh); break
-			case "30" : runEvery30Minutes(refresh); break
-			case "180": runEvery3Hours(refresh); break
-			default:
-				runEvery1Hour(refresh); break
+def setPollInterval() {
+	def message = "Setting poll interval."
+	interval = refreshInterval.toInteger()
+	if (useCloud) {
+		if (interval < 60) {
+			interval = 60
+			device.updateSetting("refreshInterval", [type:"enum", value: "60"])
+			message += "\n\t\t\t\tuseCloud is true, refreshInterval set to 1 minute minimum."
 		}
-		return "Preference Refresh set for every ${refresh_Rate} minute(s)."
 	}
+	if (interval < 60) {
+		schedule("*/${interval} * * * * ?", refresh)
+		message += "\n\t\t\t\tPoll interval set to ${interval} seconds."
+	} else {
+		interval = (interval/60).toInteger()
+		schedule("0 */${interval} * * * ?", refresh)
+		message += "\n\t\t\t\tPoll interval set to ${interval} minutes."
+	}
+	return message
 }
 
-def debugLogOff() {
-	device.updateSetting("debug", [type:"bool", value: false])
-	logInfo("debugLogOff: Debug logging is off.")
-}
-
-def pollTestOff() {
-	device.updateSetting("pollTest", [type:"bool", value: false])
-	logInfo("pollTestOff: poll testing is off")
-}
-
-def plugId() { return getDataValue("plugId") }
-
-
-//	===== Device Command Methods =====
 def on() {
 	logDebug("on")
-	def command = outputXOR("""{"context":{"child_ids":["${plugId()}"]},""" +
-							""""system":{"set_relay_state":{"state":1},""" +
-							""""get_sysinfo":{}}}""")
-	sendCmd(command)
+	sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
+			""""system":{"set_relay_state":{"state":1},""" +
+			""""get_sysinfo":{}}}""")
 }
-
 def off() {
 	logDebug("off")
-	def command = outputXOR("""{"context":{"child_ids":["${plugId()}"]},""" +
-							""""system":{"set_relay_state":{"state":0},""" +
-							""""get_sysinfo":{}}}""")
-	sendCmd(command)
+	sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
+			""""system":{"set_relay_state":{"state":0},""" +
+			""""get_sysinfo":{}}}""")
 }
-
 def refresh() {
 	logDebug("refresh")
-	if (pollTest) { logTrace("Poll Test.  Time = ${now()}") }
-	def command = "0000001dd0f281f88bff9af7d5ef94b6d1b4c09" +
-		"fec95e68fe187e8caf08bf68bf6"
-	sendCmd(command)
+	sendCmd("""{"system":{"get_sysinfo":{}}}""")
 }
-
-def setPollInterval(interval) {
-	logDebug("setPollInterval: interval = ${interval}")
-	if (interval == "off") {
-		logInfo("setPollInterval: polling is off")
-		state.pollInterval = "off"
-		state.remove("WARNING")
-		logInfo("setPollInterval: ${setRefresh()}")
-	} else {
-		interval = interval.toInteger()
-		state.pollInterval = interval
-		schedule("*/${interval} * * * * ?", refresh)
-		logWarn("setPollInterval: polling interval set to ${interval} seconds.\n" +
-				"Quick Polling can have negative impact on the Hubitat Hub performance. " +
-			    "If you encounter performance problems, try turning off quick polling.")
-		state.WARNING = "<b>Quick Polling can have negative impact on the Hubitat " +
-						"Hub and network performance.</b>  If you encounter performance " +
-				    	"problems, <b>before contacting Hubitat support</b>, turn off quick " +
-				    	"polling and check your sysem out."
-	}
-}
-
 def setSysInfo(resp) {
 	def status = resp.system.get_sysinfo
-	status = status.children.find { it.id == plugId() }
+	status = status.children.find { it.id == getDataValue("plugId") }
 	logDebug("setSysInfo: status = ${status}")
 	def onOff = "on"
 	if (status.state == 0) { onOff = "off" }
@@ -232,50 +178,87 @@ def setSysInfo(resp) {
 	}
 }
 
+//	===== Kasa Utility Commands =====
+def getBindState() {
+	sendCmd("""{"cnCloud":{"get_info":{}}}""")
+	return "Getting and Updating Bind State"
+}
+def bindUnbind(bind) {
+	logInfo("bindUnbind: updating to ${bind}")
+	if (bind == "1") {
+		if (!parent || !parent.useKasaCloud) {
+			logWarn("bindUnbind: Application must be set to useKasaCloud for binding to work.")
+			device.updateSetting("bind", [type:"enum", value: "0"])
+		} else {
+			sendCmd("""{"cnCloud":{"bind":{"username":"${parent.userName}",""" +
+					""""password":"${parent.userPassword}"}},"cnCloud":{"get_info":{}}}""")
+		}
+	} else {
+		if (useCloud) {
+			logWarn("bindUnbind: Can't unbind when device is set to useCloud")
+			device.updateSetting("bind", [type:"enum", value: "1"])
+		} else {
+			sendCmd("""{"cnCloud":{"unbind":""},"cnCloud":{"get_info":{}}}""")
+		}
+	}
+}
+def setBindUnbind(cmdResp) {
+	def binded = cmdResp.cnCloud.get_info.binded.toString()
+	if (bind && binded != bind) {
+		bindUnbind(bind)
+	} else {
+		device.updateSetting("bind", [type:"enum", value: binded])
+		logInfo("setBindUnbind: Bind status set to ${binded}")
+	}
+}
+def ledOnOff() {
+	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+	return ledStatus
+}
+def rebootDevice() {
+	logInfo("rebootDevice: User Commanded Reboot Device!")
+	device.updateSetting("rebootDev", [type:"bool", value: false])
+	sendCmd("""{"system":{"reboot":{"delay":1}}}""")
+	pauseExecution(10000)
+	return "Attempted to reboot device"
+}
 
 //	===== distribute responses =====
 def distResp(response) {
-	logDebug("distResp: response length = ${response.length()}")
-	if (response.length() == null) {
-		logDebug("distResp: null return rejected.")
-		return 
-	}
-	
-	def resp
-	try {
-		resp = parseJson(inputXOR(response))
-	} catch (e) {
-		logWarn("distResp: Invalid or incomplete return.\nerror = ${e}")
-		return
-	}
-	unschedule(rawSocketTimeout)
-	state.errorCount = 0
-	
-	if (!getDataValue("plugId")) {
-		setPlugId(resp)
+	if (response.system) {
+		if (response.system.get_sysinfo) {
+			setSysInfo(response)
+		} else if (response.system.reboot) {
+			logInfo("distResp: Rebooting device")
+		}
+	} else if (response.cnCloud) {
+		setBindUnbind(response)
+	} else if (response.error) {
+		logWarn("distResponse: Error = ${response.error}")
 	} else {
-		setSysInfo(resp)
+		logWarn("distResp: Unhandled response = ${response}")
 	}
 }
 
-
-//	===== Common Kasa Driver code =====
 private sendCmd(command) {
-	logDebug("sendCmd")
+	if (!useCloud) { sendLanCmd(command) }
+	else { sendKasaCmd(command) }
+}
+
+//	===== LAN Communications Code =====
+private sendLanCmd(command) {
+	logDebug("sendLanCmd: ${command}")
+	command = outputXOR(command)
 	runIn(4, rawSocketTimeout, [data: command])
 	if (now() - state.lastConnect > 35000 ||
 	   device.name == "HS100" || device.name == "HS200") {
-		logDebug("sendCmd: Attempting to connect.....")
+		logDebug("sendLanCmd: Attempting to connect.....")
 		try {
 			interfaces.rawSocket.connect("${getDataValue("deviceIP")}", 
 										 9999, byteInterface: true)
 		} catch (error) {
 			logDebug("SendCmd: Unable to connect to device at ${getDataValue("deviceIP")}. " +
 					 "Error = ${error}")
-			if (!getDataValue("applicationVersion")) {
-				logWarn("sendCmd:  Check your IP address and device power.")
-				return
-			}
 			def pollEnabled = parent.pollForIps()
 			if (pollEnabled == true) {
 				logDebug("SendCmd: Attempting to update IP address.")
@@ -289,22 +272,21 @@ private sendCmd(command) {
 	}
 	interfaces.rawSocket.sendMessage(command)
 }
-
 def socketStatus(message) {
 	if (message == "receive error: Stream closed.") {
 		logDebug("socketStatus: Socket Established")
 	} else {
 		logWarn("socketStatus = ${message}")
+		logWarn("Check: Device Name must be first 5 characters of Model (i.e., HS200).")
 	}
 }
-
 def parse(message) {
 	def respLength
 	if (message.length() > 8 && message.substring(0,4) == "0000") {
 		def hexBytes = message.substring(0,8)
 		respLength = 8 + 2 * hubitat.helper.HexUtils.hexStringToInt(hexBytes)
 		if (message.length() == respLength) {
-			distResp(message)
+			prepResponse(message)
 			state.lastConnect = now()
 		} else {
 			state.response = message
@@ -317,19 +299,34 @@ def parse(message) {
 			state.response = ""
 			state.respLength = 0
 			state.lastConnect = now()
-			distResp(resp)
+			prepResponse(resp)
 		} else {
 			state.response = resp
 		}
 	}
 }
-
+def prepResponse(response) {
+	logDebug("prepResponse: response length = ${response.length()}")
+	if (response.length() == null) {
+		logDebug("distResp: null return rejected.")
+		return 
+	}
+	def resp
+	try {
+		resp = parseJson(inputXOR(response))
+	} catch (e) {
+		resp = ["error": "Invalid or incomplete return. Error = ${e}"]
+	}
+	state.errorCount = 0
+	unschedule(rawSocketTimeout)
+	distResp(resp)
+}
 def rawSocketTimeout(command) {
 	state.errorCount += 1
 	if (state.errorCount <= 2) {
 		logDebug("rawSocketTimeout: attempt = ${state.errorCount}")
 		state.lastConnect = 0
-		sendCmd(command)
+		sendLanCmd(command)
 	} else {
 		logWarn("rawSocketTimeout: Retry on error limit exceeded. Error " +
 				"count = ${state.errorCount}.  If persistant try SavePreferences.")
@@ -341,6 +338,14 @@ def rawSocketTimeout(command) {
 	}
 }
 
+//	===== Cloud Communications Code =====
+private sendKasaCmd(command) {
+	logDebug("sendKasaCmd: ${command}")
+	def appServerUrl = getDataValue("appServerUrl")
+	def deviceId = getDataValue("deviceId")
+	def cmdResponse = parent.sendKasaCmd(appServerUrl, deviceId, command)
+	distResp(cmdResponse)
+}
 
 //	-- Encryption / Decryption
 private outputXOR(command) {
@@ -354,7 +359,6 @@ private outputXOR(command) {
 	}
    	return encrCmd
 }
-
 private inputXOR(resp) {
 	String[] strBytes = resp.substring(8).split("(?<=\\G.{2})")
 	def cmdResponse = ""
@@ -369,17 +373,16 @@ private inputXOR(resp) {
 	}
 	return cmdResponse
 }
-
-
 //	 ===== Logging =====
 def logTrace(msg){ log.trace "${device.label} ${msg}" }
-
 def logInfo(msg) {
 	if (descriptionText == true) { log.info "${device.label} ${msg}" }
 }
-
 def logDebug(msg){
 	if(debug == true) { log.debug "${device.label} ${msg}" }
 }
-
+def debugLogOff() {
+	device.updateSetting("debug", [type:"bool", value: false])
+	logInfo("debugLogOff: Debug logging is off.")
+}
 def logWarn(msg){ log.warn "${device.label} ${msg}" }

@@ -2,12 +2,16 @@
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== 2021 History =====
-01.25	6.0.0.  Update to combine Cloud and Local LAN integration.
+01.25	6.0.0	Update to combine Cloud and Local LAN integration.
 		a.	Added operator selected cloud function.
 		b.	Modified data creation to accommodate using cloud.
-		c.	Changed device data update process to include Save Preferences on child devices.
+		c.	Includde ave Preferences on child devices.
+02.08	6.1.0	Update supporting maintenance effort reduction
+		a.	Added support for KL430 Light Strip
+		b.	Determine type by sysinfo parameters rather than model.
+		c.	Add list of required drivers on addDevices page.
 =======================================================================================================*/
-def appVersion() { return "6.0.0" }
+def appVersion() { return "6.1" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -19,7 +23,7 @@ definition(
 	iconUrl: "",
 	iconX2Url: "",
 	singleInstance: true,
-	documentationLink: "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
+	documentationLink: "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
 	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy"
 )
 preferences {
@@ -75,7 +79,7 @@ def startPage() {
 					   install: true) {
 		section() {
 			input "showInstructions", "bool",
-				title: "<b>Display instructions on page commands</b>",
+				title: "<b>Page Hints</b>",
 				submitOnChange: true,
 				defaultalue: true
 			if (showInstructions == true) {
@@ -170,31 +174,34 @@ def getToken() {
 }
 
 //	Add Devices
-def addDevicesPage() {
+def addDevicesPage() { 
 	logDebug("addDevicesPage")
 	state.devices = [:]
-	findDevices("parseLanData")
+	findDevices()
 	
 	def devices = state.devices
 	def uninstalledDevices = [:]
+	def requiredDrivers = [:]
 	devices.each {
 		def isChild = getChildDevice(it.value.dni)
 		if (!isChild) {
-			uninstalledDevices["${it.value.dni}"] = "${it.value.alias}     ${it.value.model}"
+			uninstalledDevices["${it.value.dni}"] = "${it.value.alias} // ${it.value.type}"
+			requiredDrivers["${it.value.type}"] = "${it.value.type}"
 		}
 	}
+	def reqDrivers = "1.\t<b>Ensure the following drivers are installed:</b>"
+	requiredDrivers.each {
+		reqDrivers += "\n\t\t${it.key}"
+	}
 	def pageInstructions = "<b>Before Installing New Devices</b>\n"
-	pageInstructions += "1.\tEnsure the appropriate drivers from "
-	pageInstructions += "the previous page are installed.\n"
-	pageInstructions += "2.\tAssign Static IP Addresses.\n"
+	pageInstructions += "${reqDrivers}\n"
+	pageInstructions += "2.\t<b>Assign Static IP Addresses.</b>"
 	return dynamicPage(name:"addDevicesPage",
 					   title:"<b>Add Kasa Devices to Hubitat</b>",
 					   nextPage: startPage,
 					   install: false) {
 	 	section() {
 			paragraph pageInstructions
-		}
-	 	section("<b>Select Devices to Add to Hubitat</b>") {
 			input ("selectedAddDevices", "enum",
 				   required: false,
 				   multiple: true,
@@ -218,20 +225,25 @@ def addDevices() {
 			deviceData["plugNo"] = device.value.plugNo
 			deviceData["plugId"] = device.value.plugId
 			deviceData["deviceId"] = device.value.deviceId
+			deviceData["model"] = device.value.model
+			deviceData["feature"] = device.value.feature
+			deviceData["token"] = state.TpLinkToken
 			try {
 				addChildDevice(
 					"davegut",
-					"Kasa ${device.value.type}",
+					device.value.type,
 					device.value.dni,
 					hub.id, [
 						"label": device.value.alias,
-						"name" : device.value.model,
+						"name" : device.value.type,
 						"data" : deviceData
 					]
 				)
-				logInfo("Installed ${device.value.alias}. Data = ${device}")
+				logInfo("Installed ${device.value.alias}.")
 			} catch (error) {
-				logWarn("Failed to install device.  Data = ${device}")
+				logWarn("Failed to install device." + 
+						"\nDevice: ${device}" +
+						"\n<b>Driver: Dev ${device.value.type}")
 			}
 		}
 		pauseExecution(3000)
@@ -243,13 +255,13 @@ def addDevices() {
 def removeDevicesPage() {
 	logDebug("removeDevicesPage")
 	state.devices = [:]
-	findDevices("parseLanData")
+	findDevices()
 	def devices = state.devices
 	def installedDevices = [:]
 	devices.each {
 		def isChild = getChildDevice(it.value.dni)
 		if (isChild) {
-			installedDevices["${it.value.dni}"] = "${it.value.model} ${it.value.alias}"
+			installedDevices["${it.value.dni}"] = "${it.value.alias}, type = ${it.value.type}"
 		}
 	}
 	logDebug("removeDevicesPage: newDevices = ${newDevices}")
@@ -285,53 +297,17 @@ def removeDevices() {
 }
 
 //	Get Device Data Methods
-def findDevices(action) {
+def findDevices() {
 	logInfo("findDevices: Searching for LAN deivces on IP Segment = ${lanSegment}")
 	for(int i = 2; i < 255; i++) {
 		def deviceIP = "${lanSegment}.${i.toString()}"
-		sendLanCmd(deviceIP, """{"system":{"get_sysinfo":{}}}""", action)
+		sendLanCmd(deviceIP, """{"system":{"get_sysinfo":{}}}""", "parseLanData")
 		pauseExecution(25)
 	}
 	if (useKasaCloud == true) {
 		cloudGetDevices()
 	}
 	runIn(5, updateChildDeviceData)
-}
-def parseLanData(response) {
-	def resp = parseLanMessage(response.description)
-	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
-	def clearResp = inputXOR(resp.payload)
-	if (clearResp.length() > 1022) {
-		clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
-	}
-	def cmdResp
-	cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
-	def ip = convertHexToIP(resp.ip)
-	logDebug("parseLanData: ${ip} // ${cmdResp}")
-	def dni
-	if (cmdResp.mic_mac == null) {
-		dni = cmdResp.mac.replace(/:/, "")
-	} else {
-		dni = cmdResp.mic_mac
-	}
-	def alias = cmdResp.alias
-	def model = cmdResp.model.substring(0,5)
-	def plugNo
-	def plugId
-	def deviceId = cmdResp.deviceId
-	def appServerUrl
-	if (cmdResp.children) {
-		def childPlugs = cmdResp.children
-		childPlugs.each {
-			plugNo = it.id
-			def childDni = "${dni}${plugNo}"
-			plugId = "${deviceId}${plugNo}"
-			alias = it.alias
-			updateDevices(childDni, ip, alias, model, plugNo, appServerUrl, deviceId, plugId)
-		}
-	} else {
-		updateDevices(dni, ip, alias, model, plugNo, appServerUrl, deviceId, plugId)
-	}
 }
 def cloudGetDevices() {
 	logInfo("cloudGetDevices ${state.TpLinkToken}")
@@ -348,44 +324,105 @@ def cloudGetDevices() {
 		if (resp.status == 200 && resp.data.error_code == 0) {
 			currentDevices = resp.data.result.deviceList
 		} else {
-			logWarn("Error getting data from the Kasa Cloud")
+			logWarn("Error from the Kasa Cloud: ${resp.data.error_code} = ${resp.data.msg}")
 		}
 	}
 	currentDevices.each {
-		cloudFinishGet(it)
+		if (it.deviceType != "IOT.SMARTPLUGSWITCH" && it.deviceType != "IOT.SMARTBULB") {
+			logInfo("<b>cloudGetDevice: Ignore device type ${it.deviceType}.")
+			return
+		} else if (it.status == 0) {
+			logInfo("<b>cloudGetDevice: Device name ${it.alias} is offline and not included.")
+			return
+		}
+		def cmdResp = sendKasaCmd(it.appServerUrl, it.deviceId, '{"system":{"get_sysinfo":{}}}')
+		if (cmdResp.error) {
+			logWarn("cloudGetDevices: ${it.alias}, ${cmdResp}")
+			return
+		}
+		parseDeviceData(cmdResp.system.get_sysinfo, it.appServerUrl, null)
 	}
 }
-def cloudFinishGet(device) {
-	def dni = device.deviceMac
-	def ip
-	def alias = device.alias
-	def model = device.deviceModel.substring(0,5)
+def parseLanData(response) {
+	def resp = parseLanMessage(response.description)
+	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
+	def clearResp = inputXOR(resp.payload)
+	if (clearResp.length() > 1022) {
+		clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
+	}
+	def ip = convertHexToIP(resp.ip)
+	def cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
+	parseDeviceData(cmdResp, null, ip)
+}
+
+def parseDeviceData(cmdResp, appServerUrl = null, ip = null) {
+	logDebug("parseDeviceData: ${cmdResp} // ${appServerUrl} //  ${ip}")
+//	dni from mac and mic_mac
+//log.trace cmdResp
+	def dni
+	if (cmdResp.mic_mac) {
+		dni = cmdResp.mic_mac
+	} else {
+		dni = cmdResp.mac.replace(/:/, "")
+	}
+//	Parse out Device Type
+	def kasaType
+	if (cmdResp.mic_type) {
+		kasaType = cmdResp.mic_type
+	} else {
+		kasaType = cmdResp.type
+	}
+	def type
+	def feature
+	if (kasaType == "IOT.SMARTPLUGSWITCH") {
+		type = "Kasa Plug Switch"
+		if (cmdResp.brightness) {
+			type = "Kasa Dimming Switch"
+			feature = "isDimmable"
+		} else if (cmdResp.feature == "TIM:ENE") {
+			type = "Kasa EM Plug"
+			feature = "energyMonitor"
+			if (cmdResp.children) {
+				type = "Kasa EM Multi Plug"
+			}
+		} else if (cmdResp.children) {
+			type = "Kasa Multi Plug"
+		}
+	} else if (kasaType == "IOT.SMARTBULB") {
+		type = "Kasa Color Bulb"
+		if (cmdResp.lighting_effect_state) {
+			feature = "lightStrip"
+		} else if (cmdResp.is_color == 0 && cmdResp.is_variable_color_temp == 1) {
+			type = "Kasa CT Bulb"
+		} else if (cmdResp.is_color == 0 && cmdResp.is_variable_color_temp == 0) {
+			type = "Kasa Mono Bulb"
+		}
+	}
+
+	def model = cmdResp.model.substring(0,5)
+	def alias = cmdResp.alias
 	def plugNo
 	def plugId
-	def deviceId = device.deviceId
-	def appServerUrl = device.appServerUrl
-	def cmdResp = sendKasaCmd(device.appServerUrl, device.deviceId, '{"system":{"get_sysinfo":{}}}')
-	if (cmdResp.error) {
-		logWarn("cloudFinishGet: Error = ${cmdResp.error}")
-		return
-	}
-	if (cmdResp.system.get_sysinfo.children) {
-		def childPlugs = cmdResp.system.get_sysinfo.children
+	def deviceId = cmdResp.deviceId
+//	Create devices from multi-plug children
+	if (cmdResp.children) {
+		def childPlugs = cmdResp.children
 		childPlugs.each {
-			alias = it.alias
-			plugId = it.id
+			plugNo = it.id
 			plugNo = it.id.substring(it.id.length() - 2)
 			def childDni = "${dni}${plugNo}"
-			updateDevices(childDni, ip, alias, model, plugNo, appServerUrl, deviceId, plugId)
+			plugId = "${deviceId}${plugNo}"
+			alias = it.alias
+			updateDevices(childDni, ip, type, feature, model, alias, deviceId, plugNo, plugId, appServerUrl)
 		}
 	} else {
-		updateDevices(dni, ip, alias, model, plugNo, appServerUrl, deviceId, plugId)
+		updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId, appServerUrl)
 	}
 }
-def updateDevices(dni, ip, alias, model, plugNo, appServerUrl, deviceId, plugId) {
-	logDebug("updateDevices")
+def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId, appServerUrl) {
+	logDebug("updateDevices: dni = ${dni}")
 	def devices = state.devices
-
+//	While doing Cloud discovery, update IP from first discovery phase.
 	def existingDev = devices.find { it.key == dni }
 	if (existingDev) {
 		if (ip == null) {
@@ -395,70 +432,19 @@ def updateDevices(dni, ip, alias, model, plugNo, appServerUrl, deviceId, plugId)
 			appServerUrl = existingDev.value.appServerUrl
 		}
 	}
-
 	def device = [:]
 	device["dni"] = dni
+	device["type"] = type
+	device["feature"] = feature
 	device["alias"] = alias
 	device["model"] = model
-	device["type"] = getType(model)
+	device["deviceId"] = deviceId
+	device["ip"] = ip
 	device["plugNo"] = plugNo
 	device["plugId"] = plugId
-	device["ip"] = ip
-	device["deviceId"] = deviceId
 	device["appServerUrl"] = appServerUrl
 	devices << ["${dni}" : device]
-	logDebug("updateDevices: added to array ${alias} = ${device}")
-}
-def getType(model) {
-	switch(model) {
-		case "HS100" :
-		case "HS103" :
-		case "HS105" :
-		case "HS200" :
-		case "HS210" :
-		case "KP100" :
-		case "KP105" :
-			return "Plug Switch"
-			break
-		case "HS110" :
-		case "KP115" :
-			return "EM Plug"
-			break
-		case "KP200" :
-		case "HS107" :
-		case "KP303" :
-		case "KP400" :
-			return "Multi Plug"
-			break
-		case "HS300" :
-			return "EM Multi Plug"
-			break
-		case "HS220" :
-			return "Dimming Switch"
-			break
-		case "KB100" :
-		case "LB100" :
-		case "LB110" :
-		case "KL110" :
-		case "LB200" :
-		case "KL50(" :
-		case "KL60(" :
-			return "Mono Bulb"
-			break
-		case "LB120" :
-		case "KL120" :
-			return "CT Bulb"
-			break
-		case "KB130" :
-		case "LB130" :
-		case "KL130" :
-		case "LB230" :
-//		case "KL430" :
-			return "Color Bulb"
-			break
-		default :
-			logWarn("getType: Model not on current list.  Contact developer.")
-	}
+	logInfo("updateDevices: ${alias} added to array. Data = ${device}")
 }
 def updateChildDeviceData() {
 	logDebug("updateChildDeviceData")
@@ -470,12 +456,13 @@ def updateChildDeviceData() {
 			child.updateDataValue("applicationVersion", appVersion())
 			child.updateDataValue("appServerUrl", it.value.appServerUrl)
 			child.updateDataValue("deviceId", it.value.deviceId)
-			child.updateDataValue("plugNo", it.value.plugNo)
-			child.updateDataValue("plugId", it.value.plugId)
+			child.updateDataValue("feature", it.value.feature)
+			child.updateDataValue("token", state.TpLinkToken)
+			child.updateDataValue("model", it.value.model)
+			child.updated()
 			logDebug("updateChildDeviceData: ${it.value.alias} updated using ${it}")
 		}
 	}
-	
 }
 
 //	Local LAN Update IP Data on Error
@@ -491,8 +478,11 @@ def pollForIps() {
 		logInfo("pollForIps: Diabling poll capability for one hour")
 		app?.updateSetting("pollEnabled", [type:"bool", value: false])
 		runIn(900, pollEnable)
-		logInfo("pollForIps: starting poll for Kasa Device IPs.")
-		findDevices(updateDeviceIps)
+		for(int i = 2; i < 255; i++) {
+			def deviceIP = "${lanSegment}.${i.toString()}"
+			sendLanCmd(deviceIP, """{"system":{"get_sysinfo":{}}}""", "updateDeviceIps")
+			pauseExecution(25)
+		}
 	}
 	return pollEnabled
 }

@@ -1,9 +1,9 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "minimumHEVersion": "2.2.0",
-  "dateReleased": "2021-01-22",
+  "dateReleased": "2021-02-10",
   "releaseNotes" : "Update to allow user-selection of Cloud or LAN integration at the device level.",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
