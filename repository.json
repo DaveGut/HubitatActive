@@ -11,8 +11,8 @@
     },
     {
       "name": "Cloud Kasa Devices Integration",
-      "category": "Integrations",
-      "tags": ["LAN", "Lights & Switches"],
+      "category": "",
+      "tags": [""],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCloudDevices/packageManifest.json",
       "description": "Deprecated for new installations.  Use Kasa Devices Integration."
     },
