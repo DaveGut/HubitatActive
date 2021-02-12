@@ -6,8 +6,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 02-01	6.1.0	a.	Combined driver files for ease maintenance.
 				b.	Recreated setPollInterval (erroneously left out of 6.0).
 				c.	Moved cloud comms to within driver / device.
+02-12	6.1.0.1	Quick fix for ledOnOff missing in updated.
 ===================================================================================================*/
-def driverVer() { return "6.1.0" }
+def driverVer() { return "6.1.0.1" }
 def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 //def type() { return "EM Plug" }
@@ -122,6 +123,7 @@ def updated() {
 	logInfo("updated: Description text logging is ${descriptionText}.")
 
 	logInfo("updated: ${getBindState()}.")
+	ledOnOff()
 	pauseExecution(2000)
 	def interval = "1800"
 	if (refreshInterval) {
