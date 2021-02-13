@@ -7,18 +7,25 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				b.	Recreated setPollInterval (erroneously left out of 6.0).
 				c.	Moved cloud comms to within driver / device.
 02-12	6.1.0.1	Quick fix for ledOnOff missing in updated.
+02-13	6.1.0.2	Quick fix for file name
 ===================================================================================================*/
-def driverVer() { return "6.1.0.1" }
+def driverVer() { return "6.1.0.2" }
 //def type() { return "Plug Switch" }
 def type() { return "Dimming Switch" }
 //def type() { return "EM Plug" }
-def file = type().replaceAll(" ", "")
+def file() {
+	def filename = type().replaceAll(" ", "-")
+	if (type() == "Dimming Switch") {
+		filename = "DimmingSwitch"
+	}
+	return filename
+}
 
 metadata {
 	definition (name: "Kasa ${type()}",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/${file}.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/${file()}.groovy"
 			   ) {
 		capability "Switch"
 		if (type() == "Dimming Switch") {

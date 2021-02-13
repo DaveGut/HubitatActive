@@ -7,11 +7,12 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				b.	Recreated setPollInterval (erroneously left out of 6.0).
 				c.	Moved cloud comms to within driver / device.
 02-12	6.1.0.1	Quick fix for ledOnOff missing in updated.
+02-13	6.1.0.2	Quick fix for file name
 ===================================================================================================*/
-def driverVer() { return "6.1.0.1" }
+def driverVer() { return "6.1.0.2" }
 //def type() { return "Multi Plug" }
 def type() { return "EM Multi Plug" }
-def file = type().replaceAll(" ", "")
+def file = type().replaceAll(" ", "-")
 
 metadata {
 	definition (name: "Kasa ${type()}",
