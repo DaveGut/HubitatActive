@@ -8,8 +8,12 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 				c.	Moved cloud comms to within driver / device.
 02-12	6.1.0.1	Quick fix for ledOnOff missing in updated.
 02-13	6.1.0.2	Quick fix for file name
+02-22	6.1.1	a.	Update to access kasaServerUrl and kasaToken from app.  Had problems with
+					updating the data when enabling cloud access.
+				b.	Reworked logic for bind/unbind and Lccal/Cloud due to problems with transition.
+					Beefed up error message for these functions.
 ===================================================================================================*/
-def driverVer() { return "6.1.0.2" }
+def driverVer() { return "6.1.1" }
 //def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 def type() { return "EM Plug" }
@@ -47,17 +51,11 @@ metadata {
 			attribute "lastMonthAvg", "number"
 		}
 	}
-
 	preferences {
-		if (getDataValue("appServerUrl")) {
-			input ("useCloud", "bool",
-				   title: "Use Kasa Cloud for device control",
-				   defaultValue: false)
-		}
 		def refreshIntervals = ["60": "1 minute", "300": "5 minutes", 
 								"900": "15 minutes", "1800": "30 minutes"]
 		input ("refreshInterval", "enum",
-			   title: "Refresh / Poll Interval",
+			   title: "Refresh Interval",
 			   options: refreshIntervals,
 			   defaultValue: "1800")
 		if (type() == "EM Plug") {
@@ -73,7 +71,13 @@ metadata {
 			   defaultValue: true)
 		input ("bind", "enum",
 			   options: ["0": "Unbound from Cloud", "1": "Bound to Cloud"],
-			   title: "Kasa Cloud Binding <b>[Caution]</b>")
+			   title: "Kasa Cloud Binding <b>[Caution]</b>",
+			   defaultValue: "1")
+		if (bind == "1") {
+			input ("useCloud", "bool",
+				   title: "Use Kasa Cloud for device control (must already be bound to cloud)",
+				   defaultValue: false)
+		}
 		input ("ledStatus", "enum",
 			   options: ["0": "on", "1": "off"],
 			   title: "Led On/Off",
@@ -82,7 +86,7 @@ metadata {
 			   title: "Reboot device <b>[Caution]</b>",
 			   defaultValue: false)
 	}
-}	//	plug version
+}
 def installed() {
 	logInfo("Installing Device....")
 	runIn(2, updated)
@@ -92,36 +96,11 @@ def installed() {
 def updated() {
 	logInfo("Updating device preferences....")
 	unschedule()
+	if (state.currentBind == null) { state.currentBind = bind }
+	if (state.currentCloud == null) { state.currentCloud = useCloud }
 	if (rebootDev) {
 		logInfo("updated: ${rebootDevice()}")
 	}
-	if (!state.pollInterval) { state.pollInterval = "off" }
-	//	Set cloud to false if no appServerUrl, true if no deviceIp
-	if (!getDataValue("appServerUrl")) {
-		device.updateSetting("useCloud", [type:"bool", value: false])
-	} else if (!getDataValue("deviceIP")){
-		device.updateSetting("useCloud", [type:"bool", value: true])
-	}
-	logInfo("updated: useCloud set to ${useCloud}")
-	if (useCloud && bind == "1") {
-		state.remove("respLength")
-		state.remove("response")
-		state.remove("lastConnect")
-		state.remove("errorCount")
-	} else if (useCloud && bind == "0") {
-		logWarn("updated: useCloud not available if not bound to Kasa Cloud.")
-		device.updateSetting("useCloud", [type:"bool", value: "false"])
-		state.respLength = 0
-		state.response = ""
-		state.lastConnect = 0
-		state.errorCount = 0
-	} else {
-		state.respLength = 0
-		state.response = ""
-		state.lastConnect = 0
-		state.errorCount = 0
-	}
-
 	logInfo("updated: ${updateDriverData()}")
 	if (debug == true) {
 		runIn(1800, debugLogOff)
@@ -129,18 +108,21 @@ def updated() {
 	}
 	logInfo("updated: Description text logging is ${descriptionText}.")
 
-	logInfo("updated: ${getBindState()}.")
+	logInfo("updated: ${setCommsType()}")		//	set actual comms type after checking data
+	logInfo("updated: ${bindUnbind()}.")
 	ledOnOff()
-	pauseExecution(2000)
+
 	def interval = "1800"
+	if (!state.pollInterval) { state.pollInterval = "off" }
 	if (refreshInterval) {
 		interval = refreshInterval
 	} else {
 		device.updateSetting("refreshInterval", [type:"enum", value: "1800"])
 	}
 	logInfo("updated: ${setInterval(interval)}")
-	//	Energy Monitor startup
+
 	if (emFunction) {
+		//	Energy Monitor startup
 		pauseExecution(1000)
 		sendEvent(name: "power", value: 0, descriptionText: "Watts", unit: "W")
 		schedule("0 01 0 * * ?", updateEmStats)
@@ -150,7 +132,7 @@ def updated() {
 		logInfo("updated: Energy Monitor Function enabled.")
 	}
 	refresh()
-}	//	plug version
+}
 def updateDriverData() {
 	if (getDataValue("driverVersion") != driverVer()) {
 		updateDataValue("driverVersion", driverVer())
@@ -159,7 +141,141 @@ def updateDriverData() {
 	} else {
 		return "Driver version and data already correct."
 	}
-}	//	plug version
+}
+def setCommsType() {
+	def commsType = "local"
+	if (state.currentCloud) { commsType = "Kasa cloud" }
+	def commsParams = [:]
+	commsParams["useKasaCloud"] = parent.useKasaCloud
+	commsParams["kasaToken"] = parent.kasaToken
+	commsParams["kasaCloudUrl"] = parent.kasaCloudUrl
+	commsParams["deviceIP"] = getDataValue("deviceIP")	
+	commsParams["useCloud"] = useCloud
+	commsParams["currentCloud"] = state.currentCloud
+	commsParams["bind"] = bind
+	commsParams["currentBind"] = state.currentBind
+	commsParams["commsType"] = commsType
+	logDebug("setCommsType: ${commsParams}")
+
+	def message
+	if (state.currentCloud == useCloud) {
+		message = "device already set use ${commsType} communications."
+	} else if (useCloud) {
+		if (!parent.useKasaCloud || state.currentBind == "0" || 
+			!parent.kasaToken || !parent.kasaCloudUrl) {
+			//	Not available due to app setting or device binding to cloud.
+			logWarn("setCommsType: <b>Can't set to Kasa cloud communications.</b> Check items:" +
+				    "\n1.  Kasa Integration app must be set to Interface to Kasa Cloud." +
+				    "\n    * set Interface to Kasa Cloud in the app." +
+				    "\n2.  Device must be bound to Kasa Cloud." +
+				    "\n    * open the Kasa phone app and set device to remote control, or" +
+				    "\n    * use device page and attempt updating w/o changing cloud parameters." +
+				    "\n3.  The token is not set in the Kasa Integration app." +
+				    "\n    * run Kasa Login and Token Update in the app." +
+				    "\n4.  The kasaCloudUrl is not set int the Kasa Integration app." +
+				    "\n    * run Update Installed Devices in the app.")
+			commsType = "local"
+			device.updateSetting("useCloud", [type:"bool", value: false])
+			state.currentCloud = false
+			message = "ERROR: device reset use ${commsType} communications."
+		} else {
+			commsType = "Kasa cloud"
+			state.currentCloud = true
+			message = "device set use ${commsType} communications."
+		}
+	} else if (!useCloud) {
+		if (!getDataValue("deviceIP")) {
+			//	No IP set - may not be able to use device locally.
+			logWarn("setCommsType: <b>Device IP is not available.</b>  Check items:" +
+				    "\n1.  Device IP not set." +
+				    "\n    * Go to Kasa Integration app and run Update Installed Devices." +
+				    "\n2.  Device firmware updated to not allow local comms." +
+				    "\n    *Use cloud only.")
+			commsType = "Kasa cloud"
+			device.updateSetting("useCloud", [type:"bool", value: true])
+			state.currentCloud = true
+			message = "ERROR: device reset use ${commsType} communications."
+		} else {
+			commsType = "local"
+			state.currentCloud = false
+			message = "device set use ${commsType} communications."
+		}
+	} else { message = "useCloud not set to valid value." }
+
+	if (commsType == "Kasa cloud") {
+		state.remove("respLength")
+		state.remove("response")
+		state.remove("lastConnect")
+		state.remove("errorCount")
+		state.remove("socketTimeout")
+	} else {
+		state.respLength = 0
+		state.response = ""
+		state.lastConnect = 0
+		state.errorCount = 0
+		def timeout = 35000
+		if ( getDataValue("model") == "HS100" || getDataValue("model") == "HS200") {
+			timeout = 0
+		}
+		state.socketTimeout = timeout
+		logInfo("setCommsType: set socket timeout to ${timeout}")
+	}
+	return message
+}
+def bindUnbind() {
+	def bindParams = [:]
+	bindParams["currentCloud"] = state.currentCloud
+	bindParams["bind"] = bind
+	bindParams["currentBind"] = state.currentBind
+	bindParams["password"] = parent.userPassword
+	bindParams["name"] = parent.userName
+	logDebug("bindUnbind: ${bindParams}")
+
+	if (state.currentBind == bind) {
+		message = "No change in bind state."
+		sendCmd("""{"cnCloud":{"get_info":{}}}""")	//	get Bind state
+	} else if (bind == "1") {
+		if (!parent.userName || !parent.userPassword) {
+			//	Username or password not set, can not bind.
+			logWarn("bindUnbind: <b>Username or Password not set</b>  Check items:" +
+				    "\n1.  userName in Kasa Integration app." +
+				    "\n2.  userPassword in Kasa Integration app." +
+				    "\nRun Kasa Login and Token Update in Kasa Integration app.")
+			device.updateSetting("bind", [type:"enum", value: "0"])
+			state.currentBind = "0"
+			message = "ERROR: Username or Password not set."
+			sendCmd("""{"cnCloud":{"get_info":{}}}""")	//	get Bind state
+		} else {
+			state.currentBind = "1"
+			message = "Binding device to Kasa Cloud."
+			sendCmd("""{"cnCloud":{"bind":{"username":"${parent.userName}",""" +
+					""""password":"${parent.userPassword}"}},"cnCloud":{"get_info":{}}}""")
+		}
+	} else if (bind == "0") {
+		if (state.currentCloud) {
+			//	Can not unbind if current comms is cloud
+			logWarn("bindUnbind: <b>Unable to unbind while using cloud.</b>  Try " +
+				    "updating using cloud to local first.")
+			device.updateSetting("bind", [type:"enum", value: "1"])
+			state.currentBind = "1"
+			message = "ERROR: Can't set to unbind while useCloud is true."
+			sendCmd("""{"cnCloud":{"get_info":{}}}""")	//	get Bind state
+		} else {
+			state.currentBind = "0"
+			message = "Unbinding device from Kasa Cloud."
+			sendCmd("""{"cnCloud":{"unbind":""},"cnCloud":{"get_info":{}}}""")
+		}
+	} else { message = "ERROR.  Bind value not properly set." }
+	pauseExecution 1000
+	return message
+}
+def setBindUnbind(cmdResp) {
+	def binded = cmdResp.cnCloud.get_info.binded.toString()
+	device.updateSetting("bind", [type:"enum", value: binded])
+	pauseExecution(1000)
+	state.currentBind = binded
+	logInfo("setBindUnbind: Bind status set to ${binded}")
+}
 def setPollInterval(interval) {
 	if (interval == "off") {
 		state.remove("WARNING")
@@ -173,7 +289,7 @@ def setPollInterval(interval) {
 	}
 	state.pollInterval = interval
 	setInterval(interval)
-}	//	plug only
+}
 def setInterval(interval) {
 	if (state.pollInterval != "off") {
 		interval = state.pollInterval
@@ -185,23 +301,33 @@ def setInterval(interval) {
 	if (useCloud) {
 		if (interval < 60) {
 			interval = 60
-			message += "\n\t\t\t\tuseCloud is true, refreshInterval set to 1 minute minimum."
+			message += "\n\t\t\tuseCloud is true, refreshInterval set to 1 minute minimum."
 			state.pollInterval = "off"
 		}
 	}
 	if (interval < 60) {
 		schedule("*/${interval} * * * * ?", refresh)
-		message += "\n\t\t\t\tPoll interval set to ${interval} seconds."
+		message += "\n\t\t\tPoll interval set to ${interval} seconds."
 	} else {
 		def minInterval = (	interval/60).toInteger()
 		schedule("0 */${minInterval} * * * ?", refresh)
-		message += "\n\t\t\t\tPoll interval set to ${minInterval} minutes."
+		message += "\n\t\t\tPoll interval set to ${minInterval} minutes."
 	}
-	logDebug("setInterval: ${message}")
 	return message
-}	//	plug version
+}
+def ledOnOff() {
+	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+	return ledStatus
+}
+def rebootDevice() {
+	logWarn("rebootDevice: User Commanded Reboot Device!")
+	device.updateSetting("rebootDev", [type:"bool", value: false])
+	sendCmd("""{"system":{"reboot":{"delay":1}}}""")
+	pauseExecution(10000)
+	return "REBOOTING DEVICE"
+}
 
-//	===== Device Command Methods =====
+//	===== Command and Parse Methods =====
 def on() {
 	logDebug("on")
 	if (emFunction) {
@@ -224,6 +350,7 @@ def off() {
 				""""get_sysinfo":{}}}""")
 	}
 }
+
 def setLevel(percentage, transition = null) {
 	logDebug("setLevel: level = ${percentage}")
 	percentage = percentage.toInteger()
@@ -242,11 +369,13 @@ def presetLevel(percentage) {
 	sendCmd("""{"smartlife.iot.dimmer":{"set_brightness":{"brightness":${percentage}}},""" +
 			""""system" :{"get_sysinfo" :{}}}""")
 }
+
 def refresh() {
 	logDebug("refresh")
 	sendCmd("""{"system":{"get_sysinfo":{}}}""")
 	if (emFunction) { getPower() }
 }
+
 def setSysInfo(resp) {
 	def status = resp.system.get_sysinfo
 	logDebug("setSysInfo: status = ${status}")
@@ -309,7 +438,7 @@ def updateEmStats() {
 	logDebug("updateEmStats: Updating daily energy monitor data.")
 	def year = new Date().format("yyyy").toInteger()
 	sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""")
-}	//	plug only
+}
 def setThisMonth(resp) {
 	logDebug("setThisMonth: ${resp}")
 	def year = new Date().format("yyyy").toInteger()
@@ -384,92 +513,17 @@ def setLastMonth(resp) {
 	logInfo("setLastMonth: Energy stats set to ${energyData} // ${avgEnergy}")
 }
 
-//	===== Kasa Utility Commands =====
-def getBindState() {
-	sendCmd("""{"cnCloud":{"get_info":{}}}""")
-	return "Getting and Updating Bind State"
-}
-def bindUnbind(bind) {
-	logInfo("bindUnbind: updating to ${bind}")
-	if (bind == "1") {
-		if (!parent || !parent.useKasaCloud) {
-			logWarn("bindUnbind: Application must be set to useKasaCloud for binding to work.")
-			device.updateSetting("bind", [type:"enum", value: "0"])
-		} else {
-			sendCmd("""{"cnCloud":{"bind":{"username":"${parent.userName}",""" +
-					""""password":"${parent.userPassword}"}},"cnCloud":{"get_info":{}}}""")
-		}
-	} else {
-		if (useCloud) {
-			logWarn("bindUnbind: Can't unbind when device is set to useCloud")
-			device.updateSetting("bind", [type:"enum", value: "1"])
-		} else {
-			sendCmd("""{"cnCloud":{"unbind":""},"cnCloud":{"get_info":{}}}""")
-		}
-	}
-}
-def setBindUnbind(cmdResp) {
-	def binded = cmdResp.cnCloud.get_info.binded.toString()
-	if (bind && bind != binded) {
-		bindUnbind(bind)
-	} else {
-		device.updateSetting("bind", [type:"enum", value: binded])
-		logInfo("setBindUnbind: Bind status set to ${binded}")
-	}
-}
-def ledOnOff() {
-	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
-	return ledStatus
-}	//	plug only
-def rebootDevice() {
-	logInfo("rebootDevice: User Commanded Reboot Device!")
-	device.updateSetting("rebootDev", [type:"bool", value: false])
-	sendCmd("""{"system":{"reboot":{"delay":1}}}""")
-	pauseExecution(10000)
-	return "REBOOTING DEVICE"
-}	//	plug version
-
-//	===== distribute responses =====
-def distResp(response) {
-	def month = new Date().format("M").toInteger()
-	if (response.system) {
-		if (response.system.get_sysinfo) {
-			setSysInfo(response)
-		} else if (response.system.reboot) {
-			logInfo("distResp: Rebooting device")
-		}
-	} else if (response.emeter) {
-		def emeterResp = response.emeter
-		if (emeterResp.get_realtime) {
-			setPower(emeterResp.get_realtime)
-		} else if (emeterResp.get_daystat) {
-			setEnergyToday(emeterResp.get_daystat)
-		} else if (emeterResp.get_monthstat.month_list.find { it.month == month }) {
-			setThisMonth(emeterResp.get_monthstat)
-		} else if (emeterResp.get_monthstat.month_list.find { it.month == month - 1 }) {
-			setLastMonth(emeterResp.get_monthstat)
-		}
-	} else if (response.cnCloud) {
-		setBindUnbind(response)
-	} else if (response.error) {
-		logWarn("distResponse: Error = ${response.error}")
-	} else {
-		logWarn("distResp: Unhandled response = ${response}")
-	}
-}	//	plug version
-
+//	===== Communications =====
 private sendCmd(command) {
 	if (!useCloud) { sendLanCmd(command) }
 	else { sendKasaCmd(command) }
 }
- 
-//	===== LAN Communications Code =====
+//	LAN
 private sendLanCmd(command) {
 	logDebug("sendLanCmd: ${command}")
-	runIn(3, rawSocketTimeout, [data: command])
+	runIn(2, rawSocketTimeout, [data: command])
 	command = outputXOR(command)
-	if (now() - state.lastConnect > 35000 ||
-	   getDataValue("model") == "HS100" || getDataValue("model") == "HS200") {
+	if (now() - state.lastConnect > state.socketTimeout) {
 		logDebug("sendLanCmd: Attempting to connect.....")
 		try {
 			interfaces.rawSocket.connect("${getDataValue("deviceIP")}", 
@@ -555,11 +609,18 @@ def prepResponse(response) {
 	unschedule(rawSocketTimeout)
 	distResp(resp)
 }
-
-//	===== Cloud Communications Code =====
+//	Cloud
 private sendKasaCmd(command) {
 	logDebug("sendKasaCmd: ${command}")
 	def cmdResponse = ""
+	if (!parent.kasaCloudUrl || !parent.kasaToken) {
+			cmdResponse = ["error": "kasaCloudUrl or kasaToken not set in Kasa Integration app."]
+			logWarn("sendKasaCmd: <b>Failed to communicate with Kasa Cloud.</b> Check items:" +
+				    "\n1.  kasaCloudUrl must be set in Kasa Integration app." +
+				    "\n2.  kasaToken must be set in the Kasa Integration app.")
+		return
+	}
+
 	def cmdBody = [
 		method: "passthrough",
 		params: [
@@ -568,26 +629,62 @@ private sendKasaCmd(command) {
 		]
 	]
 	def sendCloudCmdParams = [
-		uri: "${getDataValue("appServerUrl")}/?token=${getDataValue("token")}",
+		uri: "${parent.kasaCloudUrl}/?token=${parent.kasaToken}",
 		requestContentType: 'application/json',
 		contentType: 'application/json',
 		headers: ['Accept':'application/json; version=1, */*; q=0.01'],
 		timeout: 5,
 		body : new groovy.json.JsonBuilder(cmdBody).toString()
 	]
-	httpPostJson(sendCloudCmdParams) {resp ->
-		if (resp.status == 200 && resp.data.error_code == 0) {
-			def jsonSlurper = new groovy.json.JsonSlurper()
-			cmdResponse = jsonSlurper.parseText(resp.data.result.responseData)
-		} else {
-			logWarn("sendKasaCmd: Error returned from Kasa Cloud")
-			cmdResponse = ["error": "${resp.data.error_code} = ${resp.data.msg}"]
+	try {
+		httpPostJson(sendCloudCmdParams) {resp ->
+			if (resp.status == 200 && resp.data.error_code == 0) {
+				def jsonSlurper = new groovy.json.JsonSlurper()
+				cmdResponse = jsonSlurper.parseText(resp.data.result.responseData)
+			} else {
+				logWarn("sendKasaCmd: Error returned from Kasa Cloud")
+				cmdResponse = ["error": "${resp.data.error_code} = ${resp.data.msg}"]
+			}
 		}
+	} catch (e) {
+		logWarn("sendKasaCmd: <b>Failed to communicate with Kasa Cloud.</b> Check items:" +
+				"\n1.  kasaCloudUrl must be set in Kasa Integration app." +
+				"\n2.  useKasaCloud must be set in Kasa Integration app." +
+				"\n3.  kasaToken must be set in the Kasa Integration app.")
+		cmdResponse = ["error": "Protocol Error = ${e}"]
 	}
 	distResp(cmdResponse)
 }
+//	Distribute to parsing methods
+def distResp(response) {
+	def month = new Date().format("M").toInteger()
+	if (response.system) {
+		if (response.system.get_sysinfo) {
+			setSysInfo(response)
+		} else if (response.system.reboot) {
+			logInfo("distResp: Rebooting device")
+		}
+	} else if (response.emeter) {
+		def emeterResp = response.emeter
+		if (emeterResp.get_realtime) {
+			setPower(emeterResp.get_realtime)
+		} else if (emeterResp.get_daystat) {
+			setEnergyToday(emeterResp.get_daystat)
+		} else if (emeterResp.get_monthstat.month_list.find { it.month == month }) {
+			setThisMonth(emeterResp.get_monthstat)
+		} else if (emeterResp.get_monthstat.month_list.find { it.month == month - 1 }) {
+			setLastMonth(emeterResp.get_monthstat)
+		}
+	} else if (response.cnCloud) {
+		setBindUnbind(response)
+	} else if (response.error) {
+		logWarn("distResponse: Error = ${response.error}")
+	} else {
+		logWarn("distResp: Unhandled response = ${response}")
+	}
+}
 
-//	-- Encryption / Decryption
+//	===== Encryption / Decryption =====
 private outputXOR(command) {
 	def str = ""
 	def encrCmd = "000000" + Integer.toHexString(command.length()) 
@@ -613,6 +710,7 @@ private inputXOR(resp) {
 	}
 	return cmdResponse
 }
+
 //	 ===== Logging =====
 def logTrace(msg){ 
 	log.trace "[${type()}/${driverVer()}] ${device.label} ${msg}"

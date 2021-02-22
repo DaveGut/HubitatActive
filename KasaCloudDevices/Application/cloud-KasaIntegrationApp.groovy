@@ -10,8 +10,11 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		a.	Added support for KL430 Light Strip
 		b.	Determine type by sysinfo parameters rather than model.
 		c.	Add list of required drivers on addDevices page.
+02.22	6.1.1	Update to reduce errors on updating from Cloud to No Cloud control.
+		No longer pass appServerUrl and token to the devices. Instead, create app data
+		that will be called as parent.kasaToken and parent.kasaCloudUrl by devices.
 =======================================================================================================*/
-def appVersion() { return "6.1" }
+def appVersion() { return "6.1.1" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -49,7 +52,7 @@ def uninstalled() {
 }
 
 def startPage() {
-	logInfo("starting Kasa Integration")
+	logInfo("starting Kasa Integration, Version ${appVersion()}")
 	if (selectedRemoveDevices) { removeDevices() }
 	if (selectedAddDevices) { addDevices() }
 	if (!ver600) {
@@ -103,7 +106,8 @@ def startPage() {
 			if (useKasaCloud == true) {
 				href "kasaAuthenticationPage",
 					title: "<b>Kasa Login and Token Update</b>",
-					description: "Go to Kasa Login Update.  Current token = ${state.TpLinkToken}"
+//					description: "Go to Kasa Login Update.  Current token = ${state.TpLinkToken}"
+					description: "Go to Kasa Login Update.  Current token = ${kasaToken}"
 			}
 			href "addDevicesPage",
 				title: "<b>Install Kasa Devices / Update Installed Devices</b>",
@@ -123,7 +127,7 @@ def startPage() {
 def kasaAuthenticationPage() {
 	logDebug("kasaAuthenticationPage")
 	return dynamicPage (name: "kasaAuthenticationPage", 
-    					title: "Initial Kasa Login Page",
+    					title: "Initial Kasa Login Page, Version ${appVersion()}",
 						nextPage: startPage,
                         install: false) {
         section("Enter Kasa Account Credentials: ") {
@@ -135,7 +139,8 @@ def kasaAuthenticationPage() {
             		title: "TP-Link Kasa Account Password", 
                     required: true, 
                     submitOnChange: true)
-			if (userName != null && userPassword != null) {
+//			if (userName != null && userPassword != null) {
+			if (userName && userPassword && userName != null && userPassword != null) {
 				href "getToken", title: "Get or Update Kasa Token", description: "Tap to Get Kasa Token"
             }
 			paragraph "Select  '<'  at upper left corner to exit."
@@ -163,10 +168,10 @@ def getToken() {
 	]
 	httpPostJson(getTokenParams) {resp ->
 		if (resp.status == 200 && resp.data.error_code == 0) {
-			state.TpLinkToken = resp.data.result.token
-			log.info "TpLinkToken updated to ${state.TpLinkToken}"
+			app?.updateSetting("kasaToken", resp.data.result.token)
+			logInfo("getToken: TpLinkToken updated to ${resp.data.result.token}")
 		} else {
-			log.error "Error obtaining token from Kasa Cloud."
+			logWarn("getToken: Error obtaining token from Kasa Cloud.")
 		}
 	}
 	pauseExecution(2000)
@@ -197,7 +202,7 @@ def addDevicesPage() {
 	pageInstructions += "${reqDrivers}\n"
 	pageInstructions += "2.\t<b>Assign Static IP Addresses.</b>"
 	return dynamicPage(name:"addDevicesPage",
-					   title:"<b>Add Kasa Devices to Hubitat</b>",
+					   title: "Add Kasa Devices to Hubitat, Version ${appVersion()}",
 					   nextPage: startPage,
 					   install: false) {
 	 	section() {
@@ -219,15 +224,12 @@ def addDevices() {
 		if (!isChild) {
 			def device = state.devices.find { it.value.dni == dni }
 			def deviceData = [:]
-			deviceData["applicationVersion"] = appVersion()
 			deviceData["deviceIP"] = device.value.ip
-			deviceData["appServerUrl"] = device.value.appServerUrl
 			deviceData["plugNo"] = device.value.plugNo
 			deviceData["plugId"] = device.value.plugId
 			deviceData["deviceId"] = device.value.deviceId
 			deviceData["model"] = device.value.model
 			deviceData["feature"] = device.value.feature
-			deviceData["token"] = state.TpLinkToken
 			try {
 				addChildDevice(
 					"davegut",
@@ -269,7 +271,7 @@ def removeDevicesPage() {
 					   title:"<b>Remove Kasa Devices from Hubitat</b>",
 					   nextPage: startPage,
 					   install: false) {
-	 	section("<b>Select Devices to Remove from Hubitat</b>") {
+		section("Select Devices to Remove from Hubitat, Version ${appVersion()}") {
 			input ("selectedRemoveDevices", "enum",
 				   required: false,
 				   multiple: true,
@@ -307,14 +309,14 @@ def findDevices() {
 	if (useKasaCloud == true) {
 		cloudGetDevices()
 	}
-	runIn(5, updateChildDeviceData)
+	runIn(5, updateChildren)
 }
 def cloudGetDevices() {
-	logInfo("cloudGetDevices ${state.TpLinkToken}")
-	def currentDevices = ""
+	logInfo("cloudGetDevices ${kasaToken}")
+	def cloudDevices = ""
 	def cmdBody = [method: "getDeviceList"]
 	def getDevicesParams = [
-		uri: "https://wap.tplinkcloud.com?token=${state.TpLinkToken}",
+		uri: "https://wap.tplinkcloud.com?token=${kasaToken}",
 		requestContentType: 'application/json',
 		contentType: 'application/json',
 		headers: ['Accept':'application/json; version=1, */*; q=0.01'],
@@ -322,12 +324,12 @@ def cloudGetDevices() {
 	]
 	httpPostJson(getDevicesParams) {resp ->
 		if (resp.status == 200 && resp.data.error_code == 0) {
-			currentDevices = resp.data.result.deviceList
+			cloudDevices = resp.data.result.deviceList
 		} else {
 			logWarn("Error from the Kasa Cloud: ${resp.data.error_code} = ${resp.data.msg}")
 		}
 	}
-	currentDevices.each {
+	cloudDevices.each {
 		if (it.deviceType != "IOT.SMARTPLUGSWITCH" && it.deviceType != "IOT.SMARTBULB") {
 			logInfo("<b>cloudGetDevice: Ignore device type ${it.deviceType}.")
 			return
@@ -335,13 +337,19 @@ def cloudGetDevices() {
 			logInfo("<b>cloudGetDevice: Device name ${it.alias} is offline and not included.")
 			return
 		}
-		def cmdResp = sendKasaCmd(it.appServerUrl, it.deviceId, '{"system":{"get_sysinfo":{}}}')
+		if (!kasaCloudUrl || it.appServerUrl != kasaCloudUrl) {
+			app?.updateSetting("kasaCloudUrl", it.appServerUrl)
+			pauseExecution(2000)
+		}
+
+		def cmdResp = sendKasaCmd(it.deviceId, '{"system":{"get_sysinfo":{}}}', it.appServerUrl)
 		if (cmdResp.error) {
 			logWarn("cloudGetDevices: ${it.alias}, ${cmdResp}")
 			return
 		}
-		parseDeviceData(cmdResp.system.get_sysinfo, it.appServerUrl, null)
+		parseDeviceData(cmdResp.system.get_sysinfo, null)
 	}
+	logInfo("cloudGetDevices: kasaCloudUrl uptdated to ${kasaCloudUrl}")
 }
 def parseLanData(response) {
 	def resp = parseLanMessage(response.description)
@@ -352,20 +360,18 @@ def parseLanData(response) {
 	}
 	def ip = convertHexToIP(resp.ip)
 	def cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
-	parseDeviceData(cmdResp, null, ip)
+	parseDeviceData(cmdResp, ip)
 }
 
-def parseDeviceData(cmdResp, appServerUrl = null, ip = null) {
-	logDebug("parseDeviceData: ${cmdResp} // ${appServerUrl} //  ${ip}")
-//	dni from mac and mic_mac
-//log.trace cmdResp
+//def parseDeviceData(cmdResp, appServerUrl = null, ip = null) {
+def parseDeviceData(cmdResp, ip = null) {
+	logDebug("parseDeviceData: ${cmdResp} //  ${ip}")
 	def dni
 	if (cmdResp.mic_mac) {
 		dni = cmdResp.mic_mac
 	} else {
 		dni = cmdResp.mac.replace(/:/, "")
 	}
-//	Parse out Device Type
 	def kasaType
 	if (cmdResp.mic_type) {
 		kasaType = cmdResp.mic_type
@@ -404,7 +410,6 @@ def parseDeviceData(cmdResp, appServerUrl = null, ip = null) {
 	def plugNo
 	def plugId
 	def deviceId = cmdResp.deviceId
-//	Create devices from multi-plug children
 	if (cmdResp.children) {
 		def childPlugs = cmdResp.children
 		childPlugs.each {
@@ -413,24 +418,18 @@ def parseDeviceData(cmdResp, appServerUrl = null, ip = null) {
 			def childDni = "${dni}${plugNo}"
 			plugId = "${deviceId}${plugNo}"
 			alias = it.alias
-			updateDevices(childDni, ip, type, feature, model, alias, deviceId, plugNo, plugId, appServerUrl)
+			updateDevices(childDni, ip, type, feature, model, alias, deviceId, plugNo, plugId)
 		}
 	} else {
-		updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId, appServerUrl)
+		updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId)
 	}
 }
-def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId, appServerUrl) {
+def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId) {
 	logDebug("updateDevices: dni = ${dni}")
 	def devices = state.devices
-//	While doing Cloud discovery, update IP from first discovery phase.
 	def existingDev = devices.find { it.key == dni }
-	if (existingDev) {
-		if (ip == null) {
-			ip = existingDev.value.ip
-		}
-		if (appServerUrl == null) {
-			appServerUrl = existingDev.value.appServerUrl
-		}
+	if (existingDev && ip == null) {
+		ip = existingDev.value.ip
 	}
 	def device = [:]
 	device["dni"] = dni
@@ -442,25 +441,24 @@ def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId
 	device["ip"] = ip
 	device["plugNo"] = plugNo
 	device["plugId"] = plugId
-	device["appServerUrl"] = appServerUrl
 	devices << ["${dni}" : device]
-	logInfo("updateDevices: ${alias} added to array. Data = ${device}")
+	def child = getChildDevice(dni)
+	if (child) {
+		child.updateDataValue("deviceIP", ip)
+		child.updateDataValue("deviceId", deviceId)
+		child.updateDataValue("feature", feature)
+		child.updateDataValue("model", model)
+	}
+	logInfo("updateDevices: added ${alias} to devices array.")
+	logDebug("updateDevices: ${alias} added to array. Data = ${device}")
 }
-def updateChildDeviceData() {
+def updateChildren() {
 	logDebug("updateChildDeviceData")
 	def devices = state.devices
 	devices.each {
 		def child = getChildDevice(it.key)
 		if (child) {
-			child.updateDataValue("deviceIP", it.value.ip)
-			child.updateDataValue("applicationVersion", appVersion())
-			child.updateDataValue("appServerUrl", it.value.appServerUrl)
-			child.updateDataValue("deviceId", it.value.deviceId)
-			child.updateDataValue("feature", it.value.feature)
-			child.updateDataValue("token", state.TpLinkToken)
-			child.updateDataValue("model", it.value.model)
 			child.updated()
-			logDebug("updateChildDeviceData: ${it.value.alias} updated using ${it}")
 		}
 	}
 }
@@ -518,7 +516,7 @@ private sendLanCmd(ip, command, action) {
 		 callback: action])
 	sendHubCommand(myHubAction)
 }
-def sendKasaCmd(appServerUrl, deviceId, command) {
+def sendKasaCmd(deviceId, command, appServerUrl = kasaCloudUrl) {
 	def cmdResponse = ""
 	if (!useKasaCloud) {
 		cmdResponse = ["error": "App not set for Kasa Cloud"]
@@ -532,7 +530,7 @@ def sendKasaCmd(appServerUrl, deviceId, command) {
 		]
 	]
 	def sendCloudCmdParams = [
-		uri: "${appServerUrl}/?token=${state.TpLinkToken}",
+		uri: "${appServerUrl}/?token=${kasaToken}",
 		requestContentType: 'application/json',
 		contentType: 'application/json',
 		headers: ['Accept':'application/json; version=1, */*; q=0.01'],
@@ -583,10 +581,10 @@ private String convertHexToIP(hex) {
 private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 def debugOff() { app.updateSetting("debugLog", false) }
 def logDebug(msg){
-	if(debugLog == true) { log.debug "${appVersion()} ${msg}" }
+	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}]: ${msg}" }
 }
-def logInfo(msg){ log.info "${appVersion()} ${msg}" }
-def logWarn(msg) { log.warn "${appVersion()} ${msg}" }
+def logInfo(msg){ log.info "[KasaInt/${appVersion()}]: ${msg}" }
+def logWarn(msg) { log.warn "[KasaInt/${appVersion()}]: ${msg}" }
 //	Page Instructions
 def stPgIns() {
 	def startPgIns = "Use Alternate Lan Segment: Use if you use a different LAN segment for your devices that your Hub.  Usually false."
