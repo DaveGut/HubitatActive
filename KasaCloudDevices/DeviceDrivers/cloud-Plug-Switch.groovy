@@ -12,9 +12,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 					updating the data when enabling cloud access.
 				b.	Reworked logic for bind/unbind and Lccal/Cloud due to problems with transition.
 					Beefed up error message for these functions.
-02-23	6.1.1.1	Hot fix to address dimming switch problem.
+02-23	6.1.1.2	Hot fix to address dimming switch problem.
 ===================================================================================================*/
-def driverVer() { return "6.1.1.1" }
+def driverVer() { return "6.1.1.2" }
 def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 //def type() { return "EM Plug" }
@@ -338,6 +338,9 @@ def on() {
 	} else {
 		sendCmd("""{"system":{"set_relay_state":{"state":1},""" +
 				""""get_sysinfo":{}}}""")
+		if (getDataValue("model") == "HS210") {
+			runInMillis(350, refresh)
+		}
 	}
 }
 def off() {
@@ -349,6 +352,9 @@ def off() {
 	} else {
 		sendCmd("""{"system":{"set_relay_state":{"state":0},""" +
 				""""get_sysinfo":{}}}""")
+		if (getDataValue("model") == "HS210") {
+			runInMillis(350, refresh)
+		}
 	}
 }
 
@@ -664,8 +670,6 @@ def distResp(response) {
 			setSysInfo(response)
 		} else if (response.system.reboot) {
 			logInfo("distResp: Rebooting device")
-		} else if (response.system.set_relay_state) {
-			sendCmd("""{"system":{"get_sysinfo":{}}}""")
 		}
 	} else if (response.emeter) {
 		def emeterResp = response.emeter
