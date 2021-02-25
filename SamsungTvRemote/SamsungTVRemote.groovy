@@ -37,6 +37,7 @@ b.	This driver installed and configured IAW provided instructions.
 1.3.9.1	Changed method for defining DNI to getMACFromDNI(deviceIp)
 1.3.9.2	Added preference "altWoLMac.  Create an alternate on startup using devices info page
 		to create the alternate.  Can select with power on or off.
+1.3.9.3	Added code to capture null error on parse return.
 YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
 ===== Issues with this version? =====
 a.	Notify on Hubitat thread: 
@@ -44,7 +45,7 @@ a.	Notify on Hubitat thread:
 b.	Previous Ver URL:  
 	https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/Archive/SamsungTVRemote.groovy
 */
-def driverVer() { return "1.3.9.1" }
+def driverVer() { return "1.3.9.3" }
 import groovy.json.JsonOutput
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -353,18 +354,22 @@ def webSocketStatus(message) {
 def parse(resp) {
 	if (resp.substring(2,6) == "data") {
 		parseWebsocket(resp)
-	} else {
+	} else if (resp.substring(0,3) == "mac") {
 		parseUpnp(resp)
+	} else {
+		logWarn{"parse: unprogrammed return to parse.\n${resp}"}
 	}
 }
 def parseUpnp(resp) {
 	resp = parseLanMessage(resp)
 	logDebug("parseUPnP: ${groovy.xml.XmlUtil.escapeXml(resp.body)}")
-		if (!resp.body) {
+	if (!resp.body) {
+		log.trace "parseUpnp: no resp.body. resp = \n${resp}"
 		if (resp.headers.SID) {
 			def sid = resp.headers.SID.trim()
 			updateDataValue("rcSid", sid)
-			logInfo("parse: updated rcSid to ${sid}")
+//			logInfo("parse: updated rcSid to ${sid}")
+			logInfo("parseUpnp: updated rcSid to ${sid}")
 		}
 		return
 	}
@@ -575,7 +580,7 @@ def quickPoll() {
 }
 def powerTest() {
 	try {
-		httpGet([uri: "http://${deviceIp}:9197/dmr", timeout: 5]) { resp ->
+		httpGet([uri: "http://${deviceIp}:9197/dmr", timeout: 2]) { resp ->
 			return "on"
 		}
 	} catch (error) {
@@ -655,10 +660,7 @@ def enter() { sendKey("ENTER") }
 def numericKeyPad() { sendKey("MORE") }
 //	Menu Access
 def home() { sendKey("HOME") }
-def menu() { sendKey("MENU") 
-log.trace getMACFromIP(deviceIp)
-log.trace device.getData()
-		   }
+def menu() { sendKey("MENU") }
 def guide() { sendKey("GUIDE") }
 def info() { sendKey("INFO") }
 //	Source Commands
