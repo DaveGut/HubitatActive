@@ -37,7 +37,7 @@ b.	This driver installed and configured IAW provided instructions.
 1.3.9.1	Changed method for defining DNI to getMACFromDNI(deviceIp)
 1.3.9.2	Added preference "altWoLMac.  Create an alternate on startup using devices info page
 		to create the alternate.  Can select with power on or off.
-1.3.9.3	Added code to capture null error on parse return.
+1.3.9.3	Fixed code to eliminate null data error on parse.
 YOU MUST RUN SAVE PREFERENCES AFTER INSTALLING THIS UPGRADE.
 ===== Issues with this version? =====
 a.	Notify on Hubitat thread: 
@@ -352,48 +352,50 @@ def webSocketStatus(message) {
 
 //	===== Parse the responses =====
 def parse(resp) {
-	if (resp.substring(2,6) == "data") {
-		parseWebsocket(resp)
-	} else if (resp.substring(0,3) == "mac") {
-		parseUpnp(resp)
-	} else {
-		logWarn{"parse: unprogrammed return to parse.\n${resp}"}
+	try {
+		def wsData = parseJson(resp)
+		parseWebsocket(wsData)
+	} catch (e) {
+		try {
+			def upnpData = parseLanMessage(resp)
+			parseUpnp(upnpData)
+		} catch (error) {
+//			logWarn("parse: Unhandled response.\n${resp}")
+		}
 	}
 }
 def parseUpnp(resp) {
-	resp = parseLanMessage(resp)
-	logDebug("parseUPnP: ${groovy.xml.XmlUtil.escapeXml(resp.body)}")
-	if (!resp.body) {
-		log.trace "parseUpnp: no resp.body. resp = \n${resp}"
-		if (resp.headers.SID) {
+	if (resp.body) {
+		logDebug("parseUPnP: Body = ${groovy.xml.XmlUtil.escapeXml(resp.body)}")
+		def body =  new XmlSlurper().parseText(resp.body)
+		def parts = body.toString().split('<')
+		parts.each { part ->
+			if (part.startsWith('Mute')) {
+				part = part - "/>" - ' channel="Master" val'
+				part = part.substring(part.length()-2).replaceAll('"','')
+				def mute = "muted"
+				if (part == "0") { mute = "unmuted" }
+				sendEvent(name: "mute", value: mute)
+				logDebug("parseUPnP: mute = ${mute}")
+			}
+			if (part.startsWith('Volume')) {
+				part = part - "/>" - ' channel="Master" val'
+				part = part.substring(part.length()-3).replaceAll('"','')
+				sendEvent(name: "volume", value: part.toInteger())
+				logDebug("parseUPnP: volume = ${part}")
+			}
+		}
+	} else {
+		if (resp.headers && resp.headers.SID) {
 			def sid = resp.headers.SID.trim()
 			updateDataValue("rcSid", sid)
-//			logInfo("parse: updated rcSid to ${sid}")
-			logInfo("parseUpnp: updated rcSid to ${sid}")
-		}
-		return
-	}
-	def body =  new XmlSlurper().parseText(resp.body)
-	def parts = body.toString().split('<')
-	parts.each { part ->
-		if (part.startsWith('Mute')) {
-			part = part - "/>" - ' channel="Master" val'
-			part = part.substring(part.length()-2).replaceAll('"','')
-			def mute = "muted"
-			if (part == "0") { mute = "unmuted" }
-			sendEvent(name: "mute", value: mute)
-			logDebug("parseUPnP: mute = ${mute}")
-		}
-		if (part.startsWith('Volume')) {
-			part = part - "/>" - ' channel="Master" val'
-			part = part.substring(part.length()-3).replaceAll('"','')
-			sendEvent(name: "volume", value: part.toInteger())
-			logDebug("parseUPnP: volume = ${part}")
+			logDebug("parseUpnp: updated rcSid to ${sid}")
+		} else {
+//			logWarn("parseUpnp: Unhandled return. resp =\n${resp}")
 		}
 	}
 }
 def parseWebsocket(resp) {
-	resp = parseJson(resp)
 	logDebug("parseWebsocket: ${resp}")
 	def event = resp.event
 	def logMsg = "parseWebsocket: event = ${event}"
