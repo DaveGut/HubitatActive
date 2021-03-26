@@ -502,7 +502,7 @@ def sendKasaCmd(command) {
 		handleCommsError([command, "Cloud Comms Timeout"])
 	}
 }
-/////////////////////////////////////
+
 def handleCommsError(command) {
 	def count = state.errorCount + 1
 	state.errorCount = count
@@ -567,7 +567,7 @@ def distResp(response) {
 		if (response.system.get_sysinfo) {
 			setSysInfo(response.system.get_sysinfo)
 		} else if (response.system.set_relay_state) {
-			refresh()
+			runIn(1, refresh)
 		} else if (response.system.reboot) {
 			logInfo("distResp: Rebooting device.")
 		} else if (response.system.set_led_off) {
