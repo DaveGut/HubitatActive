@@ -16,8 +16,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 	a.	Fixed zero length response in parse method string causing error message.
 	b.	Bulbs: Accommodate changes in Capability Color Temperature
 	c.	Bulbs: Temporary fix for above for when entering data from Device's edit page causing error.
+3/26	6.2.1	Further fix to null return error.
 ===================================================================================================*/
-def driverVer() { return "6.2" }
+def driverVer() { return "6.2.1" }
 //def type() { return "Multi Plug" }
 def type() { return "EM Multi Plug" }
 //	Multi Plug
@@ -133,9 +134,6 @@ def updated() {
 }
 
 def updateDriverData() {
-//	Update to handle update case where comms is via Cloud
-//	set bind to true/false based on current value
-//	logInfo("updated: ${setPollInterval(state.pollInterval)}")
 	if (getDataValue("driverVersion") != driverVer()) {
 		if (useCloud) {
 			sendEvent(name: "connection", value: "CLOUD")
@@ -147,9 +145,12 @@ def updateDriverData() {
 		if (emFunction) {
 			state.powerPollInterval = "default"
 		}
-//	Code to convert refresh / poll interval to state.pollInterval
 		if (!state.pollInterval) { state.pollInterval = "default" }
 		updateDataValue("driverVersion", driverVer())
+		state.remove("currentBind")
+		state.remove("socketTimeout")
+		state.remove("currentCloud")
+		state.remove("lastConnect")
 		return "Driver data updated to latest values."
 	} else {
 		return "Driver version and data already correct."
@@ -387,28 +388,27 @@ def socketStatus(message) {
 }
 
 def parse(message) {
+	if (message == null || message == "") { return }
 	def respLength
 	def msgLen = message.length()
-	if (msgLen != null && msgLen != 0) {
-		if (msgLen > 8 && message.substring(0,4) == "0000") {
-			def hexBytes = message.substring(0,8)
-			respLength = 8 + 2 * hubitat.helper.HexUtils.hexStringToInt(hexBytes)
-			if (msgLen == respLength) {
-				prepResponse(message)
-			} else {
-				state.response = message
-				state.respLength = respLength
-			}
+	if (msgLen > 8 && message.substring(0,4) == "0000") {
+		def hexBytes = message.substring(0,8)
+		respLength = 8 + 2 * hubitat.helper.HexUtils.hexStringToInt(hexBytes)
+		if (msgLen == respLength) {
+			prepResponse(message)
 		} else {
-			def resp = state.response
-			resp = resp.concat(message)
-			if (resp.length() == state.respLength) {
-				state.response = ""
-				state.respLength = 0
-				prepResponse(resp)
-			} else {
-				state.response = resp
-			}
+			state.response = message
+			state.respLength = respLength
+		}
+	} else {
+		def resp = state.response
+		resp = resp.concat(message)
+		if (resp.length() == state.respLength) {
+			state.response = ""
+			state.respLength = 0
+			prepResponse(resp)
+		} else {
+			state.response = resp
 		}
 	}
 }
@@ -418,7 +418,7 @@ def prepResponse(response) {
 	try {
 		resp = parseJson(inputXOR(response))
 	} catch (e) {
-		resp = ["error": "Invalid or incomplete return. Error = ${e}"]
+		return
 	}
 	distResp(resp)
 	unschedule(handleCommsError)
