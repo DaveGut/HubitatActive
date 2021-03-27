@@ -17,8 +17,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 	b.	Bulbs: Accommodate changes in Capability Color Temperature
 	c.	Bulbs: Temporary fix for above for when entering data from Device's edit page causing error.
 3/26	6.2.1	Further fix to null return error.
+3/27	6.2.2	Update state.errorCount location to fix cuunt issue.
 ===================================================================================================*/
-def driverVer() { return "6.2.1" }
+def driverVer() { return "6.2.2" }
 def type() { return "Multi Plug" }
 //def type() { return "EM Multi Plug" }
 //	Multi Plug
@@ -516,7 +517,6 @@ def resetCommsError() {
 			setPowerPoll(state.powerPollInterval)
 		}
 	}
-	state.errorCount = 0
 }
 
 //	Multi Plug
@@ -551,6 +551,7 @@ def distResp(response) {
 	} else {
 		logWarn("distResp: Unhandled response = ${response}")
 	}
+	state.errorCount = 0
 	if (state.communicationsError) {
 		resetCommsError()
 	}
