@@ -1,7 +1,7 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.2.1",
+  "version": "6.2.2",
   "minimumHEVersion": "2.2.0",
   "dateReleased": "2021-03-26",
   "releaseNotes" : "Numerous fixes for Multi-Plugs and Hubitat version 2.2.6.",

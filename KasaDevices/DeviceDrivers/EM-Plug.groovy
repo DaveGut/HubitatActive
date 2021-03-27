@@ -17,8 +17,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 	b.	Bulbs: Accommodate changes in Capability Color Temperature
 	c.	Bulbs: Temporary fix for above for when entering data from Device's edit page causing error.
 3/26	6.2.1 Fix HS210 on/off error.  Further fix to null return error.
+3/27	6.2.2	Update state.errorCount location to fix cuunt issue.
 ===================================================================================================*/
-def driverVer() { return "6.2.1" }
+def driverVer() { return "6.2.2" }
 //def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 def type() { return "EM Plug" }
@@ -459,7 +460,6 @@ def prepResponse(response) {
 	try {
 		resp = parseJson(inputXOR(response))
 	} catch (e) {
-//		resp = ["error": "Invalid or incomplete return. Error = ${e}"]
 		return
 	}
 	distResp(resp)
@@ -502,7 +502,7 @@ def sendKasaCmd(command) {
 		handleCommsError([command, "Cloud Comms Timeout"])
 	}
 }
-/////////////////////////////////////
+
 def handleCommsError(command) {
 	def count = state.errorCount + 1
 	state.errorCount = count
@@ -558,7 +558,6 @@ def resetCommsError() {
 			setPowerPoll(state.powerPollInterval)
 		}
 	}
-	state.errorCount = 0
 }
 
 //	Plug/Switch
@@ -567,7 +566,7 @@ def distResp(response) {
 		if (response.system.get_sysinfo) {
 			setSysInfo(response.system.get_sysinfo)
 		} else if (response.system.set_relay_state) {
-			refresh()
+			runIn(1, refresh)
 		} else if (response.system.reboot) {
 			logInfo("distResp: Rebooting device.")
 		} else if (response.system.set_led_off) {
@@ -593,6 +592,7 @@ def distResp(response) {
 	} else {
 		logWarn("distResp: Unhandled response = ${response}")
 	}
+	state.errorCount = 0
 	if (state.communicationsError) {
 		resetCommsError()
 	}
