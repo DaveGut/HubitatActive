@@ -5,7 +5,7 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 1.	Added coordinate method to support multi-plug outlet data/state coordination.
 2.	Cleaned up page displayed documentation.
 =======================================================================================================*/
-def appVersion() { return "6.2.2" }
+def appVersion() { return "6.2.3" }
 import groovy.json.JsonSlurper
 
 definition(

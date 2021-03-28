@@ -18,8 +18,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 	c.	Bulbs: Temporary fix for above for when entering data from Device's edit page causing error.
 3/26	6.2.1 Fix HS210 on/off error.  Further fix to null return error.
 3/27	6.2.2	Update state.errorCount location to fix cuunt issue.
+3/28	6.2.3	Added descriptionText preference back into code.
 ===================================================================================================*/
-def driverVer() { return "6.2.2" }
+def driverVer() { return "6.2.3" }
 def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 //def type() { return "EM Plug" }
@@ -79,6 +80,9 @@ metadata {
 		input ("debug", "bool",
 			   title: "Enable debug logging", 
 			   defaultValue: false)
+		input ("descriptionText", "bool", 
+			   title: "Enable description text logging", 
+			   defaultValue: true)
 		input ("bind", "bool",
 			   title: "Kasa Cloud Binding")
 		if (bind && parent.kasaCloudUrl) {
@@ -847,16 +851,24 @@ private inputXOR(resp) {
 	return cmdResponse
 }
 
-def logTrace(msg){ log.trace "[${type()}/${driverVer()}] ${device.label} ${msg}" }
+def logTrace(msg){
+	log.trace "[${type()} / ${driverVer()} / ${device.label}]| ${msg}"
+}
 
-def logInfo(msg) { log.info "[${type()}/${driverVer()}] ${device.label} ${msg}" }
-
-def logDebug(msg){
-	if(debug == true) {
-		log.debug "[${type()}/${driverVer()}] ${device.label} ${msg}"
+def logInfo(msg) {
+	if (descriptionText == true) { 
+		log.info "[${type()} / ${driverVer()} / ${device.label}]| ${msg}"
 	}
 }
 
-def logWarn(msg){ log.warn "[${type()}/${driverVer()}] ${device.label} ${msg}" }
+def logDebug(msg){
+	if(debug == true) {
+		log.debug "[${type()} / ${driverVer()} / ${device.label}]| ${msg}"
+	}
+}
+
+def logWarn(msg){
+	log.warn "[${type()} / ${driverVer()} / ${device.label}]| ${msg}"
+}
 
 //	End of File
