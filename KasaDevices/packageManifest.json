@@ -1,9 +1,9 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.2.2",
+  "version": "6.2.3",
   "minimumHEVersion": "2.2.0",
-  "dateReleased": "2021-03-26",
+  "dateReleased": "2021-03-28",
   "releaseNotes" : "Numerous fixes for Multi-Plugs and Hubitat version 2.2.6.",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
