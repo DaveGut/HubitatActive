@@ -1,7 +1,7 @@
 {
   "packageName": "Cloud Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.2.4",
+  "version": "6.2.5",
   "minimumHEVersion": "2.2.6",
   "dateReleased": "2021-03-28",
   "releaseNotes" : "Numerous fixes for Multi-Plugs and Hubitat version 2.2.6. Note, some functions have errors in Hubitat versions before 2.2.6.",
