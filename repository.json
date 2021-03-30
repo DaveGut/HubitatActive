@@ -13,7 +13,8 @@
       "name": "Cloud Kasa Devices Integration",
       "category": "",
       "tags": ["Tools & Utilities"],
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCloudDevices/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
+//      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCloudDevices/packageManifest.json",
       "description": "Deprecated for new installations.  Use Kasa Devices Integration."
     },
     {
