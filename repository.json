@@ -12,7 +12,7 @@
     {
       "name": "Cloud Kasa Devices Integration",
       "category": "",
-      "tags": [""],
+      "tags": ["Z"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCloudDevices/packageManifest.json",
       "description": "Deprecated for new installations.  Use Kasa Devices Integration."
     },
