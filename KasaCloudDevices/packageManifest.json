@@ -1,8 +1,8 @@
 {
   "packageName": "Cloud Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.2.3",
-  "minimumHEVersion": "2.2.5",
+  "version": "6.2.4",
+  "minimumHEVersion": "2.3.0",
   "releaseNotes" : "This package is DEPRECATED.  Do not use for new installations.",
   "documentationLink": "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
