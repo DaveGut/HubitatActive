@@ -4,17 +4,26 @@ Combined LAN and Cloud Integration with user choice of cloud usage at the applic
 ## Instructions:  
 https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 
-## Version 6.0 changes:
-a. Application
-   1. Added capability to select/deselect Kasa Cloud Access with login / token access pages.
-   2. Added capability to set the LAN segment to find devices (when different from Hubitat LAN segment)
-   3. Moved Kasa Tools (bind/unbind device, LED on/off, reboot device) to the individual device drivers.
-   
-b. Drivers
-   1. Merged quick poll command and refresh preference to new Refresh preference.
-   2. Added preferences for Kasa Tools.
-   3. Added preference (capability) to use Kasa Cloud or LAN.
-   4. Limit Refresh to one minute ONLY when Kasa Cloud is used for the device.
-   5. Added Cloud Communications / Parse methods.
-   
-c. REMOVED capability to do a manual (without application) installation. (Note: When using LAN instalation, the APP is not used during operations.)
+## Version 6.3 changes:
+Version 6.3 converts the LAN communications to UDP messaging in order to reduce Hubitat resource usage.  Various other changes are implements both because of that change and to simplify the overall functionality.  Below is a summary of the changes.
+a.	Attributes: connection(LAN/CLOUD) and commsError(true/false),  Added and deleted associated states.
+b.	Communications:
+	1.	Added LAN UDP Communications with associated changes to method parse and new state.lastCommand
+	2.	Removed LAN Raw Socket Communication with associated states.
+c.	Error Handling.  Change to repeat first command only, do not change poll/power poll intervals.
+d.	Multiplugs:
+	1.	Coordinate attribute connection, state.pollInterval, and settings bind / useCloud amoung devices.
+	2.	On/Off polling set and run from last device to complete a save preferences.  Data coordinated.
+e.	On/Off Polling, Power Polling, and Refersh
+	1.	Merged three function control into a single command, setPollInterval.  I use a command so
+		that users can access it through rule machine.
+	2.	Power reporting:  Reduce event handling in overall system.
+		a.	If power is below 5 W, will update if current power != new power +/- .5 W.
+		b.	Otherwise, will update if current power != new power +/- 5 W.
+f.	Data Cleanup.  Added method to clean up data, settings, and states from versions back to 5.3.3.
+g.	Bulbs.  Converted capability Color Temperature to new definition.
+h.	Save Preferences:  Added method to log all system states and data at the end the command.
+	This provides trouble shooting data for issue resolution with the developer.
+i.	Update Process: After updating code, run Application then Update Installed Devices.
+	1.	Will execute method updated on each device, including data, setting, and state updates.
+	2.	Still recommend checking each device's preferences and execute a Save Preferences.
