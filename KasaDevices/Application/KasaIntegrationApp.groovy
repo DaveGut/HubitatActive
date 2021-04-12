@@ -5,7 +5,7 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 1.	Added coordinate method to support multi-plug outlet data/state coordination.
 2.	Cleaned up page displayed documentation.
 =======================================================================================================*/
-def appVersion() { return "6.2.3" }
+def appVersion() { return "6.3.0" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -557,15 +557,13 @@ def sendKasaCmd(deviceId, command, appServerUrl = kasaCloudUrl) {
 }
 
 //	===== Coordinate between multiPlug =====
-def coordPoll(deviceId, data) {
+def coordPoll(deviceId, plugNo, data) {
 //	logDebug("coordPoll: ${deviceId} ${data}")
 	def devices = state.devices
 	devices.each {
-		if (it.value.deviceId == deviceId) {
 			def child = getChildDevice(it.value.dni)
-			if (child) {
-				child.coordPoll(data)
-			}
+		if (child && it.value.plugNo != plugNo) {
+			child.coordPoll(data)
 		}
 	}
 }

@@ -1,30 +1,33 @@
 /*	Kasa Device Driver Series
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
-===== Changes from 6.1 =====
-1.	General cleanup of installed and updated methods.
-2.	Updated scheduling to disperse methods better and reduce device collissions.
-3.	Clean-up of new reboot, setCommsType (LAN/Cloud), bind, and ledOn/Off methods and information.
-4.	Added attribute for communications error.
-5.	EM Devices:  Update on and off to delay power request to get a valid power attribute.
-6.	Multi-Plugs:
-	a.	Coordinate methods/attributes for setCommsType, Bind, pollInterval (on/off).  Includes
-		new method in driver and app for coordination.
-	b.	Coordinate of polling command so that only one Hubitat device does an on/off poll
-		of the Multi-Plug device. Includes new method in driver and app for coordination.
-7.	Hubitat 2.2.6:
-	a.	Fixed zero length response in parse method string causing error message.
-	b.	Bulbs: Accommodate changes in Capability Color Temperature
-	c.	Bulbs: Temporary fix for above for when entering data from Device's edit page causing error.
-3/26	6.2.1 Fix HS210 on/off error.  Further fix to null return error.
-3/27	6.2.2	Update state.errorCount location to fix cuunt issue.
-3/28	6.2.3	Added descriptionText preference back into code.
+===== Major hanges from 6.0 =====
+a.	Attributes: connection(LAN/CLOUD) and commsError(true/false),  Added and deleted associated states.
+b.	Communications:
+	1.	Added LAN UDP Communications with associated changes to method parse and new state.lastCommand
+	2.	Removed LAN Raw Socket Communication with associated states.
+c.	Error Handling.  Change to repeat first command only, do not change poll/power poll intervals.
+d.	Multiplugs:
+	1.	Coordinate attribute connection, state.pollInterval, and settings bind / useCloud amoung devices.
+	2.	On/Off polling set and run from last device to complete a save preferences.  Data coordinated.
+e.	On/Off Polling, Power Polling, and Refersh
+	1.	Merged three function control into a single command, setPollInterval.  I use a command so
+		that users can access it through rule machine.
+	2.	Power reporting:  Reduce event handling in overall system.
+		a.	If power is below 5 W, will update if current power != new power +/- .5 W.
+		b.	Otherwise, will update if current power != new power +/- 5 W.
+f.	Data Cleanup.  Added method to clean up data, settings, and states from versions back to 5.3.3.
+g.	Bulbs.  Converted capability Color Temperature to new definition.
+h.	Save Preferences:  Added method to log all system states and data at the end the command.
+	This provides trouble shooting data for issue resolution with the developer.
+i.	Update Process: After updating code, run Application then Update Installed Devices.
+	1.	Will execute method updated on each device, including data, setting, and state updates.
+	2.	Still recommend checking each device's preferences and execute a Save Preferences.
 ===================================================================================================*/
-def driverVer() { return "6.2.3" }
+def driverVer() { return "6.3.0" }
 //def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 def type() { return "EM Plug" }
-//	Plug Swich
 def file() {
 	def filename = type().replaceAll(" ", "-")
 	if (type() == "Dimming Switch") {
@@ -32,8 +35,8 @@ def file() {
 	}
 	return filename
 }
+import groovy.json.JsonSlurper
 
-//	Plug Switch & Multi Plug
 metadata {
 	definition (name: "Kasa ${type()}",
 				namespace: "davegut",
@@ -54,12 +57,6 @@ metadata {
 						  "30 minutes"],
 			type: "ENUM"]]
 		if (type().contains("EM")) {
-			command "setPowerPoll", [[
-				name: "Power poll Interval",
-				constraints: ["default", "5 seconds", "10 seconds", "15 seconds",
-						  "30 seconds", "1 minute", "5 minutes",  "10 minutes",
-						  "30 minutes"],
-				type: "ENUM"]]
 			capability "Power Meter"
 			capability "Energy Meter"
 			attribute "currMonthTotal", "number"
@@ -78,14 +75,15 @@ metadata {
 				   defaultValue: false)
 		}
 		input ("debug", "bool",
-			   title: "Enable debug logging", 
+			   title: "30 minutes of debug logging", 
 			   defaultValue: false)
 		input ("descriptionText", "bool", 
-			   title: "Enable description text logging", 
+			   title: "Enable information logging", 
 			   defaultValue: true)
 		input ("bind", "bool",
-			   title: "Kasa Cloud Binding")
-		if (bind && parent.kasaCloudUrl) {
+			   title: "Kasa Cloud Binding",
+			   defalutValue: true)
+		if (bind && parent.useKasaCloud) {
 			input ("useCloud", "bool",
 				   title: "Use Kasa Cloud for device control",
 				   defaultValue: false)
@@ -100,263 +98,175 @@ metadata {
 	}
 }
 
+//	======================================
+//	===== Code common to all drivers =====
+//	======================================
 def installed() {
-	logInfo("Installing device and defining initial attributes and states.")
-	state.initInstall = true
-	sendEvent(name: "connection", value: "LAN")
-	sendEvent(name: "commsError", value: false)
-	socketStatus("closed")
-	state.pollInterval = "30 minutes"
-	runIn(30, getBoundState)
-	state.respLength = 0
-	state.response = ""
+	def message = "Installing new device."
+	if (parent.useKasaCloud) {
+		message += "\n\t\t\t<b>Application set to useKasaCloud.</b>  System will attempt to install the"
+		message += "\n\t\t\tdevice as a cloud device."
+		message += "\n\t\t\tIf the device is unbound from the kasaCloud, there will be errors on install."
+		message += "\n\t\t\tTo recover set Bind and useKasaCloud in preferences and Save Preferences."
+	} else {
+		message += "\n\t\t\t<b>Application set to LAN installation.</b>  System will attempt to install the"
+		message += "\n\t\t\tdevice as a LAN device."
+		message += "\n\t\t\tIf the device can't use cloud, you will need to go to the Kasa App, select"
+		message += "\n\t\t\tuseKasaCloud, and successfully enter credentials to properly install the device."
+		message += "\n\t\t\tBefore doing this, you will need to uninstall this device."
+	}
+	message += "\n\t\t\t<b>This installation will use the CLOUD communications if you have set"
+	logInfo(message)
 	state.errorCount = 0
-	updated()
+	if (parent.useKasaCloud) {
+		logInfo("install: Installing as CLOUD device.")
+		device.updateSetting("useCloud", [type:"bool", value: true])
+		sendEvent(name: "connection", value: "CLOUD")
+	} else {
+		logInfo("install: Installing as LAN device")
+		sendEvent(name: "connection", value: "LAN")
+		device.updateSetting("useCloud", [type:"bool", value: false])
+	}
+	state.pollInterval = "30 minutes"
+	updateDataValue("driverVersion", driverVer())
+	runIn(5, updated)
 }
 
 def updated() {
 	if (rebootDev) {
-		logInfo("updated: ${rebootDevice()}")
+		//	First to run with  10 second wait to continue.
+		logWarn("updated: ${rebootDevice()}")
 	}
+	if (state.socketStatus) { state.remove("socketStatus") }
+	if (state.response) { state.remove("response") }
+	if (state.respLength) {state.remove("respLength") }
 	logInfo("updated: Updating device preferences and settings.")
 	unschedule()
-
-	logInfo("updated: Debug logging is ${debug}")
-	logInfo("updated: ${updateDriverData()}")
-	state.errorCount = 0
+	logDebug("updated: ${updateDriverData()}")
+	//	update data based on preferences
+	if (debug) { runIn(1800, debugOff) }
+	logDebug("updated: Debug logging is ${debug}")
+	logDebug("updated: Info logging is ${descriptionText}")
+	logDebug("updated: ${bindUnbind()}")
 	if(type().contains("Bulb")) {
-		if (transition_Time == null) {
-			device.updateSetting("transition_Time", [type:"num", value: 0])
-		}
-	}
-	logInfo("updated: ${setPollInterval(state.pollInterval)}")
-	if (!state.initInstall) {
-		logInfo("updated: ${setCommsType()}")
-		logInfo("updated: ${bindUnbind()}")
-		if(!type().contains("Bulb")) {
-			logInfo("updated: ${ledOnOff()}")
-		}
+		logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
+		logDebug("updated: High Resolution Color is ${highRes}")
 	} else {
-		state.remove("initInstall")
+		logDebug("updated: ${ledOnOff()}")
 	}
+		
+	//	Update scheduled methods
 	if (type().contains("EM") || type().contains("Bulb")) {
-		logInfo("updated: ${setupEmFunction()}")
+		logDebug("updated: ${setupEmFunction()}")
 	}
-	runIn(10, refresh)
+	logDebug("updated: ${setPolling()}")
+	runIn(1, refresh)
+	
+	runIn(2, getSystemData)
 }
 
-def updateDriverData() {
-	if (getDataValue("driverVersion") != driverVer()) {
-		if (useCloud) {
-			sendEvent(name: "connection", value: "CLOUD")
-		} else {
-			sendEvent(name: "connection", value: "LAN")
-			socketStatus("closed")
-		}
-		sendEvent(name: "commsError", value: false)
-		if (emFunction) {
-			state.powerPollInterval = "default"
-		}
-		if (!state.pollInterval) { state.pollInterval = "default" }
-		updateDataValue("driverVersion", driverVer())
-		state.remove("currentBind")
-		state.remove("socketTimeout")
-		state.remove("currentCloud")
-		state.remove("lastConnect")
-		return "Driver data updated to latest values."
-	} else {
-		return "Driver version and data already correct."
-	}
-}
-
-//	=================================================
-//	===== Plug/Switch Command and Parse Methods =====
-//	=================================================
-def on() {
-	logDebug("on")
-	if (getDataValue("model") != "HS210") {
-		sendCmd("""{"system":{"set_relay_state":{"state":1},""" +
-				""""get_sysinfo":{}}}""")
-		if (emFunction) {
-			runIn(10, getPower)
-		}
-	} else{
-		sendCmd("""{"system":{"set_relay_state":{"state":1}}}""")
-	}
-}
-
-def off() {
-	logDebug("off")
-	if (getDataValue("model") != "HS210") {
-		sendCmd("""{"system":{"set_relay_state":{"state":0},""" +
-				""""get_sysinfo":{}}}""")
-		if (emFunction) {
-			runIn(1, getPower)
-		}
-	} else{
-		sendCmd("""{"system":{"set_relay_state":{"state":0}}}""")
-	}
-}
-
-def setLevel(percentage, transition = null) {
-	logDebug("setLevel: level = ${percentage}")
-	percentage = percentage.toInteger()
-	if (percentage < 0) { percentage = 0 }
-	if (percentage > 100) { percentage = 100 }
-	percentage = percentage.toInteger()
-	sendCmd("""{"smartlife.iot.dimmer":{"set_brightness":{"brightness":${percentage}}},""" +
-			""""system":{"set_relay_state":{"state":1},"get_sysinfo":{}}}""")
-}
-
-def presetLevel(percentage) {
-	logDebug("presetLevel: level = ${percentage}")
-	percentage = percentage.toInteger()
-	if (percentage < 0) { percentage = 0 }
-	if (percentage > 100) { percentage = 100 }
-	percentage = percentage.toInteger()
-	sendCmd("""{"smartlife.iot.dimmer":{"set_brightness":{"brightness":${percentage}}},""" +
-			""""system" :{"get_sysinfo" :{}}}""")
-}
-
-def refresh() {
-	logDebug("refresh")
-	poll()
-	if (emFunction) {
-		runIn(1, getPower)
-	}
-}
-
-def poll() {
-	sendCmd("""{"system":{"get_sysinfo":{}}}""")
-}
-
-def setSysInfo(status) {
-	def relayState = status.relay_state
-	def onOff = "on"
-	if (relayState == 0) { onOff = "off" }
-	if (onOff != device.currentValue("switch")) {
-		sendEvent(name: "switch", value: onOff, type: "digital")
-		logInfo("setSysInfo: switch: ${onOff}")
-	}
-	if (type() == "Dimming Switch") {
-		if (status.brightness != device.currentValue("level")) {
-			sendEvent(name: "level", value: status.brightness, type: "digital")
-			logInfo("setSysInfo: level: ${status.brightness}")
-		}
-	}
-}
-
-//	==================================
 //	===== Energy Monitor Methods =====
-//	==================================
-//	Plug/Switch
 def getPower() {
-	sendCmd("""{"emeter":{"get_realtime":{}}}""")
+	if (type().contains("Multi")) {
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
+				""""emeter":{"get_realtime":{}}}""")
+	} else if (type().contains("Bulb")) {
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_realtime":{}}}""")
+	} else {
+		sendCmd("""{"emeter":{"get_realtime":{}}}""")
+	}
 }
 
-def setPower(status) {
-	def power = status.power
-	if (power == null) { power = status.power_mw / 1000 }
+def setPower(response) {
+	def power = response.power
+	if (power == null) { power = response.power_mw / 1000 }
 	power = Math.round(10*(power))/10
 	def curPwr = device.currentValue("power")
-	if (power > curPwr + 1 || power < curPwr - 1) { 
-		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W")
-		logInfo("pollResp: power = ${power}")
+	if (curPwr < 5 && (power > curPwr + 0.3 || power < curPwr - 0.3)) {
+		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital")
+		logDebug("polResp: power = ${power}")
+	} else if (power > curPwr + 5 || power < curPwr - 5) {
+		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital")
+		logDebug("polResp: power = ${power}")
 	}
 }
 
 def getEnergyToday() {
+	logDebug("getEnergyToday")
 	def year = new Date().format("yyyy").toInteger()
-	def month = new Date().format("M").toInteger()
-	if (type().contains("Bulb")) {
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_daystat":{"month": ${month}, "year": ${year}}}}""")
-	} else if (type().contains("Multi")) {
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-				""""emeter":{"get_daystat":{"month": ${month}, "year": ${year}}}}""")
-	} else {
-		sendCmd("""{"emeter":{"get_daystat":{"month": ${month}, "year": ${year}}}}""")
-	}
-}
-
-def setEnergyToday(resp) {
-	logDebug("setEnergyToday: ${resp}")
-	def day = new Date().format("d").toInteger()
-	def data = resp.day_list.find { it.day == day }
-	def energyData
-	if (data == null) {
-		energyData = 0
-	} else {
-		energyData = data.energy
-		if (energyData == null) { energyData = data.energy_wh/1000 }
-	}
-	energyData = Math.round(100*energyData)/100
-	if (energyData != device.currentValue("energy")) {
-		sendEvent(name: "energy", value: energyData, descriptionText: "Kilowatt Hours", unit: "kWh")
-		logInfo("setEngrToday: [energy: ${energyData}]")
-	}
-}
-
-def updateEmStats() {
-	logDebug("updateEmStats: Updating daily energy monitor data.")
-	def year = new Date().format("yyyy").toInteger()
-	if (type().contains("Bulb")) {
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""")
-	} else if (type().contains("Multi")) {
+	if (type().contains("Multi")) {
 		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
 				""""emeter":{"get_monthstat":{"year": ${year}}}}""")
+	} else if (type().contains("Bulb")) {
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""")
 	} else {
 		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""")
 	}
-	
 }
 
-def setThisMonth(resp) {
-	logDebug("setThisMonth: ${resp}")
-	def year = new Date().format("yyyy").toInteger()
+def setEnergyToday(response) {
+	logDebug("setEnergyToday: response = ${response}")
+	def month = new Date().format("M").toInteger()
+	def data = response.month_list.find { it.month == month }
+	def energy = data.energy
+	if (energy == null) { energy = data.energy_wh/1000 }
+	energy -= device.currentValue("currMonthTotal")
+	energy = Math.round(100*energy)/100
+	def currEnergy = device.currentValue("energy")
+	if (currEnergy < energy + 0.05) {
+		sendEvent(name: "energy", value: energy, descriptionText: "KiloWatt Hours", unit: "KWH")
+		logDebug("setEngrToday: [energy: ${energy}]")
+	}
+	setThisMonth(response)
+}
+
+def setThisMonth(response) {
+	logDebug("setThisMonth: response = ${response}")
 	def month = new Date().format("M").toInteger()
 	def day = new Date().format("d").toInteger()
-	def data = resp.month_list.find { it.month == month }
-	def scale = "energy"
-	def energyData
-	if (data == null) {
-		energyData = 0
-	} else {
-		if (data.energy == null) { scale = "energy_wh" }
-		energyData = data."${scale}"
+	def data = response.month_list.find { it.month == month }
+	def totEnergy = data.energy
+	if (totEnergy == null) { 
+		totEnergy = data.energy_wh/1000
 	}
+	totEnergy = Math.round(100*totEnergy)/100
 	def avgEnergy = 0
-	if (day !=1) { avgEnergy = energyData/(day - 1) }
-	if (scale == "energy_wh") {
-		energyData = energyData/1000
-		avgEnergy = avgEnergy/1000
+	if (day != 1) { 
+		avgEnergy = totEnergy /(day - 1) 
 	}
-	energyData = Math.round(100*energyData)/100
 	avgEnergy = Math.round(100*avgEnergy)/100
-	sendEvent(name: "currMonthTotal", value: energyData, 
+
+	sendEvent(name: "currMonthTotal", value: totEnergy, 
 			  descriptionText: "KiloWatt Hours", unit: "kWh")
 	sendEvent(name: "currMonthAvg", value: avgEnergy, 
 			  descriptionText: "KiloWatt Hours per Day", unit: "kWh/D")
-	logInfo("setThisMonth: Energy stats set to ${energyData} // ${avgEnergy}")
+	logDebug("setThisMonth: Energy stats set to ${totEnergy} // ${avgEnergy}")
 	if (month != 1) {
-		setLastMonth(resp)
+		setLastMonth(response)
 	} else {
-		if (type().contains("Bulb")) {
-			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year-1}}}}""")	//	bulbs
-		} else if (type().contains("Multi")) {
-			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +	//	multi plugs
-					""""emeter":{"get_monthstat":{"year": ${year-1}}}}""")
+		def year = new Date().format("yyyy").toInteger()
+		if (type().contains("Multi")) {
+			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
+					""""emeter":{"get_monthstat":{"year": ${year}}}}""")
+		} else if (type().contains("Bulb")) {
+			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""")
 		} else {
-		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year-1}}}}""")
+			sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""")
 		}
 	}
 }
 
-def setLastMonth(resp) {
-	logDebug("setLastMonth: cmdResponse = ${resp}")
+def setLastMonth(response) {
+	logDebug("setLastMonth: response = ${response}")
 	def year = new Date().format("yyyy").toInteger()
 	def month = new Date().format("M").toInteger()
-	def lastMonth = month - 1
-	if (lastMonth == 0) { lastMonth = 12 }
+	def day = new Date().format("d").toInteger()
+	def lastMonth
+	if (month == 1) {
+		lastMonth = 12
+	} else {
+		lastMonth = month - 1
+	}
 	def monthLength
 	switch(lastMonth) {
 		case 4:
@@ -372,102 +282,68 @@ def setLastMonth(resp) {
 		default:
 			monthLength = 31
 	}
-	def data = resp.month_list.find { it.month == lastMonth }
-	def scale = "energy"
-	def energyData
-	if (data == null) { energyData = 0 }
-	else {
-		if (data.energy == null) { scale = "energy_wh" }
-		energyData = data."${scale}"
-	}
-	def avgEnergy = energyData/monthLength
-	if (scale == "energy_wh") {
-		energyData = energyData/1000
-		avgEnergy = avgEnergy/1000
-	}
-	energyData = Math.round(100*energyData)/100
-	avgEnergy = Math.round(100*avgEnergy)/100
-	sendEvent(name: "lastMonthTotal", value: energyData, descriptionText: "KiloWatt Hours", unit: "kWh")
-	sendEvent(name: "lastMonthAvg", value: avgEnergy, descriptionText: "KiloWatt Hoursper Day", unit: "kWh/D")
-	logInfo("setLastMonth: Energy stats set to ${energyData} // ${avgEnergy}")
-}
-
-//	==========================
-//	===== Communications =====
-//	==========================
-def sendCmd(command) {
-	if (device.currentValue("connection") == "LAN") { sendLanCmd(command) }
-	else { sendKasaCmd(command) }
-}
-
-//	Plug/Switch
-def sendLanCmd(command) {
-	logDebug("sendLanCmd: ${command}, socketStatus = ${state.socketStatus}")
-	if (state.socketStatus != "open") {
-		try {
-			interfaces.rawSocket.connect("${getDataValue("deviceIP")}", 
-										 9999, byteInterface: true)
-		} catch (error) {
-			logDebug("SendCmd: Unable to connect to device at ${getDataValue("deviceIP")}. " +
-					 "Error = ${error}")
-			handleCommsError([command, "Socket Connect Fail"])
-			return
-		}
-	}
-	interfaces.rawSocket.sendMessage(outputXOR(command))
-	runIn(3, handleCommsError, [data: [command, "Socket Comms Timeout"]])
-	def model = getDataValue("model")
-	if (model == "HS100" || model == "HS200") {
-		runIn(2, socketStatus, [data: "closed"])
+	def data = response.month_list.find { it.month == lastMonth }
+	def totEnergy
+	if (data == null) {
+		totEnergy = 0
 	} else {
-		socketStatus("open")
-		runIn(35, socketStatus, [data: "closed"])
+		totEnergy = data.energy
+		if (totEnergy == null) { 
+			totEnergy = data.energy_wh/1000
+		}
+		totEnergy = Math.round(100*totEnergy)/100
+	}
+	def avgEnergy = 0
+	if (day !=1) {
+		avgEnergy = totEnergy /(day - 1)
+	}
+	avgEnergy = Math.round(100*avgEnergy)/100
+	sendEvent(name: "lastMonthTotal", value: totEnergy, 
+			  descriptionText: "KiloWatt Hours", unit: "kWh")
+	sendEvent(name: "lastMonthAvg", value: avgEnergy, 
+			  descriptionText: "KiloWatt Hoursper Day", unit: "kWh/D")
+	logDebug("setLastMonth: Energy stats set to ${totEnergy} // ${avgEnergy}")
+}
+
+//	===== Communications =====
+def sendCmd(command) {
+	if (device.currentValue("connection") == "LAN") {
+		sendLanCmd(command)
+	} else if (device.currentValue("connection") == "CLOUD"){
+		sendKasaCmd(command)
+	} else {
+		logWarn("sendCmd: attribute connection not set.")
 	}
 }
 
-def socketStatus(message) {
-	logDebug("socketStatus: ${message}")
-	state.socketStatus = message
-	if (message != "open") {
-		interfaces.rawSocket.close()
-	}
+def sendLanCmd(command) {
+	logDebug("sendLanCmd: command = ${command}")
+	state.lastLanCmd = command
+	def myHubAction = new hubitat.device.HubAction(
+		outputXOR(command),
+		hubitat.device.Protocol.LAN,
+		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
+		 destinationAddress: "${getDataValue("deviceIP")}:9999",
+		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
+		 parseWarning: true,
+		 timeout: 2])
+	sendHubCommand(myHubAction)
 }
 
 def parse(message) {
-	if (message == null || message == "") { return }
-	def respLength
-	def msgLen = message.length()
-	if (msgLen > 8 && message.substring(0,4) == "0000") {
-		def hexBytes = message.substring(0,8)
-		respLength = 8 + 2 * hubitat.helper.HexUtils.hexStringToInt(hexBytes)
-		if (msgLen == respLength) {
-			prepResponse(message)
-		} else {
-			state.response = message
-			state.respLength = respLength
-		}
-	} else {
-		def resp = state.response
-		resp = resp.concat(message)
-		if (resp.length() == state.respLength) {
-			state.response = ""
-			state.respLength = 0
-			prepResponse(resp)
-		} else {
-			state.response = resp
-		}
-	}
-}
-
-def prepResponse(response) {
-	def resp
-	try {
-		resp = parseJson(inputXOR(response))
-	} catch (e) {
+	def resp = parseLanMessage(message)
+	if (resp.type != "LAN_TYPE_UDPCLIENT") {
+		def errMsg = "LAN Error = ${resp.type}"
+		logDebug("parse: ${errMsg}]")
+		handleCommsError([state.lastLanCmd, errMsg])
 		return
 	}
-	distResp(resp)
-	unschedule(handleCommsError)
+	def clearResp = inputXOR(resp.payload)
+	if (clearResp.length() > 1022) {
+		clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
+	}
+	def cmdResp = new JsonSlurper().parseText(clearResp)
+	distResp(cmdResp)
 }
 
 def sendKasaCmd(command) {
@@ -493,261 +369,129 @@ def sendKasaCmd(command) {
 			if (resp.status == 200 && resp.data.error_code == 0) {
 				def jsonSlurper = new groovy.json.JsonSlurper()
 				distResp(jsonSlurper.parseText(resp.data.result.responseData))
-				if (state.communicationsError) {
-					resetCommsError()
-				}
 			} else {
-				logDebug("sendKasaCmd: Error returned from Kasa Cloud: [error: ${resp.data}]")
-				handleCommsError([command, "Cloud Command Failure"])
+				def errMsg = "CLOUD Error = ${resp.data}"
+				logDebug("sendKasaCmd: ${errMsg}]")
+				handleCommsError([command, errMsg])
 			}
 		}
 	} catch (e) {
-		logDebug("sendKasaCmd: Failed to communicate with Kasa Cloud. [error: ${e}]")
-		handleCommsError([command, "Cloud Comms Timeout"])
+				def errMsg = "CLOUD Error = ${e}"
+				logDebug("sendKasaCmd: ${errMsg}]")
+				handleCommsError([command, errMsg])
 	}
 }
 
-def handleCommsError(command) {
+def handleCommsError(errorData) {
 	def count = state.errorCount + 1
 	state.errorCount = count
-	def errType = command[1]
-	def message = "handleCommsError: ${count} consecutive communications errors. Type = ${errType}"
-	switch(errType) {
-		case "Socket Connect Fail" :
-			if (count == 1) {
-				socketStatus("closed")
-				message += "\n\tParent: ${parent.updateIpData()}"
-				message += "\n\t<b>Retry ${count} for command.</b>"
-				runIn(10, sendLanCmd, [data: command[0]])
-			}
-			break
-		case "Cloud Comms Timeout" :
-			if (count == 1) {
-				message += "Parent: ${parent.getToken()}"
-				message += "\n\tRetry ${count} for command."
-				runIn(2, sendKasaCmd, [data: command[0]])
-			} else if (count == 4) { setCommsError() }
-			break
-		case "Socket Comms Timeout" :
-			if (count <= 7) {
-				message += "\n\tRetry ${count} for command."
-				socketStatus("closed")
-				runIn(1, sendLanCmd, [data: command[0]])
-			} else if (count == 4) { setCommsError() }
-			break
-		default:
-			break
+	def errData = errorData[1]
+	def command = errorData[0]
+	def message = "handleCommsError: Count: ${count}."
+	if (count == 1) {
+		if ( errData.contains("CLOUD")) {
+			message += "\n\t\t\t Getting new token from parent.  Token = ${parent.getToken()}"
+		}
+		message += "\n\t\t\t Retransmitting command, try = ${count}"
+		runIn(1, sendCmd, [data: command])
+	} else if (count <= 3) {
+		message += "\n\t\t\t Retransmitting command, try = ${count}"
+		runIn(2, sendCmd, [data: command])
+	} else if (count == 4) {
+		setCommsError(errorData)
+		message += "\n\t\t\t Setting Comms Error."
 	}
-	logWarn(message)
+	logDebug(message)
 }
 
-def setCommsError() {
-	def message = "setCommsError:"
-	message += "\n\t\t4th consecutive error.  Setting communications to ERROR."
-	message += "\n\t\tSetting poll interval to 30 minutes until corrected."
-	message += "\n\t\t<b>Check device IP (LAN) or Kasa Token (CLOUD)</b>."
-	unschedule(getPower)
-	setPollInterval("30 minutes")
-	state.communicationsError = "Six consecutive comms error."
+def setCommsError(errorData) {
+	def message = "setCommsError: Four consecutive errors.  Setting commsError to true."
+	message += "\n\t\tSetting poll intervals to 30 minutes until corrected."
+	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>."
 	sendEvent(name: "commsError", value: true)
+	state.commsErrorText = "<b>${errorData}</b>"
 	logWarn message
 }
 
 def resetCommsError() {
-	state.remove("communicationsError")
-	sendEvent(name: "commsError", value: false)
-	if (state.errorCount >= 6) {
-		setPollInterval(state.pollInterval)
-		if(emFunction) {
-			setPowerPoll(state.powerPollInterval)
-		}
-	}
-}
-
-//	Plug/Switch
-def distResp(response) {
-	if (response.system) {
-		if (response.system.get_sysinfo) {
-			setSysInfo(response.system.get_sysinfo)
-		} else if (response.system.set_relay_state) {
-			runIn(1, refresh)
-		} else if (response.system.reboot) {
-			logInfo("distResp: Rebooting device.")
-		} else if (response.system.set_led_off) {
-			logInfo("distResp: Led On/Off response = ${response.system.set_led_off}")
-		} else {
-			logWarn("distResp: Unhandled response = ${response}")
-		}
-	} else if (emFunction && response.emeter) {
-		def month = new Date().format("M").toInteger()
-		if (response.emeter.get_realtime) {
-			setPower(response.emeter.get_realtime)
-		} else if (response.emeter.get_daystat) {
-			setEnergyToday(response.emeter.get_daystat)
-		} else if (response.emeter.get_monthstat.month_list.find { it.month == month }) {
-			setThisMonth(response.emeter.get_monthstat)
-		} else if (response.emeter.get_monthstat.month_list.find { it.month == month - 1 }) {
-			setLastMonth(response.emeter.get_monthstat)
-		} else {
-			logWarn("distResp: Unhandled response = ${response}")
-		}
-	} else if (response.cnCloud) {
-		setBindUnbind(response.cnCloud)
-	} else {
-		logWarn("distResp: Unhandled response = ${response}")
+	if (state.errorCount >= 4) {
+		sendEvent(name: "commsError", value: false)
+		state.remove("commsErrorText")
 	}
 	state.errorCount = 0
-	if (state.communicationsError) {
-		resetCommsError()
-	}
 }
 
-//	==============================
 //	===== Preference Methods =====
-//	==============================
-def setCommsType() {
-	def commsType = device.currentValue("connection")
-	logDebug("setCommsType: ${commsType}")
-	def message = ""
-	
-	def currentCloud = false
-	if (commsType == "CLOUD") {
-		currentCloud = true
+def setPolling() {
+	def message = "Setting Poll Intervals."
+	def interval = "30 minutes"
+	if (state.pollInterval) {
+		interval = state.pollInterval
 	}
-	if (currentCloud == useCloud) {
-		message = "device already set use ${commsType} communications."
-		return message
-	} else if (useCloud) {
-		if (!parent.useKasaCloud || !bind || 
-			!parent.kasaToken || !parent.kasaCloudUrl) {
-			//	Not available due to app setting or device binding to cloud.
-			logWarn("setCommsType: <b>Can't set to Kasa cloud communications.</b> Check items:" +
-				    "\n\t1.\tKasa Integration Appication" +
-				    "\n\t\t* set Interface to Kasa Cloud in the app and validate userName and password" +
-					"\n\t\t* the token must not be null." +
-				    "\n\t2.\tDevice must be bound to Kasa Cloud.")
-			message = "ERROR: device reset use ${commsType} communications."
-			commsType = "LAN"
-		} else {
-			message = "device set use ${commsType} communications."
-			commsType = "CLOUD"
-		}
-	} else if (!useCloud) {
-		if (!getDataValue("deviceIP")) {
-			//	No IP set - may not be able to use device locally.
-			logWarn("setCommsType: <b>Device IP is not available.</b>  Device IP not set. " +
-				    "Go to Kasa Integration app and run Update Installed Devices.")
-			message = "ERROR: device reset use ${commsType} communications."
-			commsType = "CLOUD"
-		} else {
-			message = "device set use ${commsType} communications."
-			commsType = "LAN"
-		}
-	} else {
-		message = "useCloud not set to valid value."
-		return
-	}
-
-	if (!type().contains("Multi")) {
-		if (commsType == "CLOUD") {
-			device.updateSetting("useCloud", [type:"bool", value: true])
-			sendEvent(name: "connection", value: "CLOUD")
-		} else {
-			state.respLength = 0
-			state.response = ""
-			device.updateSetting("useCloud", [type:"bool", value: false])
-			sendEvent(name: "connection", value: "LAN")
-			socketStatus("closed")
-		}
-	} else {
-		parent.coordinate(getDataValue("deviceId"), getDataValue("plugNo"), 
-						  "lanCloud", commsType)
-	}
+	message += "\n\t\t\t OnOff Polling set to ${interval}."
+	setPollInterval(interval)
+	state.remove("powerPollInterval")
+	state.remove("powerPollWarning")
 	return message
 }
 
 def setPollInterval(interval) {
 	logDebug("setPollInterval: interval = ${interval}.")
-	if (emFunction && interval.contains("sec") 
-		&& state.powerPollInterval.contains("sec")) {
-		logWarn("setPollInterval: Not set.  Power Poll set to less than one minute." +
-				" Reset Power Poll to greater than 1 minute.")
-		return
-	}
 	if (interval == "default" || interval == "off") {
 		interval = "30 minutes"
 	} else if (useCloud && interval.contains("sec")) {
 		interval = "1 minute"
 	}
-	if (type().contains("Multi")) {
-		parent.coordinate(getDataValue("deviceId"), getDataValue("plugNo"), "poll", interval)
+	if (interval.contains("sec")) {
+		state.pollWarning = "<b>Polling intervals of less than one minute can take high " +
+								 "resources and impact hub performance.</b>"
 	} else {
-		state.pollInterval = interval
+		state.remove("pollWarning")
 	}
+	state.pollInterval = interval
 	schedInterval("poll", interval)
 }
 
-//	Plug/Switch && Multi Plug
-def setPowerPoll(interval) {
-	if (!emFunction) { return }
-	logDebug("setPowerPoll: interval = ${interval}.")
-	if (interval.contains("sec") && state.pollInterval.contains("sec")) {
-		logWarn("setpowerPoll: Not set.  On/off Poll set to less than one minute." +
-				" Reset on/off Poll to greater than 1 minute.")
-		return
-	}
-	if (interval == "default" || interval == "off") {
-		interval = "30 minutes"
-	} else if (useCloud && interval.contains("sec")) {
-		interval = "1 minute"
-	}
-	state.powerPollInterval = interval
-	schedInterval("getPower", interval)
-}
-
-def schedInterval(type, interval) {
-	logDebug("schedInterval: type = ${type}, interval = ${interval}.")
+def schedInterval(pollType, interval) {
+	logDebug("schedInterval: type = ${pollType}, interval = ${interval}.")
 	def message = ""
 	def pollInterval = interval.substring(0,2).toInteger()
 	if (interval.contains("sec")) {
 		def start = Math.round((pollInterval-1) * Math.random()).toInteger()
-		schedule("${start}/${pollInterval} * * * * ?", type)
-		message += "${type} Interval set to ${interval} seconds."
+		schedule("${start}/${pollInterval} * * * * ?", pollType)
+		message += "${pollType} Interval set to ${interval} seconds."
 	} else {
 		def start = Math.round(59 * Math.random()).toInteger()
-		schedule("${start} */${pollInterval} * * * ?", type)
-		message += "${type} Interval set to ${interval} minutes."
+		schedule("${start} */${pollInterval} * * * ?", pollType)
+		message += "${pollType} Interval set to ${interval} minutes."
 	}
-	logDebug("schedInterval: ${message}")
-	return message
 }
 
 def setupEmFunction() {
-	if (!emFunction) {
-		if (state.powerPollInterval) {
-			state.remove("powerPollInterval")
-			sendEvent(name: "power", value: 0)
-			sendEvent(name: "energy", value: 0)
-			sendEvent(name: "currMonthTotal", value: 0)
-			sendEvent(name: "currMonthAvg", value: 0)
-			sendEvent(name: "lastMonthTotal", value: 0)
-			sendEvent(name: "lastMonthAvg", value: 0l)
-		}
-		return "Not in Energy Monitor mode."
-	} else {
-		sendEvent(name: "power", value: 0, descriptionText: "Watts", unit: "W")
-		if (type().contains("EM")) {
-			logInfo("setupEmFunction: ${setPowerPoll("default")}")
-		}
-		def start = Math.round(59 * Math.random()).toInteger()
-		schedule("${start} 01 0 * * ?", updateEmStats)
-		start = Math.round(59 * Math.random()).toInteger()
+	if (emFunction) {
+		sendEvent(name: "power", value: 0)
+		sendEvent(name: "energy", value: 0)
+		sendEvent(name: "currMonthTotal", value: 0)
+		sendEvent(name: "currMonthAvg", value: 0)
+		sendEvent(name: "lastMonthTotal", value: 0)
+		sendEvent(name: "lastMonthAvg", value: 0)
+		def start = Math.round(30 * Math.random()).toInteger()
 		schedule("${start} */30 * * * ?", getEnergyToday)
-		getEnergyToday()
-		pauseExecution(500)
-		updateEmStats()
-		pauseExecution(2000)
+		runIn(1, getEnergyToday)
 		return "Energy Monitor Function initialized."
+	} else if (device.currentValue("power") != null) {
+		sendEvent(name: "power", value: 0)
+		sendEvent(name: "energy", value: 0)
+		sendEvent(name: "currMonthTotal", value: 0)
+		sendEvent(name: "currMonthAvg", value: 0)
+		sendEvent(name: "lastMonthTotal", value: 0)
+		sendEvent(name: "lastMonthAvg", value: 0)
+		if (type().contains("Multi")) {
+			state.remove("powerPollInterval")
+		}
+		return "Energy Monitor Function not enabled. Data element set to 0."
+	} else {
+		return "energy Monitor Function not enabled.  Data elements already null."
 	}
 }
 
@@ -764,36 +508,30 @@ def rebootDevice() {
 }
 
 def bindUnbind() {
-	def commsError = device.currentValue("commsError")
-	logDebug("bindUnbind: ${bind} // ${commsError}")
+	logDebug("bindUnbind: ${bind}")
 	def message = ""
 	def meth = "cnCloud"
 	if (type().contains("Bulb")) {
 		meth = "smartlife.iot.common.cloud"
 	}
-	if (commsError == "true") {
-		message += "Bind. Error in connection.  Aborting update"
-		return message
+	if (bind == null) {
+		//	Set bind to true.  Attempt to get.
+		//	If update fails, device is considered cloud only and true is correct.
+		message += "Bind value null.  Set to true and attempt to get actual."
+		device.updateSetting("bind", [type:"bool", value: true])
+		sendCmd("""{"${meth}":{"get_info":{}}}""")
+	} else if (bind) {
+		message += "Attempting to Bind the Device to the Kasa Cloud."
+		sendCmd("""{"${meth}":{"bind":{"username":"${parent.userName}",""" +
+				""""password":"${parent.userPassword}"}},""" +
+				""""${meth}":{"get_info":{}}}""")
 	} else if (!bind) {
 		message = "Attempting to Unbind the Device from the Kasa Cloud."
 		sendCmd("""{"${meth}":{"unbind":""},""" +
 				""""${meth}":{"get_info":{}}}""")
-	} else if (bind) {
-		message += "Attempting to Bind the Device to the Kasa Cloud"
-		sendCmd("""{"${meth}":{"bind":{"username":"${parent.userName}",""" +
-				""""password":"${parent.userPassword}"}},""" +
-				""""${meth}":{"get_info":{}}}""")
 	}
-	pauseExecution(1000)
+	pauseExecution(5000)
 	return message
-}
-
-def getBoundState() {
-	def meth = "cnCloud"
-	if (type().contains("Bulb")) {
-		meth = "smartlife.iot.common.cloud"
-	}
-	sendCmd("""{"${meth}":{"get_info":{}}}""")
 }
 
 def setBindUnbind(cmdResp) {
@@ -808,25 +546,231 @@ def setBindUnbind(cmdResp) {
 		} else {
 			device.updateSetting("bind", [type:"bool", value: bindState])
 		}
-		logInfo("setBindUnbind: Bind status set to ${bindState}")
+		logDebug("setBindUnbind: Bind status set to ${bindState}")
 	} else {
 		logWarn("setBindUnbind: Unhandled response: ${cmdResp}")
 	}
+	runIn(1, setCommsType)
 }
 
-//	Plug/Switch & Multi Plug
+def setCommsType() {
+	def commsType = device.currentValue("connection")
+	logDebug("setCommsType: Ctype = ${commsType}, useCloud = ${useCloud}, bind = ${bind}")
+	def message = ""
+	if (useCloud) {
+		if (parent.useKasaCloud && bind) {
+			message = "Device set to use CLOUD communications."
+			commsType = "CLOUD"
+		} else {
+			//	Not available due to app setting or device binding to cloud.
+			logWarn("setCommsType: <b>Can't set to Kasa cloud communications.</b> Check items:" +
+				    "\n\t1.\tKasa Integration Appication" +
+				    "\n\t\t* set Interface to Kasa Cloud in the app and validate userName and password" +
+					"\n\t\t* the token must not be null.")
+			message = "ERROR: Can not use Cloud. Device set to use LAN communications."
+			commsType = "LAN"
+		}
+	} else if (!useCloud) {
+		if (!getDataValue("deviceIP")) {
+			//	No IP set - may not be able to use device locally.
+			logWarn("setCommsType: <b>Device IP is not available.</b>  Device IP not set. " +
+				    "Go to Kasa Integration app and run Update Installed Devices.")
+			message = "ERROR: No deviceIP.  Device set to use CLOUD communications."
+			commsType = "CLOUD"
+		} else {
+			message = "Device set to use LAN communications."
+			commsType = "LAN"
+		}
+	} else {
+		logWarn("setCommsType: useCloud not set to valid value.")
+		return
+	}
+
+	if (type().contains("Multi")) {
+		parent.coordinate(getDataValue("deviceId"), getDataValue("plugNo"), 
+						  "lanCloud", commsType)
+	} else {
+		setCommsData(commsType)
+	}
+}
+
+def setCommsData(commsType) {
+	logDebug("setCommsData: ${commsType}.")
+	if (commsType == "CLOUD") {
+		state.remove("lastLanCmd")
+		device.updateSetting("useCloud", [type:"bool", value: true])
+		sendEvent(name: "connection", value: "CLOUD")
+	} else {
+		state.lastLanCmd = """{"system":{"get_sysinfo":{}}}"""
+		device.updateSetting("useCloud", [type:"bool", value: false])
+		sendEvent(name: "connection", value: "LAN")
+	}
+	pauseExecution(1000)
+}
+
 def ledOnOff() {
 	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
 	pauseExecution(2000)
 	return "Setting Led off to ${ledStatus}."
 }
 
-//	===========================
+def getSystemData() {
+	def message = "<b>System Data Summary: [Information: </b>["
+	message += "Name: ${device.getName()} , "
+	message += "Label: ${device.getLabel()} , "
+	message += "DNI: ${device.getDeviceNetworkId()}],"
+	
+	message += "[<b>States: </b>["
+	message += "pollInterval: ${state.pollInterval} , "
+	message += "powerPollInterval: ${state.powerPollInterval} , "
+	message += "errorCount: ${state.errorCount}],"
+	
+	message += "[<b>Preferences</b>: ["
+	if (type().contains("Bulb")) {
+		message += "Transition Time: ${transition_Time} , "
+	}
+	message += "Energy Monitor: ${emFunction} , "
+	message += "Cloud Binding: ${bind} , "
+	message += "Use Kasa Cloud: ${useCloud}] , "
+	
+	message += "[<b> Attributes: </b>["
+	message += "Connection: ${device.currentValue("connection")} , "
+	message += "Comms Error: ${device.currentValue("commsError")} , "
+	message += "Switch: ${device.currentValue("switch")} , "
+	if (emFunction) {
+		message += "Power: ${device.currentValue("power")} , "
+		message += "Energy: ${device.currentValue("energy")} , "
+		message += "Current Month Daily: ${device.currentValue("currMonthAvg")} , "
+		message += "Current Month Total: ${device.currentValue("currMonthTotal")} , "
+		message += "Last Month Daily: ${device.currentValue("lastMonthAvg")} , "
+		message += "Last Month Total: ${device.currentValue("lastMonthTotal")}]"
+	}
+	message +="[<b>Device Data:</b> ${device.getData()}] , "
+	message +="[<b>Device Attributes:</b> ${device.getCurrentStates()}]]]"
+	logInfo(message)
+}
+
 //	===== Utility Methods =====
-//	===========================
+def updateDriverData() {
+//	Updates/adds/removes device data and states from devices using earlier version.
+	def drvVer = getDataValue("driverVersion")
+	if (drvVer == driverVer()) {
+		return "Driver Data already updated."
+	}
+//	Poll Interval, communications, and bind capture
+	def message = "<b>Updating data from driver version ${drvVer}."
+	def comType = "LAN"
+	def usingCloud = false
+	def binding = true
+	def interval = "30 minutes"
+	def oldDriver = getDataValue("driverVersion")
+	if (oldDriver.contains("5.3")) {
+		if (state.pollInterval && state.pollInterval != "off") {
+			interval = "${state.pollInterval} seconds"
+		}
+	} else if (oldDriver.contains("6.0")) {
+		if (refreshInterval) {
+			def inter = refreshInterval.toInteger()
+			if (inter < 60) {
+				interval = "${inter} seconds"
+			}
+		}
+		if (useCloud) { commType = "CLOUD" }
+		if (bind == "0") { binding = false }
+	} else if (oldDriver.contains("6.1")) {
+		if (state.pollInterval && state.pollInterval != "off") {
+			interval = "${state.pollInterval} seconds"
+		}
+		if (useCloud) { commType = "Cloud" }
+		if (bind == "0") { binding = false }
+	} else if (oldDriver.contains("6.2")) {
+		interval = state.pollInterval
+		if (useCloud) { commType = "Cloud" }
+		binding = bind
+	}
+	message += "\n\t\t\t Connection = ${comType}."
+	message += "\n\t\t\t bind = ${binding}."
+	message += "\n\t\t\t pollInterval = ${interval}."
+	setCommsData(comType)
+	pauseExecution(200)
+	device.updateSetting("bind", [type:"bool", value: binding])
+	pauseExecution(200)
+	state.pollInterval = interval
+
+//	Settings for all updates
+	device.removeSetting("device_IP")
+	pauseExecution(200)
+ 	device.removeSetting("pollTest")
+	pauseExecution(200)
+	device.removeSetting("refresh_Rate")
+	pauseExecution(200)
+	device.removeSetting("refreshInterval")
+	pauseExecution(200)
+	
+//	States for all version updates	
+	state.remove("response")
+	pauseExecution(200)
+	state.remove("respLength")
+	pauseExecution(200)
+	state.remove("lastConnect")
+	pauseExecution(200)
+	state.remove("pollFreq")
+	pauseExecution(200)
+	state.remove("WARNING")
+	pauseExecution(200)
+	state.remove("currentBind")
+	pauseExecution(200)
+	state.remove("currentCloud")
+	pauseExecution(200)
+	if (type() == "EM Plug Switch" || type().contains("Bulb")) {
+		state.remove("state.powerPollInterval")
+		pauseExecution(200)
+	}
+	state.remove("lanErrorsToday")
+	pauseExecution(200)
+	state.remove("lanErrorsPrev")
+	pauseExecution(200)
+	state.remove("lanErrosPrev")
+	pauseExecution(200)
+	state.remove("communicationsError")
+	pauseExecution(200)
+	state.remove("socketTimeout")
+	pauseExecution(200)
+	state.remove("lastColorTemp")
+	pauseExecution(200)
+	
+//	Data values for all updates
+	removeDataValue("appServerUrl")
+	pauseExecution(200)
+	removeDataValue("deviceFWVersion")
+	pauseExecution(200)
+	removeDataValue("lastErrorRatio")
+	pauseExecution(200)
+	removeDataValue("token")
+	if (type() == "EM Multi Plug") {
+		removeDataValue("emSysInfo")
+		pauseExecution(200)
+		removeDataValue("getPwr")
+		pauseExecution(200)
+	}
+	removeDataValue("applicationVersion")
+	pauseExecution(200)
+	if (!type().contains("Multi")) {
+		removeDataValue("plugNo")
+		pauseExecution(200)
+		removeDataValue("plugId")
+		pauseExecution(200)
+	}
+
+	updateDataValue("driverVersion", driverVer())
+	message += "\n\t\t\tNew Version: ${driverVer()}.</b>"
+	return message
+}
+
 private outputXOR(command) {
+//	UDP Version
 	def str = ""
-	def encrCmd = "000000" + Integer.toHexString(command.length()) 
+	def encrCmd = ""
  	def key = 0xAB
 	for (int i = 0; i < command.length(); i++) {
 		str = (command.charAt(i) as byte) ^ key
@@ -836,8 +780,8 @@ private outputXOR(command) {
    	return encrCmd
 }
 
-private inputXOR(resp) {
-	String[] strBytes = resp.substring(8).split("(?<=\\G.{2})")
+private inputXOR(encrResponse) {
+	String[] strBytes = encrResponse.split("(?<=\\G.{2})")
 	def cmdResponse = ""
 	def key = 0xAB
 	def nextKey
@@ -867,8 +811,126 @@ def logDebug(msg){
 	}
 }
 
+def debugOff() {
+	device.updateSetting("debug", [type:"bool", value: false])
+	logInfo("debugLogOff: Debug logging is off.")
+}
+
 def logWarn(msg){
 	log.warn "[${type()} / ${driverVer()} / ${device.label}]| ${msg}"
+}
+
+//	=================================================
+//	===== Plug/Switch Command and Parse Methods =====
+//	=================================================
+def on() {
+	logDebug("on")
+	if (type() != "Dimming Switch") {
+		sendCmd("""{"system":{"set_relay_state":{"state":1},""" +
+				""""get_sysinfo":{}}}""")
+		if (emFunction) {
+			runIn(10, getPower)
+		}
+	} else{
+		sendCmd("""{"system":{"set_relay_state":{"state":1}}}""")
+	}
+}
+
+def off() {
+	logDebug("off")
+	if (type() != "Dimming Switch") {
+		sendCmd("""{"system":{"set_relay_state":{"state":0},""" +
+				""""get_sysinfo":{}}}""")
+	} else{
+		sendCmd("""{"system":{"set_relay_state":{"state":0}}}""")
+		if (emFunction) {
+			runIn(2, getPower)
+		}
+	}
+}
+
+def setLevel(percentage, transition = null) {
+	logDebug("setLevel: level = ${percentage}")
+	percentage = percentage.toInteger()
+	if (percentage < 0) { percentage = 0 }
+	if (percentage > 100) { percentage = 100 }
+	percentage = percentage.toInteger()
+	sendCmd("""{"smartlife.iot.dimmer":{"set_brightness":{"brightness":${percentage}}},""" +
+			""""system":{"set_relay_state":{"state":1},"get_sysinfo":{}}}""")
+}
+
+def presetLevel(percentage) {
+	logDebug("presetLevel: level = ${percentage}")
+	percentage = percentage.toInteger()
+	if (percentage < 0) { percentage = 0 }
+	if (percentage > 100) { percentage = 100 }
+	percentage = percentage.toInteger()
+	sendCmd("""{"smartlife.iot.dimmer":{"set_brightness":{"brightness":${percentage}}},""" +
+			""""system" :{"get_sysinfo" :{}}}""")
+}
+
+def refresh() {
+	logDebug("refresh")
+	poll()
+}
+
+def poll() {
+	if (!emFunction) {
+		sendCmd("""{"system":{"get_sysinfo":{}}}""")
+	} else {
+		sendCmd("""{"system":{"get_sysinfo":{}},""" +
+				""""emeter":{"get_realtime":{}}}""")
+	}
+}
+
+def setSysInfo(response) {
+	logDebug("setSysInfo: ${response}")
+	def relayState = response.system.get_sysinfo.relay_state
+	def onOff = "on"
+	if (relayState == 0) { onOff = "off" }
+	if (onOff != device.currentValue("switch")) {
+		sendEvent(name: "switch", value: onOff, type: "digital")
+		logInfo("setSysInfo: switch: ${onOff}")
+	}
+	if (type() == "Dimming Switch") {
+		if (status.brightness != device.currentValue("level")) {
+			sendEvent(name: "level", value: status.brightness, type: "digital")
+			logInfo("setSysInfo: level: ${status.brightness}")
+		}
+	}
+	if (response.emeter) { setPower(response.emeter.get_realtime) }
+}
+
+def distResp(response) {
+	if (response.system) {
+		if (response.system.get_sysinfo) {
+			setSysInfo(response)
+		} else if (response.system.set_relay_state) {
+			runIn(1, refresh)
+		} else if (response.system.reboot) {
+			logWarn("distResp: Rebooting device.")
+		} else if (response.system.set_led_off) {
+			logDebug("distResp: Led On/Off response = ${response.system.set_led_off}")
+		} else {
+			logWarn("distResp: Unhandled response = ${response}")
+		}
+	} else if (emFunction && response.emeter) {
+		def month = new Date().format("M").toInteger()
+		if (response.emeter.get_realtime) {
+			setPower(response.emeter.get_realtime)
+		} else if (response.emeter.get_monthstat.month_list.find { it.month == month }) {
+			setEnergyToday(response.emeter.get_monthstat)
+		} else if (response.emeter.get_monthstat.month_list.find { it.month == month - 1 }) {
+			setLastMonth(response.emeter.get_monthstat)
+		} else {
+			logWarn("distResp: Unhandled response = ${response}")
+		}
+	} else if (response.cnCloud) {
+		setBindUnbind(response.cnCloud)
+	} else {
+		logWarn("distResp: Unhandled response = ${response}")
+	}
+	resetCommsError()
 }
 
 //	End of File
