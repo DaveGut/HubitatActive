@@ -8,6 +8,7 @@ https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.p
 Version 6.3 converts the LAN communications to UDP messaging in order to reduce Hubitat resource usage.  Various other changes are implements both because of that change and to simplify the overall functionality.  Below is a summary of the changes.
 
 a.	Attributes: connection(LAN/CLOUD) and commsError(true/false),  Added and deleted associated states.
+
 b.	Communications:
 
 	1.	Added LAN UDP Communications with associated changes to method parse and new state.lastCommand
