@@ -13,7 +13,6 @@ b.	Communications:
 	1.	Added LAN UDP Communications with associated changes to method parse and new state.lastCommand
 	2.	
 	3.	Removed LAN Raw Socket Communication with associated states.
-	4.	
 c.	Error Handling.  Change to repeat first command only, do not change poll/power poll intervals.
 
 d.	Multiplugs:
@@ -21,7 +20,6 @@ d.	Multiplugs:
 	1.	Coordinate attribute connection, state.pollInterval, and settings bind / useCloud amoung devices.
 	2.	
 	3.	On/Off polling set and run from last device to complete a save preferences.  Data coordinated.
-	4.	
 e.	On/Off Polling, Power Polling, and Refersh
 
 	1.	Merged three function control into a single command, setPollInterval.  I use a command so
