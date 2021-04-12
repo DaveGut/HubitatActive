@@ -43,5 +43,4 @@ h.	Save Preferences:  Added method to log all system states and data at the end 
 i.	Update Process: After updating code, run Application then Update Installed Devices.
 
 	1.	Will execute method updated on each device, including data, setting, and state updates.
-	2.	
-	3.	Still recommend checking each device's preferences and execute a Save Preferences.
+	2.	Still recommend checking each device's preferences and execute a Save Preferences.
