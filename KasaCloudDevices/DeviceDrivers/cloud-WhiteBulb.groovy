@@ -23,14 +23,14 @@ h.	Save Preferences:  Added method to log all system states and data at the end 
 i.	Update Process: After updating code, run Application then Update Installed Devices.
 	1.	Will execute method updated on each device, including data, setting, and state updates.
 	2.	Still recommend checking each device's preferences and execute a Save Preferences.
-6.3.1	a.	Added fixCommunications link to setCommsError.  Enables updating IP or token error when
+6.3.0.1	a.	Added fixCommunications link to setCommsError.  Enables updating IP or token error when
 			an commsError is declared in the app.  Clears error if corrected.
 		b.	Dimming Switch Driver.  Fixed rookie error in code for brightness update.
 		c.	Added application code to check the driver version for 6.3.x and flag a warning on the
 			Application log page if not.  (Some HPM installations lost some of the links in past.
 			This has been fixed in HPM.)
 ===================================================================================================*/
-def driverVer() { return "6.3.1" }
+def driverVer() { return "6.3.0.1" }
 //def type() { return "Color Bulb" }
 //def type() { return "CT Bulb" }
 def type() { return "Mono Bulb" }
@@ -714,68 +714,124 @@ def updateDriverData() {
 	state.pollInterval = interval
 
 //	Settings for all updates
-	device.removeSetting("device_IP")
-	pauseExecution(200)
- 	device.removeSetting("pollTest")
-	pauseExecution(200)
-	device.removeSetting("refresh_Rate")
-	pauseExecution(200)
-	device.removeSetting("refreshInterval")
-	pauseExecution(200)
+	if (device_IP) {
+		device.removeSetting("device_IP")
+		pauseExecution(200)
+	}
+	if (pollTest) {
+ 		device.removeSetting("pollTest")
+		pauseExecution(200)
+	}
+	if (refresh_Rate) {
+		device.removeSetting("refresh_Rate")
+		pauseExecution(200)
+	}
+	if (refreshInterval) {
+		device.removeSetting("refreshInterval")
+		pauseExecution(200)
+	}
 	
 //	States for all version updates	
-	state.remove("response")
-	pauseExecution(200)
-	state.remove("respLength")
-	pauseExecution(200)
-	state.remove("lastConnect")
-	pauseExecution(200)
-	state.remove("pollFreq")
-	pauseExecution(200)
-	state.remove("WARNING")
-	pauseExecution(200)
-	state.remove("currentBind")
-	pauseExecution(200)
-	state.remove("currentCloud")
-	pauseExecution(200)
-	if (type() == "EM Plug Switch" || type().contains("Bulb")) {
-		state.remove("state.powerPollInterval")
+	if (state.response) {
+		state.remove("response")
 		pauseExecution(200)
 	}
-	state.remove("lanErrorsToday")
-	pauseExecution(200)
-	state.remove("lanErrorsPrev")
-	pauseExecution(200)
-	state.remove("lanErrosPrev")
-	pauseExecution(200)
-	state.remove("communicationsError")
-	pauseExecution(200)
-	state.remove("socketTimeout")
-	pauseExecution(200)
-	state.remove("lastColorTemp")
-	pauseExecution(200)
+	if (state.respLength) {
+		state.remove("respLength")
+		pauseExecution(200)
+	}
+	if (state.lastConnect) {
+		state.remove("lastConnect")
+		pauseExecution(200)
+	}
+	if (state.pollFreq) {
+		state.remove("pollFreq")
+		pauseExecution(200)
+	}
+	if (state.WARNING) {
+		state.remove("WARNING")
+		pauseExecution(200)
+	}
+	if (state.currentBind) {
+		state.remove("currentBind")
+		pauseExecution(200)
+	}
+	if (state.currentCloud) {
+		state.remove("currentCloud")
+		pauseExecution(200)
+	}
+	if (type() == "EM Plug Switch" || type().contains("Bulb")) {
+		if (state.powerPollInterval) {
+			state.remove("powerPollInterval")
+			pauseExecution(200)
+		}
+	}
+	if (state.lanErrorsToday) {
+		state.remove("lanErrorsToday")
+		pauseExecution(200)
+	}
+	if (state.lanErrorsPrev) {
+		state.remove("lanErrorsPrev")
+		pauseExecution(200)
+	}
+	if (state.lanErrosPrev) {
+		state.remove("lanErrosPrev")
+		pauseExecution(200)
+	}
+	if (state.communicationsError) {
+		state.remove("communicationsError")
+		pauseExecution(200)
+	}
+	if (state.socketTimeout) {
+		state.remove("socketTimeout")
+		pauseExecution(200)
+	}
+	if (state.lastColorTemp) {
+		state.remove("lastColorTemp")
+		pauseExecution(200)
+	}
+	
 	
 //	Data values for all updates
-	removeDataValue("appServerUrl")
-	pauseExecution(200)
-	removeDataValue("deviceFWVersion")
-	pauseExecution(200)
-	removeDataValue("lastErrorRatio")
-	pauseExecution(200)
-	removeDataValue("token")
-	if (type() == "EM Multi Plug") {
-		removeDataValue("emSysInfo")
-		pauseExecution(200)
-		removeDataValue("getPwr")
+	if (getDataValue("appServerUrl")) {
+		removeDataValue("appServerUrl")
 		pauseExecution(200)
 	}
-	removeDataValue("applicationVersion")
-	pauseExecution(200)
+	if (getDataValue("deviceFWVersion")) {
+		removeDataValue("deviceFWVersion")
+		pauseExecution(200)
+	}
+	if (getDataValue("lastErrorratio")) {
+		removeDataValue("lastErrorRatio")
+		pauseExecution(200)
+	}
+	if (getDataValue("token")) {
+		removeDataValue("token")
+		pauseExecution(200)
+	}
+	if (type() == "EM Multi Plug") {
+		if (getDataValue("emSysInfo")) {
+			removeDataValue("emSysInfo")
+			pauseExecution(200)
+		}
+		if (getDataValue("getPwr")) {
+			removeDataValue("getPwr")
+			pauseExecution(200)
+		}
+	}
+	if (getDataValue("applicationVersion")) {
+		removeDataValue("applicationVersion")
+		pauseExecution(200)
+	}
 	if (!type().contains("Multi")) {
-		removeDataValue("plugNo")
-		pauseExecution(200)
-		removeDataValue("plugId")
-		pauseExecution(200)
+		if (getDataValue("plugNo")) {
+			removeDataValue("plugNo")
+			pauseExecution(200)
+		}
+		if (getDataValue("plugId")) {
+			removeDataValue("plugId")
+			pauseExecution(200)
+		}
 	}
 
 	updateDataValue("driverVersion", driverVer())
