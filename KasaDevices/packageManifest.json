@@ -1,7 +1,7 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.3.1",
+  "version": "6.3.0",
   "minimumHEVersion": "2.2.5",
   "dateReleased": "2021-04-17",
   "releaseNotes" : "Update Communication to UDP to improve Hubitat resource usage.  Also, updated polling to be a single command for onOff and power polling.  Created large data update method to delete old data bach to version 5.3.",
