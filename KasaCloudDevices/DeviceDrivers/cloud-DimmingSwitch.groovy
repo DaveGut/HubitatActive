@@ -23,8 +23,14 @@ h.	Save Preferences:  Added method to log all system states and data at the end 
 i.	Update Process: After updating code, run Application then Update Installed Devices.
 	1.	Will execute method updated on each device, including data, setting, and state updates.
 	2.	Still recommend checking each device's preferences and execute a Save Preferences.
+6.3.1	a.	Added fixCommunications link to setCommsError.  Enables updating IP or token error when
+			an commsError is declared in the app.  Clears error if corrected.
+		b.	Dimming Switch Driver.  Fixed rookie error in code for brightness update.
+		c.	Added application code to check the driver version for 6.3.x and flag a warning on the
+			Application log page if not.  (Some HPM installations lost some of the links in past.
+			This has been fixed in HPM.)
 ===================================================================================================*/
-def driverVer() { return "6.3.0" }
+def driverVer() { return "6.3.1" }
 //def type() { return "Plug Switch" }
 def type() { return "Dimming Switch" }
 //def type() { return "EM Plug" }
@@ -137,6 +143,7 @@ def updated() {
 		//	First to run with  10 second wait to continue.
 		logWarn("updated: ${rebootDevice()}")
 	}
+
 	if (state.socketStatus) { state.remove("socketStatus") }
 	if (state.response) { state.remove("response") }
 	if (state.respLength) {state.remove("respLength") }
@@ -388,29 +395,25 @@ def handleCommsError(errorData) {
 	def errData = errorData[1]
 	def command = errorData[0]
 	def message = "handleCommsError: Count: ${count}."
-	if (count == 1) {
-		if ( errData.contains("CLOUD")) {
-			message += "\n\t\t\t Getting new token from parent.  Token = ${parent.getToken()}"
-		}
-		message += "\n\t\t\t Retransmitting command, try = ${count}"
-		runIn(1, sendCmd, [data: command])
-	} else if (count <= 3) {
+	if (count <= 3) {
 		message += "\n\t\t\t Retransmitting command, try = ${count}"
 		runIn(2, sendCmd, [data: command])
 	} else if (count == 4) {
-		setCommsError(errorData)
+		setCommsError(errData)
 		message += "\n\t\t\t Setting Comms Error."
 	}
 	logDebug(message)
+		
 }
 
 def setCommsError(errorData) {
 	def message = "setCommsError: Four consecutive errors.  Setting commsError to true."
-	message += "\n\t\tSetting poll intervals to 30 minutes until corrected."
 	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>."
 	sendEvent(name: "commsError", value: true)
 	state.commsErrorText = "<b>${errorData}</b>"
+	message += "\n\t\t${parent.fixConnection(device.currentValue("connection"))}"
 	logWarn message
+	runIn(2, refresh)
 }
 
 def resetCommsError() {
@@ -885,9 +888,9 @@ def poll() {
 
 def setSysInfo(response) {
 	logDebug("setSysInfo: ${response}")
-	def relayState = response.system.get_sysinfo.relay_state
+	def status = response.system.get_sysinfo
 	def onOff = "on"
-	if (relayState == 0) { onOff = "off" }
+	if (status.relay_state == 0) { onOff = "off" }
 	if (onOff != device.currentValue("switch")) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 		logInfo("setSysInfo: switch: ${onOff}")
