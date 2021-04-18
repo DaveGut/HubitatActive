@@ -1,4 +1,4 @@
-/*	Kasa Device Driver Series
+/*	Kasa Device Driver Series - CLOUD FILE
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== Major hanges from 6.0 =====
