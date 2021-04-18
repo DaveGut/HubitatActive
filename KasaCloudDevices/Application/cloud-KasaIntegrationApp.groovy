@@ -1,4 +1,4 @@
-/*	Kasa Local Integration
+/*	Kasa Local Integration - CLOUD FILE
 Copyright Dave Gutheinz
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== Changes from 6.1 =====
