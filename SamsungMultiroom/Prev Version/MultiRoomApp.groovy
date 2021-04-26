@@ -14,13 +14,19 @@ and limitations under the  License.
 		THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
 		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
 ===== History =============================================================================
-04.30.21	3.3.6	Change discovery periodic to daily vice hourly.  Updates IPs at this
-					time or when app is run.
-
+2019
+06.15	3.0.01.  Updates for the following:
+		a.	Updated driver data structure
+		b.	Group data gathering centered in app vice driver.
+		c.	Add importUrl allowing future updates via import button in app editor.
+2020
+04.20	3.1.0	Update for Hubitat Package Manager
+06.15	3.2.0	Minor changes and synchronization with adding URL Presets to driver.
+09.12	3.3.4	Synch with driver change.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 
 import org.json.JSONObject
-def appVersion() { return "3.3.6" }
+def appVersion() { return "3.3.4" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
