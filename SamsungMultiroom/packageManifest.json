@@ -1,9 +1,9 @@
 {
   "packageName": "Samsung MultiRoom Speakers",
   "author": "Dave Gutheinz",
-  "version": "3.3.4",
+  "version": "3.3.6",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-09-15",
+  "dateReleased": "2021-04-30",
   "releaseNotes": "Continue fixing queue hang issues.",
   "apps": [
     {
