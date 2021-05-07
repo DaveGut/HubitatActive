@@ -16,11 +16,12 @@ and limitations under the  License.
 	GitHub user Toxblh for exlempary code for numerous commands
 	Hubitat users who supported validation of 2016 - 2020 models.
 ===== 2021 Version Notes =============================================================
-04.06	2.0 	First non-beta version.  Changes from final beta version:
+05.06	2.0 	First non-beta version.  Changes from final beta version:
 				a.	Optimized onOff Polling to minimize reported Hub resource utilization.
 				b.	Changed artMode to a toggle on/off interface.
 				c.	Added additional button implementations.
 				d.	Other code cleanup functions.
+05.07	2.0.1	Quick Fix for incorrect call for artModeStatus in method artMode.
 ===========================================================================================*/
 def driverVer() { return "2.0.0" }
 import groovy.json.JsonOutput
@@ -626,7 +627,7 @@ def artMode() {
 		return
 	}
 	def onOff = "on"
-	if (getDataValue("artModeStatus" == "on")) {
+	if (device.currentValue("artModeStatus") == "on") {
 		onOff = "off"
 	}
 	logDebug("artMode: setting artMode to ${onOff}.")
