@@ -36,6 +36,7 @@ e.  On/Off Polling, Power Polling, and Refersh
     2.  Power reporting:  Reduce event handling in overall system.
 
         a.  If power is below 5 W, will update if current power != new power +/- .5 W.
+	
 	b.  Otherwise, will update if current power != new power +/- 5 W.
 
 f.  Data Cleanup.  Added method to clean up data, settings, and states from versions back to 5.3.3.
@@ -49,5 +50,18 @@ i.  Update Process: After updating code, run Application then Update Installed D
 
     1.  Will execute method updated on each device, including data, setting, and state updates.
     2.  Still recommend checking each device's preferences and execute a Save Preferences.
+
+### 6.3.01
+
+a.  Added fixCommunications link to setCommsError.  Enables updating IP or token error when  
+an commsError is declared in the app.  Clears error if corrected.
+
+b.  Dimming Switch Driver.  Fixed rookie error in code for brightness update.
+
+c.  Added application code to check the driver version for 6.3.x and flag a warning on the 
+Application log page if not.  (Some HPM installations lost some of the links in past. 
+This has been fixed in HPM.)
+
+
 
 
