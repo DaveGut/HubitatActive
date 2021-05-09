@@ -1,36 +1,19 @@
 /*	Kasa Device Driver Series
-Copyright Dave Gutheinz
+
+		Copyright Dave Gutheinz
+
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
-===== Major hanges from 6.0 =====
-a.	Attributes: connection(LAN/CLOUD) and commsError(true/false),  Added and deleted associated states.
-b.	Communications:
-	1.	Added LAN UDP Communications with associated changes to method parse and new state.lastCommand
-	2.	Removed LAN Raw Socket Communication with associated states.
-c.	Error Handling.  Change to repeat first command only, do not change poll/power poll intervals.
-d.	Multiplugs:
-	1.	Coordinate attribute connection, state.pollInterval, and settings bind / useCloud amoung devices.
-	2.	On/Off polling set and run from last device to complete a save preferences.  Data coordinated.
-e.	On/Off Polling, Power Polling, and Refersh
-	1.	Merged three function control into a single command, setPollInterval.  I use a command so
-		that users can access it through rule machine.
-	2.	Power reporting:  Reduce event handling in overall system.
-		a.	If power is below 5 W, will update if current power != new power +/- .5 W.
-		b.	Otherwise, will update if current power != new power +/- 5 W.
-f.	Data Cleanup.  Added method to clean up data, settings, and states from versions back to 5.3.3.
-g.	Bulbs.  Converted capability Color Temperature to new definition.
-h.	Save Preferences:  Added method to log all system states and data at the end the command.
-	This provides trouble shooting data for issue resolution with the developer.
-i.	Update Process: After updating code, run Application then Update Installed Devices.
-	1.	Will execute method updated on each device, including data, setting, and state updates.
-	2.	Still recommend checking each device's preferences and execute a Save Preferences.
-6.3.0.1	a.	Added fixCommunications link to setCommsError.  Enables updating IP or token error when
-			an commsError is declared in the app.  Clears error if corrected.
-		b.	Dimming Switch Driver.  Fixed rookie error in code for brightness update.
-		c.	Added application code to check the driver version for 6.3.x and flag a warning on the
-			Application log page if not.  (Some HPM installations lost some of the links in past.
-			This has been fixed in HPM.)
+
+Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
+
+===== This version (6.3.1) =====
+	Fixed issue with Hubitat Dashboard "color bulb" tile where setting color temperature to
+	zero when a color is set causes the Color Temp slider to disappear.
+		a.	Fixed method setColorTemperature to properly range the set color temperature.
+		b.	Fixed method updatBulbData to not reset attribute Color Temperature if the value
+			from the device is 0.
 ===================================================================================================*/
-def driverVer() { return "6.3.0.1" }
+def driverVer() { return "6.3.1" }
 //def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 def type() { return "EM Plug" }

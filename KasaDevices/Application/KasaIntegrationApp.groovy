@@ -1,16 +1,15 @@
 /*	Kasa Local Integration
-Copyright Dave Gutheinz
+
+		Copyright Dave Gutheinz
+
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
-===== Changes from 6.1 =====
-1.	Added coordinate method to support multi-plug outlet data/state coordination.
-2.	Cleaned up page displayed documentation.
-6.3.0.1	a.	Added fixCommunications link to setCommsError.  Enables updating IP or token error when
-			an commsError is declared in the app.  Clears error if corrected.
-		b.	Added application code to check the driver version for 6.3.x and flag a warning on the
-			Application log page if not.  (Some HPM installations lost some of the links in past.
-			This has been fixed in HPM.)
+
+Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
+
+===== This version (6.3.1) =====
+No changes. Version sync with Drivers.
 ===================================================================================================*/
-def appVersion() { return "6.3.0.1" }
+def appVersion() { return "6.3.1" }
 import groovy.json.JsonSlurper
 
 definition(
