@@ -62,6 +62,13 @@ c.  Added application code to check the driver version for 6.3.x and flag a warn
 Application log page if not.  (Some HPM installations lost some of the links in past. 
 This has been fixed in HPM.)
 
+### 6.3.1
+
+Fixed issue with Hubitat Dashboard "color bulb" tile where setting color temperature to zero when a color is set causes the Color Temp slider to disappear.
+
+a.  Fixed method setColorTemperature to properly range the set color temperature.
+
+b.  Fixed method updatBulbData to not reset attribute Color Temperature if the value from the device is 0.
 
 
 
