@@ -1,7 +1,8 @@
 ## Kasa Devices Version 6.3 Application Change Log
+
+### 6.3
 Added coordinate method to support multi-plug outlet data/state coordination.
 
-Cleaned up page displayed documentation.
 ### 6.3.0.1
 a.  Added fixCommunications link to setCommsError.
     1.  Enables updating IP or token error when an commsError is declared in the app.
