@@ -1043,6 +1043,7 @@ def updateBulbData(status) {
 			if (ct == 0) { ct = device.currentValue("colorTemperature") }
 			deviceStatus << ["colorTemp" : ct]
 			if (device.currentValue("colorTemperature") != ct) {
+				sendEvent(name: "colorTemperature", value: ct)
 				isChange = true
 			}
 			if (type() == "CT Bulb") { 
