@@ -8,11 +8,9 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 
 ===== This version (6.3.2) =====
 	a.  Drivers (plugs and switches):
-		1.	Add LED On/Off toggle. Toggles on or off with attribute LED (on/off).
+		1.	Add LED On/Off switches. Toggles on or off with attribute LED (on/off).
 		2.	Remove LED On/Off Preference.
-	b.	Application: Add new Sync Names switch on first page.
-		1.	Options: Hubitat Master and Kasa App Master
-		2.	Will update automatically by running the Update Device Data.
+		3.	Change attribute "commsError" to string with values "true" and "false" as string values to be compatible with Rule Machine!
 ===================================================================================================*/
 def driverVer() { return "DEV-6.3.2" }
 //def type() { return "Plug Switch" }
@@ -54,10 +52,11 @@ metadata {
 			attribute "lastMonthTotal", "number"
 			attribute "lastMonthAvg", "number"
 		}
-		command "ledOnOff"
+		command "ledOn"
+		command "ledOff"
 		attribute "led", "string"
 		attribute "connection", "string"
-		attribute "commsError", "bool"
+		attribute "commsError", "string"
 	}
 
 	preferences {
@@ -141,6 +140,8 @@ def updated() {
 	logDebug("updated: Debug logging is ${debug}")
 	logDebug("updated: Info logging is ${descriptionText}")
 	logDebug("updated: ${bindUnbind()}")
+	sendEvent(name: "commsError", value: "false")
+	
 	if(type().contains("Bulb")) {
 		logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
 		logDebug("updated: High Resolution Color is ${highRes}")
@@ -393,7 +394,7 @@ def handleCommsError(errorData) {
 def setCommsError(errorData) {
 	def message = "setCommsError: Four consecutive errors.  Setting commsError to true."
 	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>."
-	sendEvent(name: "commsError", value: true)
+	sendEvent(name: "commsError", value: "true")
 	state.commsErrorText = "<b>${errorData}</b>"
 	message += "\n\t\t${parent.fixConnection(device.currentValue("connection"))}"
 	logWarn message
@@ -402,7 +403,7 @@ def setCommsError(errorData) {
 
 def resetCommsError() {
 	if (state.errorCount >= 4) {
-		sendEvent(name: "commsError", value: false)
+		sendEvent(name: "commsError", value: "false")
 		state.remove("commsErrorText")
 	}
 	state.errorCount = 0
@@ -595,6 +596,17 @@ def setCommsData(commsType) {
 	pauseExecution(1000)
 }
 
+def ledOn() {
+	logDebug("ledOn: Setting LED to on")
+	ledStatus = "0"
+	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+}
+
+def ledOff() {
+	logDebug("ledOn: Setting LED to off")
+	ledStatus = "1"
+	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+}
 def ledOnOff() {
 	def ledStatus = "0"
 	def onOff = "on"
@@ -955,20 +967,20 @@ def setSysInfo(response) {
 def distResp(response) {
 	if (response.system) {
 		if (response.system.get_sysinfo) {
-log.trace response
 			setSysInfo(response)
 		} else if (response.system.set_relay_state) {
 			runIn(1, refresh)
 		} else if (response.system.reboot) {
 			logWarn("distResp: Rebooting device.")
 		} else if (response.system.set_led_off) {
-			def onOff = "on"
-			if (device.currentValue("led") == "on") { onOff = "off" }
-			sendEvent(name: "led", value: onOff)
-			logDebug("distResp: Led On/Off = ${onOff}")
-logTrace("distResp: Led On/Off = ${response.system.set_led_off}")
-		} else {
-			logWarn("distResp: Unhandled response = ${response}")
+			if (response.system.set_led_off.err_code == 0) {
+				def onOff = "on"
+				if (device.currentValue("led") == "on") { onOff = "off" }
+				sendEvent(name: "led", value: onOff)
+				logDebug("distResp: Led On/Off = ${onOff}")
+			} else {
+				logWarn("distResp: Setting LED Faild")
+			}
 		}
 	} else if (emFunction && response.emeter) {
 		def month = new Date().format("M").toInteger()
