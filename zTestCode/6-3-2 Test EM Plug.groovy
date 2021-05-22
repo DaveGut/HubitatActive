@@ -4,13 +4,11 @@
 
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 
-Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
-
-===== This version (6.3.2) =====
+===== Version 6.3.2) =====
 	a.  Drivers (plugs and switches):
-		1.	Add LED On/Off switches. Toggles on or off with attribute LED (on/off).
+		1.	Add LED On/Off commands. Add attribute led to reflect state
 		2.	Remove LED On/Off Preference.
-		3.	Change attribute "commsError" to string with values "true" and "false" as string values to be compatible with Rule Machine!
+	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".  Allows use with Rule Machine.
 ===================================================================================================*/
 def driverVer() { return "DEV-6.3.2" }
 //def type() { return "Plug Switch" }
@@ -26,7 +24,7 @@ def file() {
 import groovy.json.JsonSlurper
 
 metadata {
-	definition (name: "Kasa ${type()}",
+	definition (name: "DEV Kasa ${type()}",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/${file()}.groovy"
@@ -79,10 +77,6 @@ metadata {
 				   title: "Use Kasa Cloud for device control",
 				   defaultValue: false)
 		}
-		input ("ledStatus", "enum",
-			   options: ["0": "on", "1": "off"],
-			   title: "Led On/Off",
-			   defaultValue: "0")
 		input ("rebootDev", "bool",
 			   title: "Reboot device <b>[Caution]</b>",
 			   defaultValue: false)
@@ -598,24 +592,16 @@ def setCommsData(commsType) {
 
 def ledOn() {
 	logDebug("ledOn: Setting LED to on")
-	ledStatus = "0"
-	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+//	ledStatus = "0"
+//	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+	sendCmd("""{"system":{"set_led_off":{"off":0}}}""")
 }
 
 def ledOff() {
 	logDebug("ledOn: Setting LED to off")
-	ledStatus = "1"
-	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
-}
-def ledOnOff() {
-	def ledStatus = "0"
-	def onOff = "on"
-	if (device.currentValue("led") == "on") {
-		ledStatus = "1"
-		onOff = "off"
-	}
-	logDebug("ledOnOff: Setting LED to ${onOff}")
-	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+//	ledStatus = "1"
+//	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
+	sendCmd("""{"system":{"set_led_off":{"off":1}}}""")
 }
 
 def getSystemData() {
@@ -656,7 +642,6 @@ def getSystemData() {
 
 //	===== Utility Methods =====
 def updateDriverData() {
-//	Updates/adds/removes device data and states from devices using earlier version.
 	def drvVer = getDataValue("driverVersion")
 	def doubleDriver = driverVer().substring(0,3).toDouble()
 	if (drvVer == driverVer()) {
