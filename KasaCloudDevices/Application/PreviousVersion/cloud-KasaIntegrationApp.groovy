@@ -1,11 +1,15 @@
 /*	Kasa Local Integration
-Copyright Dave Gutheinz
+
+		Copyright Dave Gutheinz
+
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
-===== Changes from 6.1 =====
-1.	Added coordinate method to support multi-plug outlet data/state coordination.
-2.	Cleaned up page displayed documentation.
-=======================================================================================================*/
-def appVersion() { return "6.2.3" }
+
+Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
+
+===== This version (6.3.1) =====
+No changes. Version sync with Drivers.
+===================================================================================================*/
+def appVersion() { return "6.3.1" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -28,7 +32,9 @@ preferences {
 	page(name: "getToken")
 }
 def installed() { initialize() }
+
 def updated() { initialize() }
+
 def initialize() {
 	logInfo("initialize")
 	unschedule()
@@ -36,6 +42,7 @@ def initialize() {
 		schedule("0 30 2 ? * WED", getToken)
 	}
 }
+
 def uninstalled() {
     getAllChildDevices().each { 
         deleteChildDevice(it.deviceNetworkId)
@@ -144,6 +151,7 @@ def kasaAuthenticationPage() {
 		}
 	}
 }
+
 def getToken() {
 	logInfo("getToken ${userName}")
 	def message = ""
@@ -175,6 +183,7 @@ def getToken() {
 		}
 	}
 	startPage()
+	return resp.data.result.token
 }
 
 //	Add Devices
@@ -215,6 +224,7 @@ def addDevicesPage() {
 		}
 	}
 }
+
 def addDevices() {
 	logDebug("addDevices: ${selectedAddDevices}")
 	def hub = location.hubs[0]
@@ -280,6 +290,7 @@ def removeDevicesPage() {
 		}
 	}
 }
+
 def removeDevices() {
 	logDebug("removeDevices: ${selectedRemoveDevices}")
 	selectedRemoveDevices.each { dni ->
@@ -310,6 +321,7 @@ def findDevices() {
 	}
 	runIn(3,updateChildren)
 }
+
 def cloudGetDevices() {
 	logInfo("cloudGetDevices ${kasaToken}")
 	if (kasaToken == null) {
@@ -357,6 +369,7 @@ def cloudGetDevices() {
 	}
 	return message
 }
+
 def parseLanData(response) {
 	def resp = parseLanMessage(response.description)
 	if (resp.type != "LAN_TYPE_UDPCLIENT") { return }
@@ -431,6 +444,7 @@ def parseDeviceData(cmdResp, ip = null) {
 		updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId)
 	}
 }
+
 def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId) {
 	logDebug("updateDevices: dni = ${dni}")
 	def devices = state.devices
@@ -454,47 +468,50 @@ def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId
 	logInfo("updateDevices: ${type} ${alias} added to devices array.")
 	logDebug("updateDevices: ${alias} added to array. Data = ${device}")
 }
+
 def updateChildren() {
 	logDebug("updateChildDeviceData")
 	def devices = state.devices
 	devices.each {
 		def child = getChildDevice(it.key)
 		if (child) {
+			child.debugOff()
 			child.updateDataValue("type", it.value.type)
 			child.updateDataValue("feature", it.value.feature)
 			child.updateDataValue("deviceId", it.value.deviceId)
 			child.updateDataValue("deviceIP", it.value.ip)
+			def childVer = child.driverVer().substring(0,3).toString()
+			def appVer = appVersion().substring(0,3).toString()
+			if (childVer != appVer) {
+				logWarn("<b>updateDevices:  Child Driver is not up to date. Device = ${it.value.alias}!</b>")
+			}
 			child.updated()
 		}
 	}
 }
 
-//	Local LAN Update IP Data on Error
-def updateIpData() {
-	logInfo("requestDataUpdate: Received device IP request from a Kasa device.")
-	runIn(5, pollForIps)
-	return "Parent attempting to update IP Data for devices."
-}
-def pollForIps() {
-	if (pollEnabled == false) {
-		logWarn("pollForIps: a poll was run within the 15 min.  Poll not run.  Try running manually through the application.")
-		return
+//	Update LAN IP or CLOUD Token
+def fixConnection(type) {
+	logInfo("fixData: Update ${type} data")
+	def message = ""
+	if (pollEnable == false) {
+		message += "Unable tor update data.  Updated in last 15 minutes."
 	} else {
-		logInfo("pollForIps: Diabling poll capability for one hour")
-		app?.updateSetting("pollEnabled", [type:"bool", value: false])
 		runIn(900, pollEnable)
+	}
+	if (type == "CLOUD") {
+		message += "Getting new token.  Value = ${getToken()}."
+	} else if (type == "LAN") {
 		for(int i = 2; i < 255; i++) {
 			def deviceIP = "${lanSegment}.${i.toString()}"
 			sendLanCmd(deviceIP, """{"system":{"get_sysinfo":{}}}""", "updateDeviceIps")
 			pauseExecution(25)
 		}
+		message += "Polled all IPs on segment ${lanSegment}."
 	}
-	return pollEnabled
+	return message
 }
-def pollEnable() {
-	logInfo("pollEnable: polling capability enabled.")
-	app?.updateSetting("pollEnabled", [type:"bool", value: true])
-}
+
 def updateDeviceIps(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
@@ -510,6 +527,11 @@ def updateDeviceIps(response) {
 	}		
 }
 
+def pollEnable() {
+	logInfo("pollEnable: polling capability enabled.")
+	app?.updateSetting("pollEnabled", [type:"bool", value: true])
+}
+
 //	===== Device Communications =====
 private sendLanCmd(ip, command, action) {
 	def myHubAction = new hubitat.device.HubAction(
@@ -523,6 +545,7 @@ private sendLanCmd(ip, command, action) {
 		 callback: action])
 	sendHubCommand(myHubAction)
 }
+
 def sendKasaCmd(deviceId, command, appServerUrl = kasaCloudUrl) {
 	def cmdResponse = ""
 	if (!useKasaCloud) {
@@ -557,18 +580,17 @@ def sendKasaCmd(deviceId, command, appServerUrl = kasaCloudUrl) {
 }
 
 //	===== Coordinate between multiPlug =====
-def coordPoll(deviceId, data) {
+def coordPoll(deviceId, plugNo, data) {
 //	logDebug("coordPoll: ${deviceId} ${data}")
 	def devices = state.devices
 	devices.each {
-		if (it.value.deviceId == deviceId) {
 			def child = getChildDevice(it.value.dni)
-			if (child) {
-				child.coordPoll(data)
-			}
+		if (child && it.value.plugNo != plugNo) {
+			child.coordPoll(data)
 		}
 	}
 }
+
 def coordinate(deviceId, plugNo, type, data) {
 	logDebug("coordinate: ${deviceId} / ${plugNo} / ${type} / ${data}")
 	def devices = state.devices
@@ -594,6 +616,7 @@ private outputXOR(command) {
 	}
    	return encrCmd
 }
+
 private inputXOR(encrResponse) {
 	String[] strBytes = encrResponse.split("(?<=\\G.{2})")
 	def cmdResponse = ""
@@ -608,17 +631,25 @@ private inputXOR(encrResponse) {
 	}
 	return cmdResponse
 }
+
 private String convertHexToIP(hex) {
 	[convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
 }
+
 private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
+
 def debugOff() { app.updateSetting("debugLog", false) }
+
 def logTrace(msg){ log.trace "[KasaInt/${appVersion()}] ${device.label} ${msg}" }
+
 def logDebug(msg){
 	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}]: ${msg}" }
 }
+
 def logInfo(msg){ log.info "[KasaInt/${appVersion()}]: ${msg}" }
+
 def logWarn(msg) { log.warn "[KasaInt/${appVersion()}]: ${msg}" }
+
 //	Page Instructions
 def stPgIns() {
 	def startPgIns = "Use Alternate Lan Segment: Use if you use a different LAN segment for your devices that your Hub.  Usually false."
