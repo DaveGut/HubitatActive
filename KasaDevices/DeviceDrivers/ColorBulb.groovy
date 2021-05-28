@@ -6,14 +6,14 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 
 Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
 
-===== This version (6.3.1) =====
-	Fixed issue with Hubitat Dashboard "color bulb" tile where setting color temperature to
-	zero when a color is set causes the Color Temp slider to disappear.
-		a.	Fixed method setColorTemperature to properly range the set color temperature.
-		b.	Fixed method updatBulbData to not reset attribute Color Temperature if the value
-			from the device is 0.
+===== Version 6.3.2) =====
+	a.  Drivers (plugs and switches):
+		1.	Add LED On/Off commands. Add attribute led to reflect state
+		2.	Remove LED On/Off Preference.
+	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".
+		Allows use with Rule Machine.
 ===================================================================================================*/
-def driverVer() { return "6.3.1" }
+def driverVer() { return "6.3.2" }
 def type() { return "Color Bulb" }
 //def type() { return "CT Bulb" }
 //def type() { return "Mono Bulb" }
@@ -64,7 +64,7 @@ metadata {
 		}
 		//	Communications
 		attribute "connection", "string"
-		attribute "commsError", "bool"
+		attribute "commsError", "string"
 	}
 	preferences {
 		if (engMon()) {
@@ -151,11 +151,11 @@ def updated() {
 	logDebug("updated: Debug logging is ${debug}")
 	logDebug("updated: Info logging is ${descriptionText}")
 	logDebug("updated: ${bindUnbind()}")
+	sendEvent(name: "commsError", value: "false")
+
 	if(type().contains("Bulb")) {
 		logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
 		logDebug("updated: High Resolution Color is ${highRes}")
-	} else {
-		logDebug("updated: ${ledOnOff()}")
 	}
 		
 	//	Update scheduled methods
@@ -405,7 +405,7 @@ def handleCommsError(errorData) {
 def setCommsError(errorData) {
 	def message = "setCommsError: Four consecutive errors.  Setting commsError to true."
 	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>."
-	sendEvent(name: "commsError", value: true)
+	sendEvent(name: "commsError", value: "true")
 	state.commsErrorText = "<b>${errorData}</b>"
 	message += "\n\t\t${parent.fixConnection(device.currentValue("connection"))}"
 	logWarn message
@@ -414,7 +414,7 @@ def setCommsError(errorData) {
 
 def resetCommsError() {
 	if (state.errorCount >= 4) {
-		sendEvent(name: "commsError", value: false)
+		sendEvent(name: "commsError", value: "false")
 		state.remove("commsErrorText")
 	}
 	state.errorCount = 0
@@ -1043,7 +1043,6 @@ def updateBulbData(status) {
 			if (ct == 0) { ct = device.currentValue("colorTemperature") }
 			deviceStatus << ["colorTemp" : ct]
 			if (device.currentValue("colorTemperature") != ct) {
-				sendEvent(name: "colorTemperature", value: ct)
 				isChange = true
 			}
 			if (type() == "CT Bulb") { 
