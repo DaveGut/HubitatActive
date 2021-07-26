@@ -28,7 +28,7 @@ metadata {
 	definition (name: "bleBox MSChild temperature",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/tempSensor.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/MSChildTemperature.groovy"
 			   ) {
 		capability "Temperature Measurement"
 		attribute "trend", "string"
