@@ -13,11 +13,16 @@ DISCLAIMER: The author of this integration is not associated with blebox.  This 
 open API documentation for development and is intended for integration into the Hubitat Environment.
 
 ===== Hiatory =====
-09.20.19	1.2.01.	Initial Parent-Child release.
-04.20.20	1.4.0	Hubitat Package Manager Update
+7.30.21	Various edits to update to latest bleBox API Levels.
+	a.	Create check for API Level of device.
+		1)	Add STATE to recommend updating to user if out-of-sync.
+		2)	Code to support all apiLevel up to the level defined in apiLevel().
+	b.	Removed manual installation.
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.4.0" }
+def driverVer() { return "D2.0.0" }
+def apiLevel() { return 20200229 }	//	bleBox latest API Level, 6.16.2021
+
 metadata {
 	definition (name: "bleBox wLightBox Mono",
 				namespace: "davegut",
@@ -31,8 +36,12 @@ metadata {
 		capability "Refresh"
 	}
 	preferences {
-		input ("debug", "bool", title: "Enable debug logging", defaultValue: false)
-		input ("descriptionText", "bool", title: "Enable description text logging", defaultValue: true)
+		input ("debug", "bool", 
+			   title: "Enable debug logging", 
+			   defaultValue: true)
+		input ("descriptionText", "bool", 
+			   title: "Enable description text logging", 
+			   defaultValue: true)
 	}
 }
 

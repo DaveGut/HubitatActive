@@ -1,8 +1,6 @@
 /*
-===== Blebox Hubitat Integration Driver
-
-	Copyright 2019, Dave Gutheinz
-
+===== Blebox Hubitat Integration Driver 2021 Updates
+	Copyright 2021, Dave Gutheinz
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file except in compliance with the
 License. You may obtain a copy of the License at: http://www.apache.org/licenses/LICENSE-2.0.
 Unless required by applicable law or agreed to in writing,software distributed under the License is distributed on an 
@@ -13,14 +11,17 @@ DISCLAIMER: The author of this integration is not associated with blebox.  This 
 open API documentation for development and is intended for integration into the Hubitat Environment.
 
 ===== Hiatory =====
-8.14.19	Various edits.
-08.15.19	1.1.01. Integrated design notes at bottom and updated implementation per notes.
-09.20.19	1.2.01.	Added link to Application that will check/update IPs if the communications fail.
-10.01.19	1.3.01. Updated error handling.
-04.20.20	1.4.0	Hubitat Package Manager Update
+7.30.21	Various edits to update to latest bleBox API Levels.
+	a.	Create check for API Level of device.
+		1)	Add STATE to recommend updating to user if out-of-sync.
+		2)	Code to send correct commands and properly parse.
+	b.	Removed manual installation.
+	c.	Temp Sensor:  Added capability to insert Temp Offset in degrees C if
+		apiLevel = 20210118
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.4.0" }
+def driverVer() { return "2.0.0" }
+def apiLevel() { return 20210118 }	//	bleBox latest API Level, 6.16.2021
 
 metadata {
 	definition (name: "bleBox tempSensor",
@@ -35,20 +36,35 @@ metadata {
 		attribute "commsError", "bool"
 	}
 	preferences {
-		if (!getDataValue("applicationVersion")) {
-			input ("device_IP", "text", title: "Device IP (Current = ${getDataValue("deviceIP")})")
-		}
-		input ("tempScale", "enum", title: "Temperature Scale", options: ["C", "F"], default: "F")
-		input ("refreshInterval", "enum", title: "Device Refresh Interval (minutes)", 
-			   options: ["1", "5", "15", "30"], defaultValue: "30")
-		input ("nameSync", "enum", title: "Synchronize Names", defaultValue: "none",
+		input ("tOffset", "integer",
+			   title: "temperature offset in 10 times degrees C [-120 -> +120]")
+		input ("tempScale", "enum", 
+			   title: "Temperature Scale", 
+			   options: ["C", "F"], 
+			   defaultValue: "C")
+		input ("statusLed", "bool", 
+			   title: "Enable the Status LED", 
+			   defaultValue: true)
+		input ("nameSync", "enum", 
+			   title: "Synchronize Names", 
+			   defaultValue: "none",
 			   options: ["none": "Don't synchronize",
 						 "device" : "bleBox device name master", 
 						 "hub" : "Hubitat label master"])
-		input ("debug", "bool", title: "Enable debug logging", defaultValue: false)
-		input ("descriptionText", "bool", title: "Enable description text logging", defaultValue: true)
+		input ("refreshInterval", "enum", 
+			   title: "Device Refresh Interval (minutes)", 
+			   options: ["1", "5", "15", "30"], 
+			   defaultValue: "30")
+		input ("debug", "bool", 
+			   title: "Enable debug logging", 
+			   defaultValue: true)
+		input ("descriptionText", "bool", 
+			   title: "Enable description text logging", 
+			   defaultValue: true)
 	}
 }
+
+def deviceApi() { return getDataValue("apiLevel").toInteger() }
 
 def installed() {
 	logInfo("Installing...")
@@ -58,48 +74,120 @@ def installed() {
 def updated() {
 	logInfo("Updating...")
 	unschedule()
-
-	if (!getDataValue("applicationVersion")) {
-		if (!device_IP) {
-			logWarn("updated:  deviceIP  is not set.")
-			return
-		}
-		updateDataValue("deviceIP", device_IP)
-		logInfo("Device IP set to ${getDataValue("deviceIP")}")
-		//	Update device name on manual installation to standard name
-		sendGetCmd("/api/device/state", "setDeviceName")
-		pauseExecution(1000)
+	state.errorCount = 0
+	//	Capture settings statusLed and tempOffset when version has changed.
+	if (driverVer() != getDataValue("driverVersion")) {
+		sendGetCmd("/api/settings/state", "updateDeviceSettings")
+		pauseExecution(4000)
+		updateDataValue("driverVersion", driverVer())
 	}
+	
+	//	Check apiLevel and provide state warning when old.
+	if (apiLevel() > deviceApi()) {
+		state.apiNote = "<b>Device api software is not the latest available. Consider updating."
+	} else {
+		state.remove("apiNote")
+	}
+	updateDataValue("driverVersion", driverVer())
 
+	//	update data based on preferences
 	switch(refreshInterval) {
 		case "1" : runEvery1Minute(refresh); break
 		case "5" : runEvery5Minutes(refresh); break
 		case "15" : runEvery15Minutes(refresh); break
 		default: runEvery30Minutes(refresh)
 	}
-	state.errorCount = 0
-	updateDataValue("driverVersion", driverVer())
-
+	logInfo("Refresh interval set for every ${refreshInterval} minute(s).")
+	if (debug) { runIn(1800, debugOff) }
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
-	logInfo("Refresh interval set for every ${refreshInterval} minute(s).")
 
-	if (nameSync == "device" || nameSync == "hub") { syncName() }
-	refresh()
+	setDevice()
+	runIn(2, refresh)
 }
 
-def setDeviceName(response) {
+def setDevice() {
+	logDebug("setDevice: statusLed: ${statusLed}, nameSync = ${nameSync}")
+	def command = "/api/settings/set"
+	def cmdText = """{"settings":{"""
+	//	tempOffset
+	if (tOffset != 0 && deviceApi() < 20180118) {
+		logWarn("setDevice: tempOffset available only to apiLevel above 20180118.")
+	} else {
+		cmdText = cmdText + """"tempSensor":{"userTempOffset":{"0":${tOffset}}}"""
+	}
+	//	Led
+	def ledEnabled = 1
+	if (statusLed == false) { ledEnabled = 0 }
+	cmdText = cmdText + ""","statusLed":{"enabled":${ledEnabled}}"""
+	
+	//	Name
+	if (nameSync == "hub") {
+		cmdText = cmdText + ""","deviceName":"${device.label}"}}"""
+	}
+	cmdText = cmdText + """}}"""
+	sendPostCmd(command, cmdText, "updateDeviceSettings")
+}
+
+def updateDeviceSettings(response) {
 	def cmdResponse = parseInput(response)
-	logDebug("setDeviceData: ${cmdResponse}")
-	device.setName(cmdResponse.device.type)
-	logInfo("setDeviceData: Device Name updated to ${cmdResponse.device.type}")
-}
+	logDebug("updateDeviceSettings: ${cmdResponse}")
+	//	When setting ledStatus, immediate return is null.
+	if (cmdResponse == null) {
+		if (state.nullResp == true) { return }
+		state.nullResp = true
+		pauseExecution(1000)
+		sendGetCmd("/api/settings/state", "updateDeviceSettings")
+		return
+	}
+	state.nullResp = false
+	
+	//	Capture Data
+	def tempOffset = 0
+	def ledEnabled
+	def deviceName
+	if (cmdResponse.settings) {
+		if (deviceApi() >= 20210118) {
+			tempOffset = cmdResponse.settings.tempSensor.userTempOffset."0"
+		}
+		ledEnabled = cmdResponse.settings.statusLed.enabled
+		deviceName = cmdResponse.settings.deviceName
+	} else {
+		logWarn("updateSettings: Setting data not read properly. Check apiLevel.")
+		return
+	}
+	def settingsUpdate = [:]
 
+	//	Temp Offset
+	device.updateSetting("tOffset",[type:"number", value:tempOffset])
+	settingsUpdate << ["tempOffset": tempOffset]
+
+	//	Led Status
+	def statusLed = true
+	if (ledEnabled == 0) {
+		statusLed = false
+	}
+	device.updateSetting("statusLed",[type:"bool", value: statusLed])
+	settingsUpdate << ["statusLed": statusLed]
+
+	//	Name - only update if syncing name
+	if (nameSync != "none") {
+		device.setLabel(deviceName)
+		settingsUpdate << ["HubitatName": deviceName]
+		device.updateSetting("nameSync",[type:"enum", value:"none"])
+	}
+
+	logInfo("updateDeviceSettings: ${settingsUpdate}")
+}
 
 //	===== Commands and Parse Returns =====
 def refresh() {
 	logDebug("refresh.")
-	sendGetCmd("/api/tempsensor/state", "commandParse")
+	if (deviceApi() >= 20200229) {
+		sendGetCmd("/state", "commandParse")
+	} else {
+		sendGetCmd("/api/tempsensor/state", "commandParse")
+	}
 }
 
 def commandParse(response) {
@@ -109,67 +197,51 @@ def commandParse(response) {
 	def respData = cmdResponse.tempSensor.sensors[0]
 	def temperature = Math.round(respData.value.toInteger() / 10) / 10
 	if (tempScale == "F") {
-		temperature = Math.round((3200 + 9*respData.value.toInteger() / 5) / 100)
+		temperature = Math.round((3200 + 9*respData.value.toInteger() / 5) / 10) / 10
 	}
 	def trend
 	switch(respData.trend) {
-		case "1":
-			trend = "even"; break
-		case "2":
-			trend = "down"; break
-		case "3":
-			trend = "up"; break
-		default:
-			trend = "No Data"
+		case "1": trend = "even"; break
+		case "2": trend = "down"; break
+		case "3": trend = "up"; break
+		default: trend = "No Data"
 	}
 	def sensorHealth = "normal"
 	if (respData.state == "3") {
 		sensorHealth = "sensor error"
 		logWarn("Sensor Error")
 	}
-	sendEvent(name: "sensorHealth", value: sensorHealth)
-	sendEvent(name: "temperature", value: temperature, unit: tempScale)
-	sendEvent(name: "trend", value: trend)
-	logInfo("commandParse: Temperature value set to ${temperature}")
-}
 
-
-//	===== Name Sync Capability =====
-def syncName() {
-	logDebug("syncName. Synchronizing device name and label with master = ${nameSync}")
-	if (nameSync == "hub") {
-		sendPostCmd("/api/device/set",
-					"""{"device":{"deviceName":"${device.label}"}}""",
-					"nameSyncHub")
-	} else if (nameSync == "device") {
-		sendGetCmd("/api/device/state", "nameSyncDevice")
+	def statusUpdate = [:]
+	def isChange = false
+	if (temperature != device.currentValue("temperature")) {
+		sendEvent(name: "temperature", value: temperature, unit: tempScale)
+		statusUpdate << ["temperature": temperature]
+		isChange = true
 	}
+	if (trend != device.currentValue("trend")) {
+		sendEvent(name: "trend", value: trend)
+		statusUpdate << ["trend": trend]
+		isChange = true
+	}
+	if (sensorHealth != device.currentValue("sensorHealth")) {
+		sendEvent(name: "sensorHealth", value: sensorHealth)
+		statusUpdate << ["sensorHealth": sensorHealth]
+		isChange = true
+	}
+	if (isChange) { logInfo("commandParse: ${statusUpdate}") }
 }
-def nameSyncHub(response) {
-	def cmdResponse = parseInput(response)
-	logDebug("nameSyncHub: ${cmdResponse}")
-	logInfo("Setting bleBox device label to that of the Hubitat device.")
-}
-def nameSyncDevice(response) {
-	def cmdResponse = parseInput(response)
-	logDebug("nameSyncDevice: ${cmdResponse}")
-	def deviceName = cmdResponse.device.deviceName
-	device.setLabel(deviceName)
-	logInfo("Hubit name for device changed to ${deviceName}.")
-}
-
 
 //	===== Communications =====
 private sendGetCmd(command, action){
 	logDebug("sendGetCmd: ${command} / ${action} / ${getDataValue("deviceIP")}")
-	state.lastCommand = [type: "get", command: "${command}", body: "n/a", action: "${action}"]
 	runIn(3, setCommsError)
 	sendHubCommand(new hubitat.device.HubAction("GET ${command} HTTP/1.1\r\nHost: ${getDataValue("deviceIP")}\r\n\r\n",
 				   hubitat.device.Protocol.LAN, null,[callback: action]))
 }
+
 private sendPostCmd(command, body, action){
-	logDebug("sendGetCmd: ${command} / ${body} / ${action} / ${getDataValue("deviceIP")}")
-	state.lastCommand = [type: "post", command: "${command}", body: "${body}", action: "${action}"]
+	logDebug("sendPostCmd: ${command} / ${body} / ${action} / ${getDataValue("deviceIP")}")
 	runIn(3, setCommsError)
 	def parameters = [ method: "POST",
 					  path: command,
@@ -180,53 +252,49 @@ private sendPostCmd(command, body, action){
 					  ]]
 	sendHubCommand(new hubitat.device.HubAction(parameters, null, [callback: action]))
 }
+
 def parseInput(response) {
 	unschedule(setCommsError)
 	state.errorCount = 0
-	sendEvent(name: "commsError", value: false)
+	if (device.currentValue("commsError") == "true") {
+		sendEvent(name: "commsError", value: false)
+	}
 	try {
+		if(response.body == null) { return }
 		def jsonSlurper = new groovy.json.JsonSlurper()
 		return jsonSlurper.parseText(response.body)
 	} catch (error) {
-		logWarn "CommsError: ${error}."
+		logWarn "parseInput: Error attempting to parse: ${error}."
 	}
 }
+
 def setCommsError() {
 	logDebug("setCommsError")
 	if (state.errorCount < 3) {
 		state.errorCount+= 1
-		repeatCommand()
-		logWarn("Attempt ${state.errorCount} to recover communications")
 	} else if (state.errorCount == 3) {
 		state.errorCount += 1
-		if (getDataValue("applicationVersion")) {
-			logWarn("setCommsError: Parent commanded to poll for devices to correct error.")
-			parent.updateDeviceIps()
-			runIn(90, repeatCommand)
-		}
-	} else {
 		sendEvent(name: "commsError", value: true)
-		logWarn "setCommsError: No response from device.  Refresh.  If off line " +
-				"persists, check IP address of device."
+		logWarn "setCommsError: Three consecutive communications errors."
 	}
 }
-def repeatCommand() { 
-	logDebug("repeatCommand: ${state.lastCommand}")
-	if (state.lastCommand.type == "post") {
-		sendPostCmd(state.lastCommand.command, state.lastCommand.body, state.lastCommand.action)
-	} else {
-		sendGetCmd(state.lastCommand.command, state.lastCommand.action)
-	}
-}
-
 
 //	===== Utility Methods =====
+def logTrace(msg) { log.trace "<b>${device.label} ${driverVer()}</b> ${msg}" }
+
 def logInfo(msg) {
 	if (descriptionText == true) { log.info "<b>${device.label} ${driverVer()}</b> ${msg}" }
 }
+
 def logDebug(msg){
 	if(debug == true) { log.debug "<b>${device.label} ${driverVer()}</b> ${msg}" }
 }
+
+def debugOff() {
+	device.updateSetting("debug", [type:"bool", value: false])
+	logInfo("debugLogOff: Debug logging is off.")
+}
+
 def logWarn(msg){ log.warn "<b>${device.label} ${driverVer()}</b> ${msg}" }
 
 //	end-of-file

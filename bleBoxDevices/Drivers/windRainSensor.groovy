@@ -11,31 +11,39 @@ DISCLAIMER: The author of this integration is not associated with blebox.  This 
 open API documentation for development and is intended for integration into the Hubitat Environment.
 
 ===== Hiatory =====
-7.30.21	Various edits to update to latest bleBox API Levels.
-	a.	Create check for API Level of device.
-		1)	Add STATE to recommend updating to user if out-of-sync.
-		2)	Code to support all apiLevel up to the level defined in apiLevel().
-	b.	Removed manual installation.
+7.30.21	New driver for blebox windRainSensor
+	a.	Version 2.0 supports only the wind sensor.  Rain sensor support will be provided
+		when the rain sensor is selected.
+	b.	Provides three winds speeds - now, average, max.
 */
 //	===== Definitions, Installation and Updates =====
 def driverVer() { return "2.0.0" }
-def apiLevel() { return 20200831 }	//	bleBox latest API Level, 6.16.2021
+def apiLevel() { return 20200831 }	//	bleBox latest API Level, 7.6.2021
 
 metadata {
-	definition (name: "bleBox switchBox",
+	definition (name: "bleBox windRainSensor",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/windRainSensor.groovy"
 			   ) {
-		capability "Switch"
-        capability "Actuator"
 		capability "Refresh"
+		attribute "windSpeed", "number"
+		attribute "avgWind", "number"
+		attribute "maxWind", "number"
+//		attribute "raining", "string"
 		attribute "commsError", "bool"
 	}
 	preferences {
-		input ("shortPoll", "number",
-			   title: "Fast Polling Interval ('0' = DISABLED)",
-			   defaultValue: 0)
+		input ("windUnit", "enum",
+			   title: "Unit for windSpeed reporting",
+			   options: ["mps" : "Meters per Second",
+						 "Kph" : "Kilometers per Hour",
+						 "fps" : "Feet per Second",
+						 "Mph" : "Miles per Hour"],
+			   defautValue: "mps")
+		input ("statusLed", "bool", 
+			   title: "Enable the Status LED", 
+			   defaultValue: true)
 		input ("nameSync", "enum", 
 			   title: "Synchronize Names", 
 			   defaultValue: "none",
@@ -43,7 +51,7 @@ metadata {
 						 "device" : "bleBox device name master", 
 						 "hub" : "Hubitat label master"])
 		input ("refreshInterval", "enum", 
-			   title: "Device Refresh Interval (minutes)", 
+			   title: "Device Refresh Interval (minutes)",
 			   options: ["1", "5", "15", "30"], 
 			   defaultValue: "30")
 		input ("debug", "bool", 
@@ -55,16 +63,12 @@ metadata {
 	}
 }
 
-def deviceApi() { return getDataValue("apiLevel").toInteger() }
-
 def installed() {
 	logInfo("Installing...")
-	if (deviceApi() >= 20180604) {
-		sendGetCmd("/api/settings/state", "updateDeviceSettings")
-	} else {
-		sendGetCmd("/api/device/state", "updateDeviceSettings")
-	}
-	runIn(5, updated)
+	state.windError = false
+	state.avgWindError = false
+	state.maxWindError = false
+	runIn(2, updated)
 }
 
 def updated() {
@@ -72,14 +76,36 @@ def updated() {
 	unschedule()
 	state.errorCount = 0
 	updateDataValue("driverVersion", driverVer())
-	
 	//	Check apiLevel and provide state warning when old.
 	if (apiLevel() > getDataValue("apiLevel").toInteger()) {
 		state.apiNote = "<b>Device api software is not the latest available. Consider updating."
 	} else {
 		state.remove("apiNote")
 	}
-		
+
+	switch(windUnit) {
+		case "mps":
+			state.speedFactor = 1
+			state.speedUnit = "m/sec"
+			break
+		case "Kph":
+			state.speedFactor = 3.6
+			state.speedUnit = "K/Hr"
+			break
+		case "fps":
+			state.speedFactor = 3.281
+			state.speedUnit = "ft/sec"
+			break
+		case "Mph":
+			state.speedFactor = 2.237
+			state.speedUnit = "M/Hr"
+			break
+		default:
+			state.speedFactor = 1
+			state.speedUnit = "m/sec"
+			break
+	}
+
 	//	update data based on preferences
 	switch(refreshInterval) {
 		case "1" : runEvery1Minute(refresh); break
@@ -92,10 +118,6 @@ def updated() {
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
 
-	//	Fast Polling
-	if (shortPoll == null) { device.updateSetting("shortPoll",[type:"number", value:0]) }
-	logInfo("fastPoll interval set to ${shortPoll}")
-
 	setDevice()
 	runIn(2, refresh)
 }
@@ -105,13 +127,12 @@ def setDevice() {
 	//	Led
 	def command = "/api/settings/set"
 	def cmdText = """{"settings":{"""
-	if (deviceApi() < 20180604) {
-		command = "/api/device/set"
-		cmdText = """"{"device":{"""
-	}
+	def ledEnabled = 1
+	if (statusLed == false) { ledEnabled = 0 }
+		cmdText = cmdText + """"statusLed":{"enabled":${ledEnabled}}"""
 	//	Name
 	if (nameSync == "hub") {
-		cmdText = cmdText + """"deviceName":"${device.label}"}}"""
+		cmdText = cmdText + ""","deviceName":"${device.label}"}}"""
 	}
 	cmdText = cmdText + """}}"""
 	sendPostCmd(command, cmdText, "updateDeviceSettings")
@@ -129,62 +150,90 @@ def updateDeviceSettings(response) {
 		return
 	}
 	state.nullResp = false
-	//	Capture Data based on return
-	def name
+
+	//	Capture Data
+	def ledEnabled
+	def deviceName
 	if (cmdResponse.settings) {
-		name = cmdResponse.settings.deviceName
+		ledEnabled = cmdResponse.settings.statusLed.enabled
+		deviceName = cmdResponse.settings.deviceName
 	} else {
-		name = cmdResponse.device.deviceName
+		logWarn("updateSettings: Setting data not read properly. Check apiLevel.")
+		return
 	}
 	def settingsUpdate = [:]
+	//	Led Status
+	def statusLed = true
+	if (ledEnabled == 0) {
+		statusLed = false
+	}
+	device.updateSetting("statusLed",[type:"bool", value: statusLed])
+	settingsUpdate << ["statusLed": statusLed]
 	//	Name - only update if syncing name
 	if (nameSync != "none") {
-		device.setLabel(name)
-		settingsUpdate << ["HubitatName": name]
+		device.setLabel(deviceName)
+		settingsUpdate << ["HubitatName": deviceName]
 		device.updateSetting("nameSync",[type:"enum", value:"none"])
 	}
 
 	logInfo("updateDeviceSettings: ${settingsUpdate}")
 }
 
-//	===== Commands and Parse Returns =====
-def on() {
-	logDebug("on")
-	sendGetCmd("/s/1", "commandParse")
-}
-
-def off() {
-	logDebug("off")
-	sendGetCmd("/s/0", "commandParse")
-}
-
 def refresh() {
-	logDebug("refresh")
-	if (deviceApi() >= 20200229) {
-		sendGetCmd("/state", "commandParse")
-	} else {
-		sendGetCmd("/api/relay/state", "commandParse")
-	}
+	logDebug("refresh.")
+	sendGetCmd("/state", "commandParse")
 }
 
 def commandParse(response) {
 	def cmdResponse = parseInput(response)
 	logDebug("commandParse: cmdResponse = ${cmdResponse}")
-
-	def relayState
-	if (cmdResponse[0]) {
-		relayState = cmdResponse[0].state
-	} else if (cmdResponse.relays[0]) {
-		relayState = cmdResponse.relays[0].state
+	def statusUpdate = [:]
+	def sensors = cmdResponse.multiSensor.sensors
+	sensors.each {
+		def type = it.type
+		switch(type) {
+			case "wind":
+				def windSpeed = it.value.toInteger() * state.speedFactor
+				if (device.currentValue("windSpeed") != windSpeed) {
+					sendEvent(name: "windSpeed", value: windSpeed, unit: state.speedUnit)
+					statusUpdate << ["windSpeed": windSpeed]
+				}
+				if (it.state.toInteger() == 3) {
+					state.windError = true
+				} else if (state.windError == true) {
+					state.windError = false
+				}
+				break
+			case "windAvg":
+				def avgWind = it.value.toInteger() * state.speedFactor
+				if (device.currentValue("avgWind") != avgWind) {
+					sendEvent(name: "avgWind", value: avgWind, unit: state.speedUnit)
+					statusUpdate << ["avgWind": avgWind]
+				}
+				if (it.state.toInteger() == 3) {
+					state.avgwindError = true
+				} else if (state.avgwindError == true) {
+					state.avgwindError = false
+				}
+				break
+			case "windMax":
+				def maxWind = it.value.toInteger() * state.speedFactor
+				if (device.currentValue("maxWind") != maxWind) {
+					sendEvent(name: "maxWind", value: maxWind, unit: state.speedUnit)
+					statusUpdate << ["maxWind": maxWind]
+				}
+				if (it.state.toInteger() == 3) {
+					state.maxwindError = true
+				} else if (state.avgwindError == true) {
+					state.maxwindError = false
+				}
+				break
+			default:
+				break
+		}
 	}
 	
-	def onOff = "off"
-	if (relayState == 1) { onOff = "on" }
-	if (onOff != device.currentValue("switch")) {
-		sendEvent(name: "switch", value: onOff)
-		logInfo("cmdResponse: switch = ${onOff}")
-	}
-	if (shortPoll.toInteger() > 0) { runIn(shortPoll.toInteger(), refresh) }
+	logInfo("commandParse: ${statusUpdate}")
 }
 
 //	===== Communications =====
@@ -235,14 +284,14 @@ def setCommsError() {
 }
 
 //	===== Utility Methods =====
-def logTrace(msg) { log.trace "<b>${device.label} ${driverVer()}</b> ${msg}" }
+def logTrace(msg) { log.trace "${device.label} ${driverVer()} ${msg}" }
 
 def logInfo(msg) {
-	if (descriptionText == true) { log.info "<b>${device.label} ${driverVer()}</b> ${msg}" }
+	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
 }
 
 def logDebug(msg){
-	if(debug == true) { log.debug "<b>${device.label} ${driverVer()}</b> ${msg}" }
+	if(debug == true) { log.debug "${device.label} ${driverVer()} ${msg}" }
 }
 
 def debugOff() {
@@ -250,6 +299,6 @@ def debugOff() {
 	logInfo("debugLogOff: Debug logging is off.")
 }
 
-def logWarn(msg){ log.warn "<b>${device.label} ${driverVer()}</b> ${msg}" }
+def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }
 
 //	end-of-file
