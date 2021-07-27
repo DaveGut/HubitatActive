@@ -11,43 +11,49 @@ DISCLAIMER: The author of this integration is not associated with blebox.  This 
 open API documentation for development and is intended for integration into the Hubitat Environment.
 
 ===== Hiatory =====
-7.30.21	Various edits to update to latest bleBox API Levels.
-	a.	Create check for API Level of device.
-		1)	Add STATE to recommend updating to user if out-of-sync.
-		2)	Code to support all apiLevel up to the level defined in apiLevel().
-	b.	Removed manual installation.
+7.30.21	New Parent driver for blebox multiSensor units
+	a.	Version 2.0 supports only type = temperature.  Future should support
+		types for wind and rain measurement.
+	b.	On install, creates child based on type in setting.
+	c.	Parent has following functions:
+		1.	Set refresh rate (1 minute to 30 minutes).
+		2.	Complete a manual reset.
+		3.	Allows post-parent-install adding children
+		4.	Provides all communications to device for parent and children.
+		5.	Communications error detection overall health reporting.
 */
 //	===== Definitions, Installation and Updates =====
 def driverVer() { return "2.0.0" }
-def apiLevel() { return 20200831 }	//	bleBox latest API Level, 6.16.2021
+def apiLevel() { return 20210413 }	//	bleBox latest API Level, 7.6.2021
 
 metadata {
-	definition (name: "bleBox switchBox",
+	definition (name: "bleBox multiSensor",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBox.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/multiSensor.groovy"
 			   ) {
-		capability "Switch"
-        capability "Actuator"
 		capability "Refresh"
 		attribute "commsError", "bool"
 	}
 	preferences {
-		input ("shortPoll", "number",
-			   title: "Fast Polling Interval ('0' = DISABLED)",
-			   defaultValue: 0)
+		input ("statusLed", "bool", 
+			   title: "Enable the Status LED", 
+			   defaultValue: true)
 		input ("nameSync", "enum", 
 			   title: "Synchronize Names", 
 			   defaultValue: "none",
 			   options: ["none": "Don't synchronize",
 						 "device" : "bleBox device name master", 
 						 "hub" : "Hubitat label master"])
+		input ("addChild", "bool", 
+			   title: "Add New Child sensors", 
+			   defaultValue: false)
 		input ("refreshInterval", "enum", 
-			   title: "Device Refresh Interval (minutes)", 
+			   title: "Device Refresh Interval (minutes)",
 			   options: ["1", "5", "15", "30"], 
 			   defaultValue: "30")
 		input ("debug", "bool", 
-			   title: "Enable debug logging", 
+			   title: "Enable debug logging",
 			   defaultValue: true)
 		input ("descriptionText", "bool", 
 			   title: "Enable description text logging", 
@@ -55,15 +61,9 @@ metadata {
 	}
 }
 
-def deviceApi() { return getDataValue("apiLevel").toInteger() }
-
 def installed() {
 	logInfo("Installing...")
-	if (deviceApi() >= 20180604) {
-		sendGetCmd("/api/settings/state", "updateDeviceSettings")
-	} else {
-		sendGetCmd("/api/device/state", "updateDeviceSettings")
-	}
+	sendGetCmd("/api/settings/state", "createChildren")
 	runIn(5, updated)
 }
 
@@ -72,14 +72,13 @@ def updated() {
 	unschedule()
 	state.errorCount = 0
 	updateDataValue("driverVersion", driverVer())
-	
 	//	Check apiLevel and provide state warning when old.
 	if (apiLevel() > getDataValue("apiLevel").toInteger()) {
 		state.apiNote = "<b>Device api software is not the latest available. Consider updating."
 	} else {
 		state.remove("apiNote")
 	}
-		
+
 	//	update data based on preferences
 	switch(refreshInterval) {
 		case "1" : runEvery1Minute(refresh); break
@@ -91,13 +90,42 @@ def updated() {
 	if (debug) { runIn(1800, debugOff) }
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
-
-	//	Fast Polling
-	if (shortPoll == null) { device.updateSetting("shortPoll",[type:"number", value:0]) }
-	logInfo("fastPoll interval set to ${shortPoll}")
+	//	Add Children (toggle) plus Refresh
+	if (addChild) {
+		sendGetCmd("/api/settings/state", "createChildren")
+		device.updateSetting("addChild",[type:"bool", value:false])
+		pauseExecution(3000)
+	}
 
 	setDevice()
 	runIn(2, refresh)
+}
+
+def createChildren(response) {
+	def cmdResponse = parseInput(response)
+	logDebug("createChildren: ${cmdResponse}")
+	def settingsArrays = cmdResponse.settings.multiSensor
+	settingsArrays.each {
+		def type = it.type
+		def sensorDni = "${device.getDeviceNetworkId()}-${it.id}"
+		def isChild = getChildDevice(sensorDni)
+		if (!isChild && it.settings.enabled.toInteger() == 1) {
+			try {
+				addChildDevice("davegut", "bleBox MSChild ${type}", sensorDni, [
+					"label":it.settings.name, 
+					"name":"tempSensorChild",
+					"apiLevel":getDataValue("apiLevel"), 
+					"tempOffset":it.settings.userTempOffset, 
+					"sensorId":it.id.toString()])
+				logInfo("Installed ${it.settings.name}.")
+			} catch (error) {
+				logWarn("Failed to install device. Device: ${device}, sensorId = ${it.id}.")
+				logWarn(error)
+			}
+		}
+	}
+	updateDeviceSettings(response)
+	logInfo("createChildren: statusLed = ${ledStatus}")
 }
 
 def setDevice() {
@@ -105,13 +133,12 @@ def setDevice() {
 	//	Led
 	def command = "/api/settings/set"
 	def cmdText = """{"settings":{"""
-	if (deviceApi() < 20180604) {
-		command = "/api/device/set"
-		cmdText = """"{"device":{"""
-	}
+	def ledEnabled = 1
+	if (statusLed == false) { ledEnabled = 0 }
+		cmdText = cmdText + """"statusLed":{"enabled":${ledEnabled}}"""
 	//	Name
 	if (nameSync == "hub") {
-		cmdText = cmdText + """"deviceName":"${device.label}"}}"""
+		cmdText = cmdText + ""","deviceName":"${device.label}"}}"""
 	}
 	cmdText = cmdText + """}}"""
 	sendPostCmd(command, cmdText, "updateDeviceSettings")
@@ -129,18 +156,32 @@ def updateDeviceSettings(response) {
 		return
 	}
 	state.nullResp = false
-	//	Capture Data based on return
-	def name
+	//	Transfer data to children
+	def settingsArrays = cmdResponse.settings.multiSensor
+	def children = getChildDevices()
+	children.each { it.updateDeviceSettings(settingsArrays) }
+	//	Capture Data
+	def ledEnabled
+	def deviceName
 	if (cmdResponse.settings) {
-		name = cmdResponse.settings.deviceName
+		ledEnabled = cmdResponse.settings.statusLed.enabled
+		deviceName = cmdResponse.settings.deviceName
 	} else {
-		name = cmdResponse.device.deviceName
+		logWarn("updateSettings: Setting data not read properly. Check apiLevel.")
+		return
 	}
 	def settingsUpdate = [:]
+	//	Led Status
+	def statusLed = true
+	if (ledEnabled == 0) {
+		statusLed = false
+	}
+	device.updateSetting("statusLed",[type:"bool", value: statusLed])
+	settingsUpdate << ["statusLed": statusLed]
 	//	Name - only update if syncing name
 	if (nameSync != "none") {
-		device.setLabel(name)
-		settingsUpdate << ["HubitatName": name]
+		device.setLabel(deviceName)
+		settingsUpdate << ["HubitatName": deviceName]
 		device.updateSetting("nameSync",[type:"enum", value:"none"])
 	}
 
@@ -148,43 +189,19 @@ def updateDeviceSettings(response) {
 }
 
 //	===== Commands and Parse Returns =====
-def on() {
-	logDebug("on")
-	sendGetCmd("/s/1", "commandParse")
-}
-
-def off() {
-	logDebug("off")
-	sendGetCmd("/s/0", "commandParse")
-}
-
 def refresh() {
-	logDebug("refresh")
-	if (deviceApi() >= 20200229) {
-		sendGetCmd("/state", "commandParse")
-	} else {
-		sendGetCmd("/api/relay/state", "commandParse")
-	}
+	logDebug("refresh.")
+	sendGetCmd("/state", "commandParse")
 }
 
 def commandParse(response) {
+	def stateArrays
 	def cmdResponse = parseInput(response)
 	logDebug("commandParse: cmdResponse = ${cmdResponse}")
+	stateArrays = cmdResponse.multiSensor.sensors
 
-	def relayState
-	if (cmdResponse[0]) {
-		relayState = cmdResponse[0].state
-	} else if (cmdResponse.relays[0]) {
-		relayState = cmdResponse.relays[0].state
-	}
-	
-	def onOff = "off"
-	if (relayState == 1) { onOff = "on" }
-	if (onOff != device.currentValue("switch")) {
-		sendEvent(name: "switch", value: onOff)
-		logInfo("cmdResponse: switch = ${onOff}")
-	}
-	if (shortPoll.toInteger() > 0) { runIn(shortPoll.toInteger(), refresh) }
+	def children = getChildDevices()
+	children.each { it.commandParse(stateArrays) }
 }
 
 //	===== Communications =====
@@ -235,14 +252,14 @@ def setCommsError() {
 }
 
 //	===== Utility Methods =====
-def logTrace(msg) { log.trace "<b>${device.label} ${driverVer()}</b> ${msg}" }
+def logTrace(msg) { log.trace "${device.label} ${driverVer()} ${msg}" }
 
 def logInfo(msg) {
-	if (descriptionText == true) { log.info "<b>${device.label} ${driverVer()}</b> ${msg}" }
+	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
 }
 
 def logDebug(msg){
-	if(debug == true) { log.debug "<b>${device.label} ${driverVer()}</b> ${msg}" }
+	if(debug == true) { log.debug "${device.label} ${driverVer()} ${msg}" }
 }
 
 def debugOff() {
@@ -250,6 +267,6 @@ def debugOff() {
 	logInfo("debugLogOff: Debug logging is off.")
 }
 
-def logWarn(msg){ log.warn "<b>${device.label} ${driverVer()}</b> ${msg}" }
+def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }
 
 //	end-of-file

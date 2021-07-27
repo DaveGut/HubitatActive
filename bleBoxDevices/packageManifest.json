@@ -1,108 +1,132 @@
 {
-  "packageName": "BleBox Device Integration",
-  "author": "Dave Gutheinz -- version=1.4.0 --heversion-2.1.9 --datereleased=2020-04-20",
-  "minimumHEVersion": "0.0",
-  "dateReleased": "2020-04-20",
+  "packageName": "bleBox Integration",
+  "author": "David Gutheinz",
+  "version": "2.0.0",
+  "minimumHEVersion": "2.2.7",
+  "communityLink": "https://community.hubitat.com/t/blebox-switches-dimmers-etc/9024",
+  "dateReleased": "2021-07-27",
   "apps": [
     {
-      "id": "cf912ad2-7c62-4aad-83ba-45c6b3868e8c",
+      "id": "e6e5f174-e7b9-4f9a-8d1e-fae71570d255",
       "name": "bleBox Integration",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Application/bleboxApplication.groovy",
       "required": true,
-      "oauth": false
+      "oauth": false,
+      "primary": false
     }
   ],
   "drivers": [
     {
-      "id": "7ef123f0-8b98-4d75-b57b-16600ebe5d5e",
+      "id": "7c2beeef-c641-45a2-ac2b-ac6b9629ccd0",
       "name": "bleBox airSensor",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/airSensor.groovy",
       "required": false
     },
     {
-      "id": "07dee875-210d-45e6-92b6-949050c1da0a",
+      "id": "b4cd341c-e038-458f-bcf3-47c63fea89ac",
       "name": "bleBox dimmerBox",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/dimmerBox.groovy",
       "required": false
     },
     {
-      "id": "2aaf6ec3-7fab-4c14-a97e-ba98c54deecf",
+      "id": "adfdadee-5770-4dce-9534-62cc5357f406",
       "name": "bleBox gateBox",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/gateBox.groovy",
       "required": false
     },
     {
-      "id": "d3c3ffab-9289-4c12-a9ec-937cceab2a55",
+      "id": "dde3f824-ea3e-461f-9a5f-e2d56183683f",
       "name": "bleBox shutterBox",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/shutterBox.groovy",
       "required": false
     },
     {
-      "id": "97c7df36-33d8-41be-b5e0-11145f388e76",
+      "id": "8a7960a7-d203-4257-a04b-d6178477b0d3",
       "name": "bleBox switchBox",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBox.groovy",
       "required": false
     },
     {
-      "id": "250e1979-3243-417c-ba53-220e062ba5a8",
+      "id": "aefb6c91-368e-44bc-840e-ed75ae9420ec",
       "name": "bleBox switchBoxD",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/switchBoxD.groovy",
       "required": false
     },
     {
-      "id": "6238784c-b3ee-48f6-b954-04977c06c042",
+      "id": "9bad65fb-473a-4863-bd25-7c74a77a71c1",
       "name": "bleBox tempSensor",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/tempSensor.groovy",
       "required": false
     },
     {
-      "id": "51cb6cb3-a2a1-43fb-963b-7029ed536623",
+      "id": "19b3c36b-87d3-4b52-9c64-a9019d77fd58",
       "name": "bleBox wLightBox",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBox.groovy",
       "required": false
     },
     {
-      "id": "9accaad7-3095-4521-bf54-12e9f632aacc",
+      "id": "9b594378-7c61-45a2-a37c-bd55ffe80baf",
       "name": "bleBox wLightBox Ct",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxCt.groovy",
       "required": false
     },
     {
-      "id": "005b6d04-632b-4dcf-9ca0-c82775390deb",
+      "id": "418b1284-4aa0-4b94-99b6-831eaec9c065",
       "name": "bleBox wLightBox Mono",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxMono.groovy",
       "required": false
     },
     {
-      "id": "4b6a773c-7a97-48fa-8c73-2e5b4859bd9a",
+      "id": "0a8dfa90-1d14-4bc5-a595-d1a5e021ac43",
       "name": "bleBox wLightBox Rgb",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxRgb.groovy",
       "required": false
     },
     {
-      "id": "2f4e8af1-226c-48c1-a16d-e23ba45a5146",
+      "id": "4b93da60-6ad4-46d4-b3ec-3088ad9b5b11",
       "name": "bleBox wLightBox Rgbw",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxRgbw.groovy",
       "required": false
     },
     {
-      "id": "856960cf-e497-44ce-818a-d8ded6842440",
+      "id": "a2fc39ea-3993-4694-96a2-f967e9206ac9",
       "name": "bleBox wLightBoxS",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/wLightBoxS.groovy",
+      "required": false
+    },
+    {
+      "id": "6c9b709b-4df4-4d47-b625-f9eeaa37edf3",
+      "name": "bleBox multiSensor",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/multiSensor.groovy",
+      "required": false
+    },
+    {
+      "id": "8fdbd781-56c3-439e-b36c-83bd9903a5a8",
+      "name": "bleBox MSChild temperature",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/MSChildTemperature.groovy",
+      "required": false
+    },
+    {
+      "id": "fce9437f-a721-4f67-8115-9ea4d3fefa85",
+      "name": "bleBox windRainSensor",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Drivers/windRainSensor.groovy",
       "required": false
     }
   ]

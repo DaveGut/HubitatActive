@@ -13,13 +13,15 @@ DISCLAIMER: The author of this integration is not associated with blebox.  This 
 open API documentation for development and is intended for integration into the Hubitat Environment.
 
 ===== Hiatory =====
-09.20.19	1.2.01.	Initial Parent - Child driver release.
-					Added link to Application that will check/update IPs if the communications fail.
-10.01.19	1.3.01. Updated error handling.
-04.20.20	1.4.0	Hubitat Package Manager Update
+7.30.21	Various edits to update to latest bleBox API Levels.
+	a.	Create check for API Level of device.
+		1)	Add STATE to recommend updating to user if out-of-sync.
+		2)	Code to support all apiLevel up to the level defined in apiLevel().
+	b.	Removed manual installation.
 */
 //	===== Definitions, Installation and Updates =====
-def driverVer() { return "1.4.0" }
+def driverVer() { return "2.0.0" }
+def apiLevel() { return 20200229 }	//	bleBox latest API Level, 6.16.2021
 
 metadata {
 	definition (name: "bleBox wLightBox",
@@ -33,81 +35,49 @@ metadata {
 		attribute "commsError", "bool"
 	}
 	preferences {
-		if (!getDataValue("applicationVersion")) {
-			input ("device_IP", "text", title: "Device IP (Current = ${getDataValue("deviceIP")})")
-		}
-		input ("transTime", "number", title: "Default Transition time (seconds)", defaultValue: 2)
-		input ("refreshInterval", "enum", title: "Device Refresh Interval (minutes)", 
-			   options: ["1", "5", "15", "30"], defaultValue: "30")
-		input ("nameSync", "enum", title: "Synchronize Names", defaultValue: "none",
+		input ("transTime", "integer", 
+			   title: "Default Transition time (seconds)", 
+			   defaultValue: 2)
+		input ("statusLed", "bool", 
+			   title: "Enable the Status LED", 
+			   defaultValue: true)
+		input ("nameSync", "enum", 
+			   title: "Synchronize Names", 
+			   defaultValue: "none",
 			   options: ["none": "Don't synchronize",
 						 "device" : "bleBox device name master", 
 						 "hub" : "Hubitat label master"])
-		input ("debug", "bool", title: "Enable debug logging", defaultValue: false)
-		input ("descriptionText", "bool", title: "Enable description text logging", defaultValue: true)
+		input ("refreshInterval", "enum", 
+			   title: "Device Refresh Interval (minutes)", 
+			   options: ["1", "5", "15", "30"], 
+			   defaultValue: "30")
+		input ("debug", "bool", 
+			   title: "Enable debug logging", 
+			   defaultValue: true)
+		input ("descriptionText", "bool", 
+			   title: "Enable description text logging", 
+			   defaultValue: true)
 	}
 }
+
+def deviceApi() { return getDataValue("apiLevel").toInteger() }
 
 def installed() {
 	logInfo("Installing...")
 	state.savedLevel = "00000000"
-	runIn(1, updated)
-}
-
-def updated() {
-	logInfo("Updating...")
-	logInfo("Default fade speed set to ${state.defFadeSpeed}")
-	logInfo("Debug logging is: ${debug}.")
-	logInfo("Description text logging is ${descriptionText}.")
-	unschedule()
-
-	if (!getDataValue("applicationVersion")) {
-		if (!device_IP) {
-			logWarn("updated:  deviceIP  is not set.")
-			return
-		}
-		updateDataValue("deviceIP", device_IP)
-		logInfo("Device IP set to ${getDataValue("deviceIP")}")
-	}
-
-	if(!getDataValue("driverVersion")) {
-		sendGetCmd("/api/device/state", "setDeviceName")
-		pauseExecution(1000)
-		sendGetCmd("/api/rgbw/state", "addChildren")
-		pauseExecution(5000)
-		logInfo("updated: <b>successfully added children ${getChildDevices()}")
-	}
-	
-	switch(refreshInterval) {
-		case "1" : runEvery1Minute(refresh); break
-		case "5" : runEvery5Minutes(refresh); break
-		case "15" : runEvery15Minutes(refresh); break
-		default: runEvery30Minutes(refresh)
-	}
-	logInfo("Refresh interval set for every ${refreshInterval} minute(s).")
-
-	state.errorCount = 0
-	state.fadeSpeed = transTime
-	updateDataValue("driverVersion", driverVer())
-	if (nameSync == "device" || nameSync == "hub") { syncName() }
-	runIn(1, refresh)
-}
-
-def setDeviceName(response) {
-	def cmdResponse = parseInput(response)
-	logDebug("setDeviceData: ${cmdResponse}")
-	device.setName(cmdResponse.device.type)
-	logInfo("setDeviceData: Device Name updated to ${cmdResponse.device.type}")
+	sendGetCmd("/api/rgbw/state", "addChildren")
+	runIn(5, updated)
 }
 
 def addChildren(response) {
 	def cmdResponse = parseInput(response)
-	logDebug("addChildren: Adding children for mode = ${mode}")
+	def colorMode = cmdResponse.rgbw.colorMode
+	logDebug("addChildren: Adding children for mode = ${colorMode}")
 
 	def dni = device.getDeviceNetworkId()
 	def channel
 	def child
-	switch(cmdResponse.rgbw.colorMode) {
+	switch(colorMode) {
 		case "1":
 			channel = "rgbw"
 			addChild("wLightBox Rgbw", "${dni}-1", "${device.displayName} Rgbw", channel)
@@ -166,6 +136,101 @@ def addChild(type, dni, label, channel) {
 	logInfo("addChild: Added child ${type} / ${dni} / ${label} / ${channel}")
 }
 
+def updated() {
+	logInfo("Updating...")
+	unschedule()
+	state.errorCount = 0
+	state.nullResp = false
+	updateDataValue("driverVersion", driverVer())
+	
+	//	Check apiLevel and provide state warning when old.
+	if (apiLevel() > deviceApi()) {
+		state.apiNote = "<b>Device api software is not the latest available. Consider updating."
+	} else {
+		state.remove("apiNote")
+	}
+
+	//	update data based on preferences
+	switch(refreshInterval) {
+		case "1" : runEvery1Minute(refresh); break
+		case "5" : runEvery5Minutes(refresh); break
+		case "15" : runEvery15Minutes(refresh); break
+		default: runEvery30Minutes(refresh)
+	}
+	logInfo("Refresh interval set for every ${refreshInterval} minute(s).")
+	logInfo("Refresh interval set for every ${refreshInterval} minute(s).")
+	if (debug) { runIn(1800, debugOff) }
+	logInfo("Debug logging is: ${debug}.")
+	logInfo("Description text logging is ${descriptionText}.")
+
+	setDevice()
+	runIn(2, refresh)
+}
+
+def setDevice() {
+	logDebug("setDevice: statusLed: ${statusLed}, nameSync = ${nameSync}")
+	def command = "/api/settings/set"
+	def cmdText = """{"settings":{"""
+	if (deviceApi() < 20180718) {
+		command = "/api/device/set"
+		cmdText = """{"device":{"""
+	}
+	//	Led
+	if (deviceApi() >= 20180718) {
+		def ledEnabled = 1
+		if (statusLed == false) { ledEnabled = 0 }
+		cmdText = cmdText + """"statusLed":{"enabled":${ledEnabled}}"""
+	}
+	//	Name
+	if (nameSync == "hub") {
+		cmdText = cmdText + ""","deviceName":"${device.label}"}}"""
+	}
+	cmdText = cmdText + """}}"""
+	sendPostCmd(command, cmdText, "updateDeviceSettings")
+}
+
+def updateDeviceSettings(response) {
+	def cmdResponse = parseInput(response)
+	logDebug("updateDeviceSettings: ${cmdResponse}")
+	//	Work around for null response due to shutter box returning null.
+	if (cmdResponse == null) {
+		if (state.nullResp == true) { return }
+		state.nullResp = true
+		pauseExecution(1000)
+		sendGetCmd("/api/settings/state", "updateDeviceSettings")
+		return
+	}
+	state.nullResp = false
+	
+	//	Capture Data
+	def ledEnabled = 1
+	def deviceName
+	if (cmdResponse.settings) {
+		ledEnabled = cmdResponse.settings.statusLed.enabled
+		deviceName = cmdResponse.settings.deviceName
+	} else if (cmdResponse.device) {
+		deviceName = cmdResponse.device.deviceName
+	} else {
+		logWarn("updateSettings: Setting data not read properly. Check apiLevel.")
+		return
+	}
+	def settingsUpdate = [:]
+	//	Led Status
+	def statusLed = true
+	if (ledEnabled == 0) {
+		statusLed = false
+	}
+	device.updateSetting("statusLed",[type:"bool", value: statusLed])
+	settingsUpdate << ["statusLed": statusLed]
+	//	Name - only update if syncing name
+	if (nameSync != "none") {
+		device.setLabel(deviceName)
+		settingsUpdate << ["HubitatName": deviceName]
+		device.updateSetting("nameSync",[type:"enum", value:"none"])
+	}
+
+	logInfo("updateDeviceSettings: ${settingsUpdate}")
+}
 
 //	===== Commands and Parse Returns =====
 def on() {
@@ -212,14 +277,13 @@ def childCommand(channel, level, transTime=state.fadeSpeed) {
 	}
 }
 
-def setRgbw(rgbw, transTime = state.fadeSpeed) {
+def setRgbw(rgbw, fadeSpeed = transTime) {
 	//	Common method to send new rgbw to device.
-	logDebug("setRgbw: ${rgbw} / ${transTime}")
-	fadeSpeed = 1000 * transTime.toInteger()
+	logDebug("setRgbw: ${rgbw} / ${fadeSpeed}")
+	fadeSpeed = 1000 * fadeSpeed.toInteger()
 	sendPostCmd("/api/rgbw/set",
 				"""{"rgbw":{"desiredColor":"${rgbw}","durationsMs":{"colorFade":${fadeSpeed}}}}""",
 				"commandParse")
-	state.fadeSpeed = transTime
 }
 
 def refresh() {
@@ -242,44 +306,16 @@ def commandParse(response) {
 	children.each { it.parseReturnData(hexDesired) }
 }
 
-
-//	===== Name Sync Capability =====
-def syncName() {
-	logDebug("syncName. Synchronizing device name and label with master = ${nameSync}")
-	if (nameSync == "hub") {
-		sendPostCmd("/api/settings/set",
-					"""{"settings":{"deviceName":"${device.label}"}}""",
-					"nameSyncHub")
-	} else if (nameSync == "device") {
-		sendGetCmd("/api/device/state", "nameSyncDevice")
-	}
-	device.updateSetting("nameSync",[type:"enum", value:"none"])
-}
-def nameSyncHub(response) {
-	def cmdResponse = parseInput(response)
-	logDebug("nameSyncHub: ${cmdResponse}")
-	logInfo("Set bleBox device label to that of the Hubitat device.")
-}
-def nameSyncDevice(response) {
-	def cmdResponse = parseInput(response)
-	logDebug("nameSyncDevice: ${cmdResponse}")
-	def deviceName = cmdResponse.device.deviceName
-	device.setLabel(deviceName)
-	logInfo("Hubit name for device changed to ${deviceName}.")
-}
-
-
 //	===== Communications =====
 private sendGetCmd(command, action){
 	logDebug("sendGetCmd: ${command} / ${action} / ${getDataValue("deviceIP")}")
-	state.lastCommand = [type: "get", command: "${command}", body: "n/a", action: "${action}"]
 	runIn(3, setCommsError)
 	sendHubCommand(new hubitat.device.HubAction("GET ${command} HTTP/1.1\r\nHost: ${getDataValue("deviceIP")}\r\n\r\n",
 				   hubitat.device.Protocol.LAN, null,[callback: action]))
 }
+
 private sendPostCmd(command, body, action){
-	logDebug("sendGetCmd: ${command} / ${body} / ${action} / ${getDataValue("deviceIP")}")
-	state.lastCommand = [type: "post", command: "${command}", body: "${body}", action: "${action}"]
+	logDebug("sendPostCmd: ${command} / ${body} / ${action} / ${getDataValue("deviceIP")}")
 	runIn(3, setCommsError)
 	def parameters = [ method: "POST",
 					  path: command,
@@ -290,53 +326,50 @@ private sendPostCmd(command, body, action){
 					  ]]
 	sendHubCommand(new hubitat.device.HubAction(parameters, null, [callback: action]))
 }
+
 def parseInput(response) {
 	unschedule(setCommsError)
 	state.errorCount = 0
-	sendEvent(name: "commsError", value: false)
+	if (device.currentValue("commsError") == "true") {
+		sendEvent(name: "commsError", value: false)
+	}
 	try {
+		if(response.body == null) { return }
 		def jsonSlurper = new groovy.json.JsonSlurper()
 		return jsonSlurper.parseText(response.body)
 	} catch (error) {
-		logWarn "CommsError: ${error}."
+		logWarn "parseInput: Error attempting to parse: ${error}."
 	}
 }
+
 def setCommsError() {
 	logDebug("setCommsError")
 	if (state.errorCount < 3) {
 		state.errorCount+= 1
-		repeatCommand()
-		logWarn("Attempt ${state.errorCount} to recover communications")
 	} else if (state.errorCount == 3) {
 		state.errorCount += 1
-		if (getDataValue("applicationVersion")) {
-			logWarn("setCommsError: Parent commanded to poll for devices to correct error.")
-			parent.updateDeviceIps()
-			runIn(90, repeatCommand)
-		}
-	} else {
 		sendEvent(name: "commsError", value: true)
-		logWarn "setCommsError: No response from device.  Refresh.  If off line " +
-				"persists, check IP address of device."
+		logWarn "setCommsError: Three consecutive communications errors."
 	}
 }
-def repeatCommand() { 
-	logDebug("repeatCommand: ${state.lastCommand}")
-	if (state.lastCommand.type == "post") {
-		sendPostCmd(state.lastCommand.command, state.lastCommand.body, state.lastCommand.action)
-	} else {
-		sendGetCmd(state.lastCommand.command, state.lastCommand.action)
-	}
-}
-
 
 //	===== Utility Methods =====
+def logTrace(msg) { log.trace "<b>${device.label} ${driverVer()}</b> ${msg}" }
+
 def logInfo(msg) {
 	if (descriptionText == true) { log.info "<b>${device.label} ${driverVer()}</b> ${msg}" }
 }
+
 def logDebug(msg){
 	if(debug == true) { log.debug "<b>${device.label} ${driverVer()}</b> ${msg}" }
 }
+
+def debugOff() {
+	device.updateSetting("debug", [type:"bool", value: false])
+	logInfo("debugLogOff: Debug logging is off.")
+}
+
 def logWarn(msg){ log.warn "<b>${device.label} ${driverVer()}</b> ${msg}" }
 
 //	end-of-file
+

@@ -8,27 +8,13 @@ Unless required by applicable law or agreed to in writing,software distributed u
 License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
 either express or implied. See the License for the specific language governing permissions 
 and limitations under the License.
-
-===== Version Description =====
-09.20.19	Version 1.1 update.
-			Application Execution Options
-			a.	Install bleBox Devices.
-				1.	Scans Lan segment for bleBox Devices and creates database entry for found devices.
-				2.	Updates children device's deviceIP baseed on scanning.
-				3.	Offers non-children devices for installation.
-				4.	Installs user-selected devices.
-			b.	Lists bleBox Devices.
-				1.	Scans Lan segment for bleBox Devices and creates database entry for found devices.
-				2.	Updates children device's deviceIP baseed on scanning.
-				3.	Displays all found bleBox devices.
-			c.	Selection of information and debug logging.
-			Child-Device Called IP Poll (scan)
-			a.	Checks if scan has been done in last 15 minutes.  Exits if true.
-			b.	Scans Lan segment for bleBox Devices and creates database entry for found devices.
-			c.	Updates children device's deviceIP baseed on scanning.
-04.20.2020	1.4.0	Hubitat Package Manager Support.
+V2.0.0
+Initial updates to accommodate multiple API Levels.  Currently uses deprecated
+command to capture all devices.
+Growth:
+a.	Add driver name to metadata for each device.  If no driver, All caps NO DRIVER.
 =============================================================================================*/
-def appVersion() { return "1.4.0" }
+def appVersion() { return "2.0.0" }
 import groovy.json.JsonSlurper
 definition(
 	name: "bleBox Integration",
@@ -41,6 +27,7 @@ definition(
 	singleInstance: true,
 	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/Application/bleboxApplication.groovy"
 	)
+
 preferences {
 	page(name: "mainPage")
 	page(name: "addDevicesPage")
@@ -61,7 +48,6 @@ def initialize() {
 	if (state.deviceIps) { state.remove("deviceIps") }
 	if (selectedAddDevices) { addDevices() }
 }
-
 
 //	=====	Main Page	=====
 def mainPage() {
@@ -95,11 +81,11 @@ def mainPage() {
 	}
 }
 
-
 //	=====	Add Devices	=====
 def addDevicesPage() {
 	state.devices = [:]
-	findDevices(200, "parseDeviceData")
+	findDevices(25, "parseDeviceData")
+	runIn(10, updateChildren)
 	def devices = state.devices
 	def newDevices = [:]
 	devices.each {
@@ -128,55 +114,59 @@ def parseDeviceData(response) {
 	logDebug("parseDeviceData: <b>${cmdResponse}")
 	if (cmdResponse == "error") { return }
 	if (cmdResponse.device) { cmdResponse = cmdResponse.device }
-	def label = cmdResponse.deviceName
+	else { logWarn("parseDeviceData: invalid return data") }
 	def dni = cmdResponse.id.toUpperCase()
+	def ip = cmdResponse.ip
+	def apiLevel = 20000000
+	if (cmdResponse.apiLevel) { apiLevel = cmdResponse.apiLevel.toInteger() }
 	def type = cmdResponse.type
-	def ip = convertHexToIP(response.ip)
-	def typeData
-	def devData = [:]
-	devData["dni"] = dni
-	devData["ip"] = ip
-	devData["label"] = label
-	devData["type"] = type
-	state.devices << ["${dni}" : devData]
-	def isChild = getChildDevice(dni)
-	if (isChild) {
-		isChild.updateDataValue("deviceIP", ip)
+	if (type == "multiSensor" && cmdResponse.product == "windRainSensor") {
+		type = "windRainSensor"
 	}
-	if (type == "switchBoxD") {
-		sendGetCmd(ip, """/api/relay/state""", "parseRelayData")
+	if (type != "switchBoxD") {
+		def devData = [:]
+		devData["ip"] = ip
+		devData["apiLevel"] = apiLevel
+		devData["type"] = type
+		devData["dni"] = dni
+		devData["label"] = cmdResponse.deviceName
+		state.devices << ["${dni}" : devData]
+	} else {
+		//	relay0
+		def relayDni = dni + "-0"
+		def devData = [:]
+		devData["ip"] = ip
+		devData["apiLevel"] = apiLevel
+		devData["type"] = type
+		devData["dni"] = relayDni
+		devData["label"] = cmdResponse.deviceName + "-0"
+		devData["relayNumber"] = "0"
+		state.devices << ["${relayDni}" : devData]
+		//	relay1
+		relayDni = dni + "-1"
+		devData = [:]
+		devData["ip"] = ip
+		devData["apiLevel"] = apiLevel
+		devData["type"] = cmdResponse.type
+		devData["dni"] = relayDni
+		devData["label"] = cmdResponse.deviceName+ "-1"
+		devData["relayNumber"] = "1"
+		state.devices << ["${relayDni}" : devData]
 	}
 }
 
-
-//	===== Device Specific Actions =====
-def getDeviceData() {
-	logDebug("getDeviceData")
-	devices = state.devices
-	devices.each {
-		if (it.value.type == "switchBoxD") {
-			sendGetCmd(it.value.ip, """/api/relay/state""", "parseRelayData")
+def updateChildren() {
+	def devices = state.devices
+	devices.each{
+		def isChild = getChildDevice(it.value.dni)
+		if (isChild) {
+			isChild.updateDataValue("deviceIP", it.value.ip)
+			isChild.updateDataValue("apiLevel", it.value.apiLevel.toString())
+			logInfo("updateChildren: updated [${it.value.label}, ${it.value.ip}, ${it.value.apiLevel}]")
+			isChild.updated()
 		}
 	}
 }
-
-def parseRelayData(response) {
-	def cmdResponse = parseResponse(response)
-	logDebug("parseRelayData: <b>${cmdResponse}")
-	if (cmdResponse == "error") { return }
-	def relays = cmdResponse.relays
-	def devIp = convertHexToIP(response.ip)
-	def device = state.devices.find { it.value.ip == devIp }
-	def dni = device.value.dni
-	device.value << [dni:"${dni}-0", label:"${relays[0].name}", relayNumber:"0"]
-	def relay2Data = ["dni": "${dni}-1",
-					  "ip": device.value.ip,
-					  "type": device.value.type,
-					  "label": relays[1].name,
-					  "relayNumber": "1"]
-	state.devices << ["${dni}-1" : relay2Data]
-}
-
 
 //	===== Add Devices =====
 def addDevices() {
@@ -194,6 +184,7 @@ def addDevices() {
 			def deviceData = [:]
 			deviceData["applicationVersion"] = appVersion()
 			deviceData["deviceIP"] = device.value.ip
+			deviceData["apiLevel"] = device.value.apiLevel
 			if (device.value.relayNumber) { deviceData["relayNumber"] = device.value.relayNumber }
 			try {
 				addChildDevice(
@@ -213,12 +204,11 @@ def addDevices() {
 	}
 }
 
-
 //	=====	Update Device IPs	=====
 def listDevicesPage() {
 	logDebug("listDevicesPage")
 	state.devices = [:]
-	findDevices(200, "parseDeviceData")
+	findDevices(25, "parseDeviceData")
 	pauseExecution(5000)
 	def devices = state.devices
 	def foundDevices = "<b>Found Devices (Installed / DNI / IP / Alias):</b>"
@@ -240,63 +230,6 @@ def listDevicesPage() {
 	}
 }
 
-
-//	===== Recurring IP Check =====
-def updateDeviceIps() {
-	logDebug("updateDeviceIps: Updating Device IPs after hub reboot.")
-	runIn(5, updateDevices)
-}
-
-def updateDevices() {
-	if (pollEnabled == true) {
-		app?.updateSetting("pollEnabled", [type:"bool", value: false])
-		runIn(900, pollEnable)
-	} else {
-		logWarn("updateDevices: a poll was run within the last 15 minutes.  Exited.")
-		return
-	}
-	def children = getChildDevices()
-	logDebug("UpdateDevices: ${children} / ${pollEnabled}")
-	app?.updateSetting("missingDevice", [type:"bool", value: false])
-	children.each {
-		if (it.isDisabled()) {
-			logDebug("updateDevices: ${it} is disabled and not checked.")
-			return
-		}
-		def ip = it.getDataValue("deviceIP")
-		runIn(2, setMissing)
-		sendGetCmd(ip, "/api/device/state", "checkValid")
-		pauseExecution(3000)
-	}
-	runIn(2, pollIfMissing)
-}
-
-def pollIfMissing() {
-	logDebug("pollIfMissing: ${missingDevice}.")
-	if (missingDevice == true) {
-		state.devices= [:]
-		findDevices(200, parseDeviceData)
-		app?.updateSetting("missingDevice", [type:"bool", value: false])
-	}
-}
-
-def checkValid(response) {
-	unschedule("setMissing")
-	def resp = parseLanMessage(response.description)
-	logDebug("checkValid: response received from ${convertHexToIP(resp.ip)}")
-}
-
-def setMissing() {
-	logWarn("setMissing: Setting missingDevice to true")
-	app?.updateSetting("missingDevice", [type:"bool", value: true])
-}
-
-def pollEnable() {
-	logDebug("pollEnable")
-	app?.updateSetting("pollEnabled", [type:"bool", value: true])
-}
-
-
 //	=====	bleBox Specific Communications	=====
 def findDevices(pollInterval, action) {
 	logDebug("findDevices: ${pollInterval} / ${action}")
@@ -311,16 +244,24 @@ def findDevices(pollInterval, action) {
 	logInfo("findDevices: IP Segment = ${networkPrefix}")
 	for(int i = 2; i < 254; i++) {
 		def deviceIP = "${networkPrefix}.${i.toString()}"
-		sendGetCmd(deviceIP, "/api/device/state", action)
+		sendGetCmd("/info", action, deviceIP)
 		pauseExecution(pollInterval)
 	}
 	pauseExecution(5000)
+	
+	for(int i = 2; i < 254; i++) {
+		def deviceIP = "${networkPrefix}.${i.toString()}"
+		sendGetCmd("/api/device/state", action, deviceIP)
+		pauseExecution(pollInterval)
+	}
 }
-private sendGetCmd(ip, command, action){
-	logDebug("sendGetCmd: ${ip} / ${command} / ${action}")
+
+private sendGetCmd(command, action, ip){
+	logDebug("sendGetCmd: ${command} / ${action} / ${ip}")
 	sendHubCommand(new hubitat.device.HubAction("GET ${command} HTTP/1.1\r\nHost: ${ip}\r\n\r\n",
-												hubitat.device.Protocol.LAN, null, [callback: action]))
+				   hubitat.device.Protocol.LAN, null,[callback: action]))
 }
+
 def parseResponse(response) {
 	def cmdResponse
 	if(response.status != 200) {
@@ -341,23 +282,29 @@ def parseResponse(response) {
 	return cmdResponse
 }
 
-
 //	===== General Utility methods =====
 def uninstalled() {
     getAllChildDevices().each { 
         deleteChildDevice(it.deviceNetworkId)
     }
 }
+
 private String convertHexToIP(hex) {
 	[convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
 }
+
 private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
+
 def logDebug(msg){
 	if(debugLog == true) { log.debug "<b>${appVersion()}</b> ${msg}" }
 }
+
 def logInfo(msg){
 	if(infoLog == true) { log.info "<b>${appVersion()}</b> ${msg}" }
 }
+
+def logTrace(msg){ log.trace "${msg}" }
+
 def logWarn(msg) { log.warn "<b>${appVersion()}</b> ${msg}" }
 
 //	end-of-file
