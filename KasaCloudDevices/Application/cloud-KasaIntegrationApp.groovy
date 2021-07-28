@@ -8,8 +8,9 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 
 ===== Version 6.3.2) =====
 Fixed token acquisition method eliminate system-generated error.
+07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
 ===================================================================================================*/
-def appVersion() { return "6.3.2" }
+def appVersion() { return "6.3.3" }
 import groovy.json.JsonSlurper
 
 definition(

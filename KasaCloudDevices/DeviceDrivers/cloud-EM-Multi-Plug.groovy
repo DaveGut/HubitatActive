@@ -12,8 +12,9 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 		2.	Remove LED On/Off Preference.
 	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".
 		Allows use with Rule Machine.
+07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
 ===================================================================================================*/
-def driverVer() { return "6.3.2" }
+def driverVer() { return "6.3.3" }
 //def type() { return "Multi Plug" }
 def type() { return "EM Multi Plug" }
 def file() { return type().replaceAll(" ", "-") }
@@ -588,12 +589,14 @@ def setCommsData(commsType) {
 
 def ledOn() {
 	logDebug("ledOn: Setting LED to on")
-	sendCmd("""{"system":{"set_led_off":{"off":0}}}""")
+	sendCmd("""{"system":{"set_led_off":{"off":0},""" +
+			""""get_sysinfo":{}}}""")
 }
 
 def ledOff() {
-	logDebug("ledOn: Setting LED to off")
-	sendCmd("""{"system":{"set_led_off":{"off":1}}}""")
+	logDebug("ledOff: Setting LED to off")
+	sendCmd("""{"system":{"set_led_off":{"off":1},""" +
+			""""get_sysinfo":{}}}""")
 }
 
 def getSystemData() {
@@ -901,6 +904,12 @@ def setSysInfo(response) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 		logInfo("setSysInfo: switch: ${onOff}")
 	}
+	def ledOnOff = "on"
+	if (status.led_off == 1) { ledOnOff = "off" }
+	if (ledOnOff != device.currentValue("led")) {
+		sendEvent(name: "led", value: ledOnOff)
+		logDebug("distResp: Led On/Off = ${ledOnOff}")
+	}
 }
 
 def distResp(response) {
@@ -911,18 +920,9 @@ def distResp(response) {
 				getPower()
 			}
 		} else if (response.system.set_relay_state) {
-			runIn(1, refresh)
+			runInMillis(100, refresh)
 		} else if (response.system.reboot) {
 			logWarn("distResp: Rebooting device.")
-		} else if (response.system.set_led_off) {
-			if (response.system.set_led_off.err_code == 0) {
-				def onOff = "on"
-				if (device.currentValue("led") == "on") { onOff = "off" }
-				sendEvent(name: "led", value: onOff)
-				logDebug("distResp: Led On/Off = ${onOff}")
-			} else {
-				logWarn("distResp: Setting LED Faild")
-			}
 		} else {
 			logWarn("distResp: Unhandled response = ${response}")
 		}
