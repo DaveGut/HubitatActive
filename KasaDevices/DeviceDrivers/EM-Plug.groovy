@@ -946,9 +946,8 @@ def setSysInfo(response) {
 			logInfo("setSysInfo: level: ${status.brightness}")
 		}
 	}
-	def ledStatus = response.system.get_sysinfo.led_off
 	def ledOnOff = "on"
-	if (ledStatus == 1) { ledOnOff = "off" }
+	if (status.led_off == 1) { ledOnOff = "off" }
 	if (ledOnOff != device.currentValue("led")) {
 		sendEvent(name: "led", value: ledOnOff)
 		logInfo("setSysInfo: Led On/Off = ${ledOnOff}")
