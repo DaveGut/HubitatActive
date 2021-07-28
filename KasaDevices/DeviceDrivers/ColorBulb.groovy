@@ -12,8 +12,9 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 		2.	Remove LED On/Off Preference.
 	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".
 		Allows use with Rule Machine.
+07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
 ===================================================================================================*/
-def driverVer() { return "6.3.2" }
+def driverVer() { return "6.3.3" }
 def type() { return "Color Bulb" }
 //def type() { return "CT Bulb" }
 //def type() { return "Mono Bulb" }

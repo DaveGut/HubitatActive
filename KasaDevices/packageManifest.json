@@ -1,9 +1,9 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.3.2",
+  "version": "6.3.3",
   "minimumHEVersion": "2.2.6",
-  "dateReleased": "2021-05-28",
+  "dateReleased": "2021-07-28",
   "releaseNotes" : "Fixed App error.  Added Led on/off support.  Changed CommsError attribute to string.",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
