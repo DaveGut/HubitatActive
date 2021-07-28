@@ -904,8 +904,9 @@ def setSysInfo(response) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 		logInfo("setSysInfo: switch: ${onOff}")
 	}
+	def ledStatus = response.system.get_sysinfo.led_off
 	def ledOnOff = "on"
-	if (status.led_off == 1) { ledOnOff = "off" }
+	if (ledStatus == 1) { ledOnOff = "off" }
 	if (ledOnOff != device.currentValue("led")) {
 		sendEvent(name: "led", value: ledOnOff)
 		logDebug("distResp: Led On/Off = ${ledOnOff}")
