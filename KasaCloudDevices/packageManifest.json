@@ -3,7 +3,7 @@
   "author": "David Gutheinz",
   "version": "6.3.3",
   "minimumHEVersion": "2.2.6",
-  "releaseNotes" : "This package is DEPRECATED.  Do not use for new installations.",
+  "releaseNotes" : "This package is DEPRECATED.  Use for UPDATES ONLY! DO NOT USE FOR NEW INSTALLATIONS.",
   "documentationLink": "https://github.com/DaveGut/Hubitat-TP-Link-Integration/wiki",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "dateReleased": "2021-07-28",
