@@ -5,7 +5,7 @@
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 
 Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
-
+xxxxxxx
 ===== Version 6.3.2) =====
 	a.  Drivers (plugs and switches):
 		1.	Add LED On/Off commands. Add attribute led to reflect state
