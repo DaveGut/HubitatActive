@@ -6,11 +6,13 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 
 Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
 
-===== Version 6.3.2) =====
-Fixed token acquisition method eliminate system-generated error.
-07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
+===== Version 6.4.0 =====
+1.	Added support for independent Light Strip driver
+2.	Added child-parent comms for
+	a.	Sync Effect Preset Data (Light Strip)
+	b.	Sunc Bulb Preset Data (Light Strip, Color Bulb)
 ===================================================================================================*/
-def appVersion() { return "6.3.3" }
+def appVersion() { return "6.4.0" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -25,6 +27,7 @@ definition(
 	documentationLink: "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
 	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy"
 )
+
 preferences {
 	page(name: "startPage")
 	page(name: "kasaAuthenticationPage")
@@ -32,6 +35,7 @@ preferences {
 	page(name: "removeDevicesPage")
 	page(name: "getToken")
 }
+
 def installed() { initialize() }
 
 def updated() { initialize() }
@@ -383,7 +387,6 @@ def parseLanData(response) {
 	parseDeviceData(cmdResp, ip)
 }
 
-//def parseDeviceData(cmdResp, appServerUrl = null, ip = null) {
 def parseDeviceData(cmdResp, ip = null) {
 	logDebug("parseDeviceData: ${cmdResp} //  ${ip}")
 	def dni
@@ -416,7 +419,7 @@ def parseDeviceData(cmdResp, ip = null) {
 	} else if (kasaType == "IOT.SMARTBULB") {
 		if (cmdResp.lighting_effect_state) {
 			feature = "lightStrip"
-			type = "Kasa Color Bulb"
+			type = "Kasa Light Strip"
 		} else if (cmdResp.is_color == 1) {
 			type = "Kasa Color Bulb"
 		} else if (cmdResp.is_variable_color_temp == 1) {
@@ -469,7 +472,7 @@ def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId
 	logInfo("updateDevices: ${type} ${alias} added to devices array.")
 	logDebug("updateDevices: ${alias} added to array. Data = ${device}")
 }
-/////////////////////////////////////////////////////////////
+
 def updateChildren() {
 	logDebug("updateChildDeviceData")
 	def devices = state.devices
@@ -515,7 +518,7 @@ def fixConnection(type) {
 	}
 	return message
 }
-//////////////////////////////////////////////////////////////
+
 def updateDeviceIps(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
@@ -585,7 +588,6 @@ def sendKasaCmd(deviceId, command, appServerUrl = kasaCloudUrl) {
 
 //	===== Coordinate between multiPlug =====
 def coordPoll(deviceId, plugNo, data) {
-//	logDebug("coordPoll: ${deviceId} ${data}")
 	def devices = state.devices
 	devices.each {
 			def child = getChildDevice(it.value.dni)
@@ -603,6 +605,51 @@ def coordinate(deviceId, plugNo, type, data) {
 			def child = getChildDevice(it.value.dni)
 			if (child) {
 				child.coord(type, data, plugNo)
+			}
+		}
+	}
+}
+
+//	===== Coordinate Bulb and Light Strip Preset Data =====
+def syncBulbPresets(bulbPresets, devType) {
+	logDebug("syncBulbPresets")
+	def devices = state.devices
+	devices.each {
+		def type = it.value.type
+		if (type == "Kasa ${devType}") {
+			def child = getChildDevice(it.value.dni)
+			if (child) {
+				child.updatePresets(bulbPresets)
+			}
+		}
+	}
+}
+
+def resetStates(deviceNetworkId) {
+	logDebug("resetStates: ${deviceNetworkId}")
+	def devices = state.devices
+	devices.each {
+		def type = it.value.type
+		def dni = it.value.dni
+		if (type == "Kasa Light Strip") {
+			def child = getChildDevice(dni)
+			if (child && dni != deviceNetworkId) {
+				child.resetStates()
+			}
+		}
+	}
+}
+	
+def syncEffectPreset(effData, deviceNetworkId) {
+	logDebug("syncEffectPreset: ${effData.name} || ${deviceNetworkId}")
+	def devices = state.devices
+	devices.each {
+		def type = it.value.type
+		def dni = it.value.dni
+		if (type == "Kasa Light Strip") {
+			def child = getChildDevice(dni)
+			if (child && dni != deviceNetworkId) {
+				child.updateEffectPreset(effData)
 			}
 		}
 	}
@@ -644,7 +691,7 @@ private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 
 def debugOff() { app.updateSetting("debugLog", false) }
 
-def logTrace(msg){ log.trace "[KasaInt/${appVersion()}] ${device.label} ${msg}" }
+def logTrace(msg){ log.trace "[KasaInt/${appVersion()}] ${msg}" }
 
 def logDebug(msg){
 	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}]: ${msg}" }

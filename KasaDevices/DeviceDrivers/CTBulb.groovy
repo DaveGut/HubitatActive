@@ -6,22 +6,23 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 
 Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
 
-===== Version 6.3.2) =====
-	a.  Drivers (plugs and switches):
-		1.	Add LED On/Off commands. Add attribute led to reflect state
-		2.	Remove LED On/Off Preference.
-	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".
-		Allows use with Rule Machine.
-07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
+===== Version 6.4.0) =====
+1.  New driver for Light Strips.  Includes new functions:
+	a.	Effect Presets - Save current strip effect.  Delete saved effect (by name).
+		Set a save effect to the strip's active effect.
+	b.	Bulb Presets.  Works on current color attributes.  Save, Delete, and Set
+	c.	Preference Sync Effect Presets.  Sets the effect presets for other strips
+		to match current strip.
+	d.	Preference Sync Bulb Preset Data. Sets the bulb presets for other strips 
+		to match current strip.
+	e.	Limitation: Light Strips and the driver do not support Color Temperature.
+2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
+3.	General update: Clean up installation and save preferences process.
 ===================================================================================================*/
-def driverVer() { return "6.3.3" }
+def driverVer() { return "6.4.0" }
 //def type() { return "Color Bulb" }
 def type() { return "CT Bulb" }
 //def type() { return "Mono Bulb" }
-//	User Selection of Energy Monitor Functions.
-def engMon() { return true }
-//def engMon() { return false }
-//	Bulb
 def file() { return type().replaceAll(" ", "") }
 import groovy.json.JsonSlurper
 
@@ -53,32 +54,43 @@ metadata {
 						  "30 minutes"],
 			type: "ENUM"]]
 		//	EM Functions
-		//	By commenting out def engMon() true statement (about line 30), you can remove Energy Monitor
-		//	Attributes from your device edit pages.
-		if (engMon()) {
-			capability "Power Meter"
-			capability "Energy Meter"
-			attribute "currMonthTotal", "number"
-			attribute "currMonthAvg", "number"
-			attribute "lastMonthTotal", "number"
-			attribute "lastMonthAvg", "number"
-		}
+		capability "Power Meter"
+		capability "Energy Meter"
+		attribute "currMonthTotal", "number"
+		attribute "currMonthAvg", "number"
+		attribute "lastMonthTotal", "number"
+		attribute "lastMonthAvg", "number"
 		//	Communications
 		attribute "connection", "string"
 		attribute "commsError", "string"
+		//	Psuedo capability Light Presets
+		if (type() == "Color Bulb") {
+			command "bulbPresetCreate", [[
+				name: "Name for preset.", 
+				type: "STRING"]]
+			command "bulbPresetDelete", [[
+				name: "Name for preset.", 
+				type: "STRING"]]
+			command "bulbPresetSet", [[
+				name: "Name for preset.", 
+				type: "STRING"],[
+				name: "Transition Time (seconds).", 
+				type: "STRING"]]
+		}
 	}
 	preferences {
-		if (engMon()) {
-			input ("emFunction", "bool", 
-				   title: "Enable Energy Monitor", 
-				   defaultValue: false)
-		}
+		input ("emFunction", "bool", 
+			   title: "Enable Energy Monitor", 
+			   defaultValue: false)
 		input ("transition_Time", "num",
 			   title: "Default Transition time (seconds)",
 			   defaultValue: 0)
 		if (type() == "Color Bulb") {
 			input ("highRes", "bool", 
 				   title: "(Color Bulb) High Resolution Hue Scale", 
+				   defaultValue: false)
+			input ("syncBulbs", "bool",
+				   title: "Sync Bulb Preset Data",
 				   defaultValue: false)
 		}
 		input ("debug", "bool",
@@ -105,22 +117,7 @@ metadata {
 //	===== Code common to all drivers =====
 //	======================================
 def installed() {
-	def message = "Installing new device."
-	if (parent.useKasaCloud) {
-		message += "\n\t\t\t<b>Application set to useKasaCloud.</b>  System will attempt to install the"
-		message += "\n\t\t\tdevice as a cloud device."
-		message += "\n\t\t\tIf the device is unbound from the kasaCloud, there will be errors on install."
-		message += "\n\t\t\tTo recover set Bind and useKasaCloud in preferences and Save Preferences."
-	} else {
-		message += "\n\t\t\t<b>Application set to LAN installation.</b>  System will attempt to install the"
-		message += "\n\t\t\tdevice as a LAN device."
-		message += "\n\t\t\tIf the device can't use cloud, you will need to go to the Kasa App, select"
-		message += "\n\t\t\tuseKasaCloud, and successfully enter credentials to properly install the device."
-		message += "\n\t\t\tBefore doing this, you will need to uninstall this device."
-	}
-	message += "\n\t\t\t<b>This installation will use the CLOUD communications if you have set"
-	logInfo(message)
-	state.errorCount = 0
+	logInfo("Installing Device...")
 	if (parent.useKasaCloud) {
 		logInfo("install: Installing as CLOUD device.")
 		device.updateSetting("useCloud", [type:"bool", value: true])
@@ -130,9 +127,12 @@ def installed() {
 		sendEvent(name: "connection", value: "LAN")
 		device.updateSetting("useCloud", [type:"bool", value: false])
 	}
+	state.errorCount = 0
 	state.pollInterval = "30 minutes"
+	state.bulbPresets = [:]
 	updateDataValue("driverVersion", driverVer())
-	runIn(5, updated)
+	if (type() == "colorBulb") { state.bulbPresets = [:] }
+	runIn(2, updated)
 }
 
 def updated() {
@@ -140,33 +140,75 @@ def updated() {
 		//	First to run with  10 second wait to continue.
 		logWarn("updated: ${rebootDevice()}")
 	}
-
-	if (state.socketStatus) { state.remove("socketStatus") }
-	if (state.response) { state.remove("response") }
-	if (state.respLength) {state.remove("respLength") }
-	logInfo("updated: Updating device preferences and settings.")
 	unschedule()
-	logDebug("updated: ${updateDriverData()}")
-	//	update data based on preferences
+	if (syncBulbs) {
+		logDebug("updated: ${syncBulbPresets()}")
+		return
+	}
 	if (debug) { runIn(1800, debugOff) }
-	logDebug("updated: Debug logging is ${debug}")
-	logDebug("updated: Info logging is ${descriptionText}")
-	logDebug("updated: ${bindUnbind()}")
+	logDebug("updated: Debug logging is ${debug}. Info logging is ${descriptionText}.")
+	logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
+	logDebug("updated: High Resolution Color is ${highRes}")
+	state.errorCount = 0
 	sendEvent(name: "commsError", value: "false")
-
-	if(type().contains("Bulb")) {
-		logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
-		logDebug("updated: High Resolution Color is ${highRes}")
-	}
-		
-	//	Update scheduled methods
-	if (type().contains("EM") || type().contains("Bulb")) {
-		logDebug("updated: ${setupEmFunction()}")
-	}
+	if (type() == "Color Bulb" && !state.bulbPresets) { state.bulbPresets = [:] }
+	logDebug("updated: ${bindUnbind()}")
+	logDebug("updated: ${setupEmFunction()}")
 	logDebug("updated: ${setPolling()}")
-	runIn(1, refresh)
-	
-	runIn(2, getSystemData)
+	logDebug("updated: ${updateDriverData()}")
+	updateDataValue("driverVersion", driverVer())
+	runIn(3, refresh)
+}
+
+def updateDriverData() {
+	def drvVer = getDataValue("driverVersion")
+	if (drvVer == driverVer()) {
+		return "Driver Data already updated."
+	}
+	def message = "<b>Updating data from driver version ${drvVer}."
+	state.remove("lastSaturation")
+	pauseExecution(100)
+	state.remove("lastHue")
+	def comType = "LAN"
+	def usingCloud = false
+	def binding = true
+	def interval = "30 minutes"
+	if (drvVer.contains("5.3")) {
+		if (state.pollInterval && state.pollInterval != "off") {
+			interval = "${state.pollInterval} seconds"
+		}
+	} else if (drvVer.contains("6.0")) {
+		if (refreshInterval) {
+			def inter = refreshInterval.toInteger()
+			if (inter < 60) {
+				interval = "${inter} seconds"
+			}
+		}
+		if (useCloud) { commType = "CLOUD" }
+		if (bind == "0") { binding = false }
+	} else if (drvVer.contains("6.1")) {
+		if (state.pollInterval && state.pollInterval != "off") {
+			interval = "${state.pollInterval} seconds"
+		}
+		if (useCloud) { commType = "Cloud" }
+	} else if (drvVer.contains("6.2")) {
+		interval = state.pollInterval
+		if (useCloud) { commType = "Cloud" }
+		binding = bind
+	}
+	message += "\n\t\t\t Connection = ${comType}."
+	message += "\n\t\t\t bind = ${binding}."
+	message += "\n\t\t\t pollInterval = ${interval}."
+	setCommsData(comType)
+	pauseExecution(200)
+	device.updateSetting("bind", [type:"bool", value: binding])
+	pauseExecution(200)
+	state.pollInterval = interval
+	state.remove("WARNING")
+	pauseExecution(100)
+	updateDataValue("driverVersion", driverVer())
+	message += "\n\t\t\tNew Version: ${driverVer()}.</b>"
+	return message
 }
 
 //	===== Energy Monitor Methods =====
@@ -421,6 +463,35 @@ def resetCommsError() {
 	state.errorCount = 0
 }
 
+def distResp(response) {
+	if (response["${service()}"]) {
+		updateBulbData(response["${service()}"]."${method()}")
+		if(emFunction) { getPower() }
+	} else if (response.system) {
+		updateBulbData(response.system.get_sysinfo.light_state)
+		if(emFunction) { getPower() }
+	} else if (emFunction && response["smartlife.iot.common.emeter"]) {
+		def month = new Date().format("M").toInteger()
+		def emeterResp = response["smartlife.iot.common.emeter"]
+		if (emeterResp.get_realtime) {
+			setPower(emeterResp.get_realtime)
+		} else if (emeterResp.get_monthstat.month_list.find { it.month == month }) {
+			setEnergyToday(emeterResp.get_monthstat)
+		} else if (emeterResp.get_monthstat.month_list.find { it.month == month - 1 }) {
+			setLastMonth(emeterResp.get_monthstat)
+		} else {
+			logWarn("distResp: Unhandled response = ${response}")
+		}
+	} else if (response["smartlife.iot.common.cloud"]) {
+		setBindUnbind(response["smartlife.iot.common.cloud"])
+	} else if (response["smartlife.iot.common.system"]) {
+		logWarn("distResp: Rebooting device")
+	} else {
+		logWarn("distResp: Unhandled response = ${response}")
+	}
+	resetCommsError()
+}
+
 //	===== Preference Methods =====
 def setPolling() {
 	def message = "Setting Poll Intervals."
@@ -608,221 +679,24 @@ def setCommsData(commsType) {
 	pauseExecution(1000)
 }
 
-def ledOnOff() {
-	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
-	pauseExecution(2000)
-	return "Setting Led off to ${ledStatus}."
+//	===== Preset Sync Functions =====
+def syncBulbPresets() {
+	device.updateSetting("syncBulbs", [type:"bool", value: false])
+//	runIn(1, sendBulbPresets)
+	parent.syncBulbPresets(state.bulbPresets, type())
+	return "Synching Bulb Presets with all Kasa Bulbs."
 }
 
-def getSystemData() {
-	def message = "<b>System Data Summary: [Information: </b>["
-	message += "Name: ${device.getName()} , "
-	message += "Label: ${device.getLabel()} , "
-	message += "DNI: ${device.getDeviceNetworkId()}],"
-	
-	message += "[<b>States: </b>["
-	message += "pollInterval: ${state.pollInterval} , "
-	message += "powerPollInterval: ${state.powerPollInterval} , "
-	message += "errorCount: ${state.errorCount}],"
-	
-	message += "[<b>Preferences</b>: ["
-	if (type().contains("Bulb")) {
-		message += "Transition Time: ${transition_Time} , "
-	}
-	message += "Energy Monitor: ${emFunction} , "
-	message += "Cloud Binding: ${bind} , "
-	message += "Use Kasa Cloud: ${useCloud}] , "
-	
-	message += "[<b> Attributes: </b>["
-	message += "Connection: ${device.currentValue("connection")} , "
-	message += "Comms Error: ${device.currentValue("commsError")} , "
-	message += "Switch: ${device.currentValue("switch")} , "
-	if (emFunction) {
-		message += "Power: ${device.currentValue("power")} , "
-		message += "Energy: ${device.currentValue("energy")} , "
-		message += "Current Month Daily: ${device.currentValue("currMonthAvg")} , "
-		message += "Current Month Total: ${device.currentValue("currMonthTotal")} , "
-		message += "Last Month Daily: ${device.currentValue("lastMonthAvg")} , "
-		message += "Last Month Total: ${device.currentValue("lastMonthTotal")}]"
-	}
-	message +="[<b>Device Data:</b> ${device.getData()}] , "
-	message +="[<b>Device Attributes:</b> ${device.getCurrentStates()}]]]"
-	logInfo(message)
+def xxsendBulbPresets() {
+	parent.syncBulbPresets(state.bulbPresets, type())
+}
+
+def updatePresets(bulbPresets) {
+	logDebug("updatePresets: Preset Bulb Data: ${bulbPresets}.")
+	state.bulbPresets = bulbPresets
 }
 
 //	===== Utility Methods =====
-def updateDriverData() {
-//	Updates/adds/removes device data and states from devices using earlier version.
-	def drvVer = getDataValue("driverVersion")
-	if (drvVer == driverVer()) {
-		return "Driver Data already updated."
-	}
-//	Poll Interval, communications, and bind capture
-	def message = "<b>Updating data from driver version ${drvVer}."
-	def comType = "LAN"
-	def usingCloud = false
-	def binding = true
-	def interval = "30 minutes"
-	def oldDriver = getDataValue("driverVersion")
-	if (oldDriver.contains("5.3")) {
-		if (state.pollInterval && state.pollInterval != "off") {
-			interval = "${state.pollInterval} seconds"
-		}
-	} else if (oldDriver.contains("6.0")) {
-		if (refreshInterval) {
-			def inter = refreshInterval.toInteger()
-			if (inter < 60) {
-				interval = "${inter} seconds"
-			}
-		}
-		if (useCloud) { commType = "CLOUD" }
-		if (bind == "0") { binding = false }
-	} else if (oldDriver.contains("6.1")) {
-		if (state.pollInterval && state.pollInterval != "off") {
-			interval = "${state.pollInterval} seconds"
-		}
-		if (useCloud) { commType = "Cloud" }
-		if (bind == "0") { binding = false }
-	} else if (oldDriver.contains("6.2")) {
-		interval = state.pollInterval
-		if (useCloud) { commType = "Cloud" }
-		binding = bind
-	}
-	message += "\n\t\t\t Connection = ${comType}."
-	message += "\n\t\t\t bind = ${binding}."
-	message += "\n\t\t\t pollInterval = ${interval}."
-	setCommsData(comType)
-	pauseExecution(200)
-	device.updateSetting("bind", [type:"bool", value: binding])
-	pauseExecution(200)
-	state.pollInterval = interval
-
-//	Settings for all updates
-	if (device_IP) {
-		device.removeSetting("device_IP")
-		pauseExecution(200)
-	}
-	if (pollTest) {
- 		device.removeSetting("pollTest")
-		pauseExecution(200)
-	}
-	if (refresh_Rate) {
-		device.removeSetting("refresh_Rate")
-		pauseExecution(200)
-	}
-	if (refreshInterval) {
-		device.removeSetting("refreshInterval")
-		pauseExecution(200)
-	}
-	
-//	States for all version updates	
-	if (state.response) {
-		state.remove("response")
-		pauseExecution(200)
-	}
-	if (state.respLength) {
-		state.remove("respLength")
-		pauseExecution(200)
-	}
-	if (state.lastConnect) {
-		state.remove("lastConnect")
-		pauseExecution(200)
-	}
-	if (state.pollFreq) {
-		state.remove("pollFreq")
-		pauseExecution(200)
-	}
-	if (state.WARNING) {
-		state.remove("WARNING")
-		pauseExecution(200)
-	}
-	if (state.currentBind) {
-		state.remove("currentBind")
-		pauseExecution(200)
-	}
-	if (state.currentCloud) {
-		state.remove("currentCloud")
-		pauseExecution(200)
-	}
-	if (type() == "EM Plug Switch" || type().contains("Bulb")) {
-		if (state.powerPollInterval) {
-			state.remove("powerPollInterval")
-			pauseExecution(200)
-		}
-	}
-	if (state.lanErrorsToday) {
-		state.remove("lanErrorsToday")
-		pauseExecution(200)
-	}
-	if (state.lanErrorsPrev) {
-		state.remove("lanErrorsPrev")
-		pauseExecution(200)
-	}
-	if (state.lanErrosPrev) {
-		state.remove("lanErrosPrev")
-		pauseExecution(200)
-	}
-	if (state.communicationsError) {
-		state.remove("communicationsError")
-		pauseExecution(200)
-	}
-	if (state.socketTimeout) {
-		state.remove("socketTimeout")
-		pauseExecution(200)
-	}
-	if (state.lastColorTemp) {
-		state.remove("lastColorTemp")
-		pauseExecution(200)
-	}
-	
-	
-//	Data values for all updates
-	if (getDataValue("appServerUrl")) {
-		removeDataValue("appServerUrl")
-		pauseExecution(200)
-	}
-	if (getDataValue("deviceFWVersion")) {
-		removeDataValue("deviceFWVersion")
-		pauseExecution(200)
-	}
-	if (getDataValue("lastErrorratio")) {
-		removeDataValue("lastErrorRatio")
-		pauseExecution(200)
-	}
-	if (getDataValue("token")) {
-		removeDataValue("token")
-		pauseExecution(200)
-	}
-	if (type() == "EM Multi Plug") {
-		if (getDataValue("emSysInfo")) {
-			removeDataValue("emSysInfo")
-			pauseExecution(200)
-		}
-		if (getDataValue("getPwr")) {
-			removeDataValue("getPwr")
-			pauseExecution(200)
-		}
-	}
-	if (getDataValue("applicationVersion")) {
-		removeDataValue("applicationVersion")
-		pauseExecution(200)
-	}
-	if (!type().contains("Multi")) {
-		if (getDataValue("plugNo")) {
-			removeDataValue("plugNo")
-			pauseExecution(200)
-		}
-		if (getDataValue("plugId")) {
-			removeDataValue("plugId")
-			pauseExecution(200)
-		}
-	}
-
-	updateDataValue("driverVersion", driverVer())
-	message += "\n\t\t\tNew Version: ${driverVer()}.</b>"
-	return message
-}
-
 private outputXOR(command) {
 //	UDP Version
 	def str = ""
@@ -960,7 +834,7 @@ def setColorTemperature(colorTemp, level = device.currentValue("level"), transTi
 	else if (colorTemp > highCt) { colorTemp = highCt }
 	sendCmd("""{"${service()}":{"${method()}":""" +
 			"""{"ignore_default":1,"on_off":1,"brightness":${level},"color_temp":${colorTemp},""" +
-			""""transition_period":${transTime}}}}""")
+			""""hue":0,"saturation":0,"transition_period":${transTime}}}}""")
 }
 
 def setCircadian() {
@@ -1013,9 +887,54 @@ def poll() {
 	sendCmd("""{"system":{"get_sysinfo":{}}}""")
 }
 
+//	===== Capability Bulb Presets =====
+def bulbPresetCreate(psName) {
+	if (!state.bulbPresets) { state.bulbPresets = [:] }
+	psName = psName.trim()
+	logDebug("bulbPresetCreate: ${psName}")
+	def psData = [:]
+	psData["hue"] = device.currentValue("hue")
+	psData["saturation"] = device.currentValue("saturation")
+	psData["level"] = device.currentValue("level")
+	def colorTemp = device.currentValue("colorTemperature")
+	if (colorTemp == null) { colorTemp = 0 }
+	psData["colTemp"] = colorTemp
+	state.bulbPresets << ["${psName}": psData]
+}
+
+def bulbPresetDelete(psName) {
+	psName = psName.trim()
+	logDebug("bulbPresetDelete: ${psName}")
+	def presets = state.bulbPresets
+	if (presets.toString().contains(psName)) {
+		presets.remove(psName)
+	} else {
+		logWarn("bulbPresetDelete: ${psName} is not a valid name.")
+	}
+}
+
+def bulbPresetSet(psName, transTime = transition_Time) {
+	psName = psName.trim()
+	transTime = 1000 * transTime.toInteger()
+	if (state.bulbPresets."${psName}") {
+		def psData = state.bulbPresets."${psName}"
+		logDebug("bulbPresetSet: ${psData}, transTime = ${transTime}")
+		def hue = psData.hue
+		if (highRes != true) {
+			hue = Math.round(0.49 + hue * 3.6).toInteger()
+		}
+		sendCmd("""{"${service()}":{"${method()}":{"ignore_default":1,"on_off":1,""" +
+				""""brightness":${psData.level},"color_temp":${psData.colTemp},""" +
+				""""hue":${hue},"saturation":${psData.saturation},"transition_period":${transTime}}}}""")
+} else {
+		logWarn("bulbPresetSet: ${psName} is not a valid name.")
+	}
+}
+
+//	===== Update Data =====
 def updateBulbData(status) {
 	logDebug("updateBulbData: ${status}")
-	if (status.err_code) {
+	if (status.err_code && status.err_code != 0) {
 		logWarn("updateBulbData: ${status.err_msg}")
 		return
 	}
@@ -1023,7 +942,7 @@ def updateBulbData(status) {
 	def onOff = "on"
 	if (status.on_off == 0) { onOff = "off" }
 	deviceStatus << ["power" : onOff]
-	def isChange = false
+	def isChange = "false"
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
 		isChange = true
@@ -1041,40 +960,38 @@ def updateBulbData(status) {
 				isChange = true
 			}
 			def ct = status.color_temp
-			if (ct == 0) { ct = device.currentValue("colorTemperature") }
 			deviceStatus << ["colorTemp" : ct]
 			if (device.currentValue("colorTemperature") != ct) {
 				isChange = true
+				sendEvent(name: "colorTemperature", value: ct)
 			}
-			if (type() == "CT Bulb") { 
-				setColorTempData(status.color_temp.toInteger())
+			def hue = status.hue.toInteger()
+			if (ct == "0") { hue = 0 }
+			if (highRes != true) { hue = (hue / 3.6).toInteger() }
+			deviceStatus << ["hue" : hue]
+			if (device.currentValue("hue") != hue) {
+				sendEvent(name: "hue", value: hue)
+				isChange = true
+			}
+			deviceStatus << ["sat" : status.saturation]
+			if (ct == "0") { saturation = 0 }
+			if (device.currentValue("saturation") != status.saturation) {
+				sendEvent(name: "saturation", value: status.saturation)
+				isChange = true
+			}
+			def color = [:]
+			color << ["hue" : hue]
+			color << ["saturation" : status.saturation]
+			if (status.color_temp.toInteger() > 2000) {
+				color << ["level" : 0]
 			} else {
-				def hue = status.hue.toInteger()
-				if (highRes != true) { hue = (hue / 3.6).toInteger() }
-				deviceStatus << ["hue" : hue]
-				if (device.currentValue("hue") != hue) {
-					sendEvent(name: "hue", value: hue)
-					isChange = true
-				}
-				deviceStatus << ["sat" : status.saturation]
-				if (device.currentValue("saturation") != status.saturation) {
-					sendEvent(name: "saturation", value: status.saturation)
-					isChange = true
-				}
-				def color = [:]
-				color << ["hue" : hue]
-				color << ["saturation" : status.saturation]
-				if (status.color_temp.toInteger() > 2000) {
-					color << ["level" : 0]
-				} else {
-					color << ["level" : status.brightness]
-				}
-				sendEvent(name: "color", value: color)
-				if (status.color_temp.toInteger() == 0) { 
-					setRgbData(hue, status.saturation) }
-				else { 
-					setColorTempData(status.color_temp) 
-				}
+				color << ["level" : status.brightness]
+			}
+			sendEvent(name: "color", value: color)
+			if (status.color_temp.toInteger() == 0) { 
+				setRgbData(hue) }
+			else { 
+				setColorTempData(status.color_temp) 
 			}
 		}
 	}
@@ -1107,10 +1024,8 @@ def setColorTempData(temp){
 	}
 }
 
-def setRgbData(hue, saturation){
+def setRgbData(hue){
 	logDebug("setRgbData: hue = ${hue} // highRes = ${highRes}")
-	state.lastHue = hue
-	state.lastSaturation = saturation
 	if (highRes != true) { hue = (hue * 3.6).toInteger() }
     def colorName
 	switch (hue){
@@ -1152,35 +1067,6 @@ def setRgbData(hue, saturation){
 	    sendEvent(name: "colorName", value: colorName)
 		logInfo("setRgbData: Color name is ${colorName}.")
 	}
-}
-
-def distResp(response) {
-	if (response["${service()}"]) {
-		updateBulbData(response["${service()}"]."${method()}")
-		if(emFunction) { getPower() }
-	} else if (response.system) {
-		updateBulbData(response.system.get_sysinfo.light_state)
-		if(emFunction) { getPower() }
-	} else if (emFunction && response["smartlife.iot.common.emeter"]) {
-		def month = new Date().format("M").toInteger()
-		def emeterResp = response["smartlife.iot.common.emeter"]
-		if (emeterResp.get_realtime) {
-			setPower(emeterResp.get_realtime)
-		} else if (emeterResp.get_monthstat.month_list.find { it.month == month }) {
-			setEnergyToday(emeterResp.get_monthstat)
-		} else if (emeterResp.get_monthstat.month_list.find { it.month == month - 1 }) {
-			setLastMonth(emeterResp.get_monthstat)
-		} else {
-			logWarn("distResp: Unhandled response = ${response}")
-		}
-	} else if (response["smartlife.iot.common.cloud"]) {
-		setBindUnbind(response["smartlife.iot.common.cloud"])
-	} else if (response["smartlife.iot.common.system"]) {
-		logWarn("distResp: Rebooting device")
-	} else {
-		logWarn("distResp: Unhandled response = ${response}")
-	}
-	resetCommsError()
 }
 
 //	End of File

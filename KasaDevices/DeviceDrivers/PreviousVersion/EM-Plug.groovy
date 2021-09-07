@@ -4,16 +4,15 @@
 
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 
-Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
-
-===== This version (6.3.1) =====
-	Fixed issue with Hubitat Dashboard "color bulb" tile where setting color temperature to
-	zero when a color is set causes the Color Temp slider to disappear.
-		a.	Fixed method setColorTemperature to properly range the set color temperature.
-		b.	Fixed method updatBulbData to not reset attribute Color Temperature if the value
-			from the device is 0.
+===== Version 6.3.2) =====
+	a.  Drivers (plugs and switches):
+		1.	Add LED On/Off commands. Add attribute led to reflect state
+		2.	Remove LED On/Off Preference.
+	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".
+		Allows use with Rule Machine.
+07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
 ===================================================================================================*/
-def driverVer() { return "6.3.1" }
+def driverVer() { return "6.3.3" }
 //def type() { return "Plug Switch" }
 //def type() { return "Dimming Switch" }
 def type() { return "EM Plug" }
@@ -53,8 +52,11 @@ metadata {
 			attribute "lastMonthTotal", "number"
 			attribute "lastMonthAvg", "number"
 		}
+		command "ledOn"
+		command "ledOff"
+		attribute "led", "string"
 		attribute "connection", "string"
-		attribute "commsError", "bool"
+		attribute "commsError", "string"
 	}
 
 	preferences {
@@ -77,10 +79,6 @@ metadata {
 				   title: "Use Kasa Cloud for device control",
 				   defaultValue: false)
 		}
-		input ("ledStatus", "enum",
-			   options: ["0": "on", "1": "off"],
-			   title: "Led On/Off",
-			   defaultValue: "0")
 		input ("rebootDev", "bool",
 			   title: "Reboot device <b>[Caution]</b>",
 			   defaultValue: false)
@@ -138,11 +136,11 @@ def updated() {
 	logDebug("updated: Debug logging is ${debug}")
 	logDebug("updated: Info logging is ${descriptionText}")
 	logDebug("updated: ${bindUnbind()}")
+	sendEvent(name: "commsError", value: "false")
+	
 	if(type().contains("Bulb")) {
 		logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
 		logDebug("updated: High Resolution Color is ${highRes}")
-	} else {
-		logDebug("updated: ${ledOnOff()}")
 	}
 		
 	//	Update scheduled methods
@@ -392,7 +390,7 @@ def handleCommsError(errorData) {
 def setCommsError(errorData) {
 	def message = "setCommsError: Four consecutive errors.  Setting commsError to true."
 	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>."
-	sendEvent(name: "commsError", value: true)
+	sendEvent(name: "commsError", value: "true")
 	state.commsErrorText = "<b>${errorData}</b>"
 	message += "\n\t\t${parent.fixConnection(device.currentValue("connection"))}"
 	logWarn message
@@ -401,7 +399,7 @@ def setCommsError(errorData) {
 
 def resetCommsError() {
 	if (state.errorCount >= 4) {
-		sendEvent(name: "commsError", value: false)
+		sendEvent(name: "commsError", value: "false")
 		state.remove("commsErrorText")
 	}
 	state.errorCount = 0
@@ -594,10 +592,16 @@ def setCommsData(commsType) {
 	pauseExecution(1000)
 }
 
-def ledOnOff() {
-	sendCmd("""{"system":{"set_led_off":{"off":${ledStatus}}}}""")
-	pauseExecution(2000)
-	return "Setting Led off to ${ledStatus}."
+def ledOn() {
+	logDebug("ledOn: Setting LED to on")
+	sendCmd("""{"system":{"set_led_off":{"off":0},""" +
+			""""get_sysinfo":{}}}""")
+}
+
+def ledOff() {
+	logDebug("ledOff: Setting LED to off")
+	sendCmd("""{"system":{"set_led_off":{"off":1},""" +
+			""""get_sysinfo":{}}}""")
 }
 
 def getSystemData() {
@@ -638,11 +642,12 @@ def getSystemData() {
 
 //	===== Utility Methods =====
 def updateDriverData() {
-//	Updates/adds/removes device data and states from devices using earlier version.
 	def drvVer = getDataValue("driverVersion")
+	def doubleDriver = driverVer().substring(0,3).toDouble()
 	if (drvVer == driverVer()) {
 		return "Driver Data already updated."
 	}
+	
 //	Poll Interval, communications, and bind capture
 	def message = "<b>Updating data from driver version ${drvVer}."
 	def comType = "LAN"
@@ -804,6 +809,7 @@ def updateDriverData() {
 		}
 	}
 
+	sendEvent(name: "led", value: "on")
 	updateDataValue("driverVersion", driverVer())
 	message += "\n\t\t\tNew Version: ${driverVer()}.</b>"
 	return message
@@ -940,6 +946,12 @@ def setSysInfo(response) {
 			logInfo("setSysInfo: level: ${status.brightness}")
 		}
 	}
+	def ledOnOff = "on"
+	if (status.led_off == 1) { ledOnOff = "off" }
+	if (ledOnOff != device.currentValue("led")) {
+		sendEvent(name: "led", value: ledOnOff)
+		logInfo("setSysInfo: Led On/Off = ${ledOnOff}")
+	}
 	if (response.emeter) { setPower(response.emeter.get_realtime) }
 }
 
@@ -948,11 +960,9 @@ def distResp(response) {
 		if (response.system.get_sysinfo) {
 			setSysInfo(response)
 		} else if (response.system.set_relay_state) {
-			runIn(1, refresh)
+			runInMillis(100, refresh)
 		} else if (response.system.reboot) {
 			logWarn("distResp: Rebooting device.")
-		} else if (response.system.set_led_off) {
-			logDebug("distResp: Led On/Off response = ${response.system.set_led_off}")
 		} else {
 			logWarn("distResp: Unhandled response = ${response}")
 		}

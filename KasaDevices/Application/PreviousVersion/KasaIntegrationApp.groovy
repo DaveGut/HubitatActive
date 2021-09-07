@@ -6,10 +6,11 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 
 Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
 
-===== This version (6.3.1) =====
-No changes. Version sync with Drivers.
+===== Version 6.3.2) =====
+Fixed token acquisition method eliminate system-generated error.
+07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
 ===================================================================================================*/
-def appVersion() { return "6.3.1" }
+def appVersion() { return "6.3.3" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -177,13 +178,13 @@ def getToken() {
 			app?.updateSetting("kasaToken", resp.data.result.token)
 			message += "getToken: TpLinkToken updated to ${resp.data.result.token}"
 			logInfo(message)
+			return resp.data.result.token
 		} else {
 			message += "getToken: Error obtaining token from Kasa Cloud."
 			logWarn(message)
 		}
 	}
 	startPage()
-	return resp.data.result.token
 }
 
 //	Add Devices
@@ -468,7 +469,7 @@ def updateDevices(dni, ip, type, feature, model, alias, deviceId, plugNo, plugId
 	logInfo("updateDevices: ${type} ${alias} added to devices array.")
 	logDebug("updateDevices: ${alias} added to array. Data = ${device}")
 }
-
+/////////////////////////////////////////////////////////////
 def updateChildren() {
 	logDebug("updateChildDeviceData")
 	def devices = state.devices
@@ -479,7 +480,9 @@ def updateChildren() {
 			child.updateDataValue("type", it.value.type)
 			child.updateDataValue("feature", it.value.feature)
 			child.updateDataValue("deviceId", it.value.deviceId)
-			child.updateDataValue("deviceIP", it.value.ip)
+			if (it.value.ip != null || it.value.ip != "") {
+				child.updateDataValue("deviceIP", it.value.ip)
+			}
 			def childVer = child.driverVer().substring(0,3).toString()
 			def appVer = appVersion().substring(0,3).toString()
 			if (childVer != appVer) {
@@ -495,9 +498,10 @@ def fixConnection(type) {
 	logInfo("fixData: Update ${type} data")
 	def message = ""
 	if (pollEnable == false) {
-		message += "Unable tor update data.  Updated in last 15 minutes."
+		message += "Unable to update data.  Updated in last 15 minutes."
 	} else {
 		runIn(900, pollEnable)
+		app?.updateSetting("pollEnabled", [type:"bool", value: false])
 	}
 	if (type == "CLOUD") {
 		message += "Getting new token.  Value = ${getToken()}."
@@ -511,7 +515,7 @@ def fixConnection(type) {
 	}
 	return message
 }
-
+//////////////////////////////////////////////////////////////
 def updateDeviceIps(response) {
 	def resp = parseLanMessage(response.description)
 	def parser = new JsonSlurper()
