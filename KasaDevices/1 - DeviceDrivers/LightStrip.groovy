@@ -25,7 +25,7 @@ def file() { return type().replaceAll(" ", "") }
 import groovy.json.JsonSlurper
 
 metadata {
-	definition (name: "Kasa Light Strip}",
+	definition (name: "Kasa Light Strip",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/LightStrip.groovy"
