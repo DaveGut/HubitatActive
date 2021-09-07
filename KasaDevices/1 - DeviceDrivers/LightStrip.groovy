@@ -6,25 +6,29 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 
 Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
 
-===== Version 6.3.2) =====
-	a.  Drivers (plugs and switches):
-		1.	Add LED On/Off commands. Add attribute led to reflect state
-		2.	Remove LED On/Off Preference.
-	b.	Drivers (all).  change attribute "commsError" to string with values "true" and "false".
-		Allows use with Rule Machine.
-07.28.21	6.3.3	Fixes to LED ON/Off Functions (Swiches/Plugs Only).
+===== Version 6.4.0) =====
+1.  New driver for Light Strips.  Includes new functions:
+	a.	Effect Presets - Save current strip effect.  Delete saved effect (by name).
+		Set a save effect to the strip's active effect.
+	b.	Bulb Presets.  Works on current color attributes.  Save, Delete, and Set
+	c.	Preference Sync Effect Presets.  Sets the effect presets for other strips
+		to match current strip.
+	d.	Preference Sync Bulb Preset Data. Sets the bulb presets for other strips 
+		to match current strip.
+	e.	Limitation: Light Strips and the driver do not support Color Temperature.
+2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
+3.	General update: Clean up installation and save preferences process.
 ===================================================================================================*/
-def driverVer() { return "6.3.3" }
+def driverVer() { return "6.4.0" }
 def type() { return "Light Strip" }
-def engMon() { return true }
 def file() { return type().replaceAll(" ", "") }
 import groovy.json.JsonSlurper
 
 metadata {
-	definition (name: "Kasa ${type()}",
+	definition (name: "Kasa Light Strip}",
 				namespace: "davegut",
 				author: "Dave Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/${file()}.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/LightStrip.groovy"
 			   ) {
         capability "Light"
 		capability "Switch"
