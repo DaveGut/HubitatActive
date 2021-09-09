@@ -19,7 +19,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
 3.	General update: Clean up installation and save preferences process.
 ===================================================================================================*/
-def driverVer() { return "6.4.0" }
+def driverVer() { return "6.4.0.1" }
 def type() { return "Color Bulb" }
 //def type() { return "CT Bulb" }
 //def type() { return "Mono Bulb" }
@@ -506,7 +506,7 @@ def setPolling() {
 	return message
 }
 
-def setPollInterval(interval) {
+def setPollInterval(interval = state.pollInterval) {
 	logDebug("setPollInterval: interval = ${interval}.")
 	if (interval == "default" || interval == "off") {
 		interval = "30 minutes"

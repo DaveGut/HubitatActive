@@ -19,7 +19,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
 3.	General update: Clean up installation and save preferences process.
 ===================================================================================================*/
-def driverVer() { return "6.4.0" }
+def driverVer() { return "6.4.0.1" }
 def type() { return "Multi Plug" }
 //def type() { return "EM Multi Plug" }
 def file() { return type().replaceAll(" ", "-") }
@@ -158,7 +158,7 @@ def updateDriverData() {
 		interval = state.pollInterval
 		if (useCloud) { commType = "Cloud" }
 		binding = bind
-	}
+	} else
 	message += "\n\t\t\t Connection = ${comType}."
 	message += "\n\t\t\t bind = ${binding}."
 	message += "\n\t\t\t pollInterval = ${interval}."
@@ -474,7 +474,7 @@ def setPolling() {
 	return message
 }
 
-def setPollInterval(interval) {
+def setPollInterval(interval = state.pollInterval) {
 	logDebug("setPollInterval: interval = ${interval}.")
 	if (interval == "default" || interval == "off") {
 		interval = "30 minutes"
