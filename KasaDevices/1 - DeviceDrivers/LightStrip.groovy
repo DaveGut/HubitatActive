@@ -19,7 +19,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
 3.	General update: Clean up installation and save preferences process.
 ===================================================================================================*/
-def driverVer() { return "6.4.0" }
+def driverVer() { return "6.4.0.1" }
 def type() { return "Light Strip" }
 def file() { return type().replaceAll(" ", "") }
 import groovy.json.JsonSlurper
@@ -890,7 +890,7 @@ def effectSet(effName) {
 def parseEffect(resp) {
 	if (resp.get_lighting_effect) {
 		def effData = resp.get_lighting_effect
-		logDebug("parseEffect: ${state.createEffect} || ${effData}")
+		logDebug("parseEffect: ${effData}")
 		def effName = effData.name
 		sendEvent(name: "effectName", value: effName)
 		def enabled = false
@@ -969,10 +969,10 @@ def updateBulbData(status) {
 	def onOff = "on"
 	if (status.on_off == 0) { onOff = "off" }
 	deviceStatus << ["power" : onOff]
-	def isChange = "false"
+	def isChange = false
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff, type: "digital")
-		isChange = "true"
+		isChange = true
 	}
 	if (onOff == "on") {
 		def color = [:]
@@ -988,9 +988,10 @@ def updateBulbData(status) {
 		color << ["hue" : hue]
 		color << ["saturation" : saturation]
 		color << ["level" : level]
+		deviceStatus << ["color" : color]
 		def colorName = getColorName(hue)
 		if (device.currentValue("color") != color) {
-			isChange = "true"
+		isChange = true
 			sendEvent(name: "hue", value: hue)
 			sendEvent(name: "level", value: level, unit: "%")
 			sendEvent(name: "saturation", value: saturation)
