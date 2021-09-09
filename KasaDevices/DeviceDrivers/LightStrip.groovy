@@ -19,7 +19,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
 3.	General update: Clean up installation and save preferences process.
 ===================================================================================================*/
-def driverVer() { return "6.4.0.1" }
+def driverVer() { return "6.4.0.2" }
 def type() { return "Light Strip" }
 def file() { return type().replaceAll(" ", "") }
 import groovy.json.JsonSlurper
@@ -155,14 +155,12 @@ def updated() {
 	//	update data based on preferences
 	if (debug) { runIn(1800, debugOff) }
 	if (syncEffects) {
-//		logDebug("updated: ${syncEffectPresets()}")
-logTrace("updated: ${syncEffectPresets()}")
+		logDebug("updated: ${syncEffectPresets()}")
 		return
 	}
 
 	if (syncBulbs) {
-//		logDebug("updated: ${syncBulbPresets()}")
-logTrace("updated: ${syncBulbPresets()}")
+		logDebug("updated: ${syncBulbPresets()}")
 		return
 	}
 	logDebug("updated: Debug logging is ${debug}. Info logging is ${descriptionText}.")
@@ -172,13 +170,11 @@ logTrace("updated: ${syncBulbPresets()}")
 	logDebug("updated: ${setupEmFunction()}")
 	logDebug("updated: ${setPolling()}")
 	if (syncEffects) {
-//		logDebug("updated: ${syncEffectPresets()}")
-logTrace("updated: ${syncEffectPresets()}")
+		logDebug("updated: ${syncEffectPresets()}")
 	}
 
 	if (syncBulbs) {
-//		logDebug("updated: ${syncBulbPresets()}")
-logTrace("updated: ${syncBulbPresets()}")
+		logDebug("updated: ${syncBulbPresets()}")
 	}
 	runIn(3, refresh)
 }
@@ -838,7 +834,7 @@ def setColor(Map color) {
         return
     }
 	sendCmd("""{"smartlife.iot.lightStrip":{"set_light_state":{"ignore_default":1,"on_off":1,"brightness":${level},""" +
-			""""hue":${hue},"saturation":${saturation},"transition_period":${transTime}}}}""")
+			""""color_temp":0,"hue":${hue},"saturation":${saturation},"transition_period":${transTime}}}}""")
 }
 
 def refresh() {
@@ -915,7 +911,6 @@ def parseEffect(resp) {
 def bulbPresetCreate(psName) {
 	if (!state.bulbPresets) { state.bulbPresets = [:] }
 	psName = psName.trim()
-	logDebug("bulbPresetCreate: ${psName}")
 	def psData = [:]
 	psData["hue"] = device.currentValue("hue")
 	psData["saturation"] = device.currentValue("saturation")
@@ -923,6 +918,7 @@ def bulbPresetCreate(psName) {
 	def colorTemp = device.currentValue("colorTemperature")
 	if (colorTemp == null) { colorTemp = 0 }
 	psData["colTemp"] = colorTemp
+	logDebug("bulbPresetCreate: ${psName}, ${psData}")
 	state.bulbPresets << ["${psName}": psData]
 }
 
