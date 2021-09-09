@@ -691,10 +691,6 @@ def syncBulbPresets() {
 	return "Synching Bulb Presets with all Kasa Bulbs."
 }
 
-def xxsendBulbPresets() {
-	parent.syncBulbPresets(state.bulbPresets, type())
-}
-
 def updatePresets(bulbPresets) {
 	logDebug("updatePresets: Preset Bulb Data: ${bulbPresets}.")
 	state.bulbPresets = bulbPresets
@@ -952,7 +948,7 @@ def bulbPresetSet(psName, transTime = transition_Time) {
 			hue = Math.round(0.49 + hue * 3.6).toInteger()
 		}
 		sendCmd("""{"smartlife.iot.lightStrip":{"set_light_state":{"ignore_default":1,"on_off":1,"brightness":${psData.level},""" +
-				""""hue":${hue},"saturation":${psData.saturation},"transition_period":${transTime}}}}""")
+				""""hue":${hue},"color_temp":0,"saturation":${psData.saturation},"transition_period":${transTime}}}}""")
 	} else {
 		logWarn("bulbPresetSet: ${psName} is not a valid name.")
 	}
