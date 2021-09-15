@@ -26,7 +26,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 	d.	Update using HPM uses the HPM Modify function. (Done for single driver
 		updates between major releases.)
 ===================================================================================================*/
-def driverVer() { return "6.4.0.3" }
+def driverVer() { return "6.4.0.4" }
 def type() { return "Light Strip" }
 
 metadata {
@@ -169,14 +169,17 @@ def updated() {
 }
 
 def updateDriverData() {
-//	if (getDataValue("driverVersion") == driverVer()) {
-//		return "Driver Data already updated."
-//	}
+	if (getDataValue("driverVersion") == driverVer()) {
+		return "Driver Data already updated."
+	}
 	if (!state.effectPresets) ( state.effectPresets = [] )
 	if (!state.bulbPresets) ( state.bulbPresets = [:] )
 	state.remove("effectsList")
 	if (!device.currentValue("lightEffects")) {
 		sendEvent(name: "lightEffects", value: "{}")
+	}
+	if (!device.currentValue("colorTemperature")) {
+		sendEvent(name: "colorTemperature", value: 0)
 	}
 	logDebug(resetLightEffects())
 	return "<b>Updating data from driver version ${drvVer}."
@@ -531,6 +534,7 @@ def updateBulbData(status) {
 			level = effect.brightness
 			hubHue = 0
 			saturation = 0
+			colorTemp = 0
 		} else if (colorMode == "CT") {
 			colorName = getCtName(colorTemp)
 			hubHue = 0
@@ -954,7 +958,7 @@ def getPower() { // library marker davegut.kasaCommon, line 126
 	if (type().contains("Multi")) { // library marker davegut.kasaCommon, line 128
 		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaCommon, line 129
 				""""emeter":{"get_realtime":{}}}""") // library marker davegut.kasaCommon, line 130
-	} else if (type().contains("Bulb")) { // library marker davegut.kasaCommon, line 131
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 131
 		sendCmd("""{"smartlife.iot.common.emeter":{"get_realtime":{}}}""") // library marker davegut.kasaCommon, line 132
 	} else { // library marker davegut.kasaCommon, line 133
 		sendCmd("""{"emeter":{"get_realtime":{}}}""") // library marker davegut.kasaCommon, line 134
@@ -981,7 +985,7 @@ def getEnergyToday() { // library marker davegut.kasaCommon, line 152
 	if (type().contains("Multi")) { // library marker davegut.kasaCommon, line 155
 		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaCommon, line 156
 				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaCommon, line 157
-	} else if (type().contains("Bulb")) { // library marker davegut.kasaCommon, line 158
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 158
 		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaCommon, line 159
 	} else { // library marker davegut.kasaCommon, line 160
 		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaCommon, line 161
@@ -1032,7 +1036,7 @@ def setThisMonth(response) { // library marker davegut.kasaCommon, line 181
 		if (type().contains("Multi")) { // library marker davegut.kasaCommon, line 206
 			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaCommon, line 207
 					""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaCommon, line 208
-		} else if (type().contains("Bulb")) { // library marker davegut.kasaCommon, line 209
+		} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 209
 			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaCommon, line 210
 		} else { // library marker davegut.kasaCommon, line 211
 			sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaCommon, line 212
@@ -1166,7 +1170,7 @@ def setupEmFunction() { // library marker davegut.kasaCommon, line 312
 def rebootDevice() { // library marker davegut.kasaCommon, line 340
 	logWarn("rebootDevice: User Commanded Reboot Device!") // library marker davegut.kasaCommon, line 341
 	device.updateSetting("rebootDev", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 342
-	if (type().contains("Bulb")) { // library marker davegut.kasaCommon, line 343
+	if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 343
 		sendCmd("""{"smartlife.iot.common.system":{"reboot":{"delay":1}}}""") // library marker davegut.kasaCommon, line 344
 	} else { // library marker davegut.kasaCommon, line 345
 		sendCmd("""{"system":{"reboot":{"delay":1}}}""") // library marker davegut.kasaCommon, line 346
@@ -1179,7 +1183,7 @@ def bindUnbind() { // library marker davegut.kasaCommon, line 352
 	logDebug("bindUnbind: ${bind}") // library marker davegut.kasaCommon, line 353
 	def message = "" // library marker davegut.kasaCommon, line 354
 	def meth = "cnCloud" // library marker davegut.kasaCommon, line 355
-	if (type().contains("Bulb")) { // library marker davegut.kasaCommon, line 356
+	if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 356
 		meth = "smartlife.iot.common.cloud" // library marker davegut.kasaCommon, line 357
 	} // library marker davegut.kasaCommon, line 358
 	if (bind == null) { // library marker davegut.kasaCommon, line 359
