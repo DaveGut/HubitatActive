@@ -4,29 +4,11 @@
 
 License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 
-Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Version%206%20Change%20Log.md
-
-===== Version 6.4.0.3 =====
-1.  New driver for Light Strips.  Includes new functions:
-	a.	Effect Presets - Save current strip effect.  Delete saved effect (by name).
-		Set a save effect to the strip's active effect.
-	b.	Bulb Presets.  Works on current color attributes.  Save, Delete, and Set
-	c.	Preference Sync Effect Presets.  Sets the effect presets for other strips
-		to match current strip.
-	d.	Preference Sync Bulb Preset Data. Sets the bulb presets for other strips 
-		to match current strip.
-	e.	Limitation: Light Strips and the driver do not support Color Temperature.
-2.	Updated Color Bulb driver.  Added Bulb Presets and preference Sync Bulb Data.
-3.	General update: Clean up installation and save preferences process.
-4.	driverVer 6.4.0.3:
-	a.	Added capabilities "Color Temperature" and "Light Effects"
-	b.	Removed state.effectsList.  Now use attribue "effectsList".
-	c.	Switched to Library-based development.  Groovy file will have a lot of
-		comments related to importing this data into the driver for publication.
-	d.	Update using HPM uses the HPM Modify function. (Done for single driver
-		updates between major releases.)
+===== Version 6.4.0.5 =====
+1.  Switched to Library-based development.  Groovy file will have a lot of comments
+	related to importing the library methods into the driver for publication.
 ===================================================================================================*/
-def driverVer() { return "6.4.0.4" }
+def driverVer() { return "6.4.0.5" }
 def type() { return "Light Strip" }
 
 metadata {
@@ -118,9 +100,6 @@ metadata {
 	}
 }
 
-//	======================================
-//	===== Code common to all drivers =====
-//	======================================
 def installed() {
 	logInfo("Installing Device...")
 	state.errorCount = 0
@@ -143,12 +122,8 @@ def installed() {
 
 def updated() {
 	if (rebootDev) {
-		//	First to run with  10 second wait to continue.
 		logWarn("updated: ${rebootDevice()}")
 	}
-	unschedule()
-	//	update data based on preferences
-	if (debug) { runIn(1800, debugOff) }
 	if (syncEffects) {
 		logDebug("updated: ${syncEffectPresets()}")
 		return
@@ -157,38 +132,36 @@ def updated() {
 		logDebug("updated: ${syncBulbPresets()}")
 		return
 	}
+	unschedule()
+	if (debug) { runIn(1800, debugOff) }
 	logDebug("updated: Debug logging is ${debug}. Info logging is ${descriptionText}.")
-	logDebug("updated: ${bindUnbind()}")
+	logDebug("updated: Default Transition Time = ${transition_Time} seconds.")
+	//	Reset error handling
+	state.errorCount = 0
 	sendEvent(name: "commsError", value: "false")
-	//	Update scheduled methods
+	logDebug("updated: ${bindUnbind()}")
 	logDebug("updated: ${setupEmFunction()}")
 	logDebug("updated: ${setPolling()}")
 	logDebug("updated: ${updateDriverData()}")
-	updateDataValue("driverVersion", driverVer())
 	runIn(3, refresh)
 }
 
 def updateDriverData() {
-	if (getDataValue("driverVersion") == driverVer()) {
-		return "Driver Data already updated."
+	def drvVer = getDataValue("driverVersion")
+	if (drvVer == driverVer()) {
+		return "No driver version update."
 	}
-	if (!state.effectPresets) ( state.effectPresets = [] )
-	if (!state.bulbPresets) ( state.bulbPresets = [:] )
-	state.remove("effectsList")
-	if (!device.currentValue("lightEffects")) {
-		sendEvent(name: "lightEffects", value: "{}")
-	}
-	if (!device.currentValue("colorTemperature")) {
-		sendEvent(name: "colorTemperature", value: 0)
-	}
-	logDebug(resetLightEffects())
-	return "<b>Updating data from driver version ${drvVer}."
+	def message = "<b>Updating data from driver version ${drvVer}."
+	def commsType = "LAN"
+	if (useCloud == true) { commsType = "CLOUD" }
+	setCommsData(comType)
+	if (!state.bulbPresets) { state.bulbPresets = [:] }
+	updateDataValue("driverVersion", driverVer())
+	message += "\n\t\t\tNew Version: ${driverVer()}.</b>"
+	return message
 }
 
-//	===== Preset Sync Functions =====
-//	===============================
-//	===== Bulb Unique Methods =====
-//	===============================
+//	===== Command Methods =====
 def on() {
 	logDebug("on: transition time = ${transition_Time}")
 	def transTime = 1000 * transition_Time.toInteger()
@@ -464,7 +437,7 @@ def updatePresets(bulbPresets) {
 	state.bulbPresets = bulbPresets
 }
 
-//	===== Communications =====
+//	===== Update Data =====
 def distResp(response) {
 	if (response["smartlife.iot.lightStrip"]) {
 		sendCmd("""{"system":{"get_sysinfo":{}}}""")
@@ -553,7 +526,7 @@ def updateBulbData(status) {
 			sendEvent(name: "effectName", value: effectName)
 			isChange = true
 		}
-		if (device.currentValue("colorTemperature").toInteger() != colorTemp) {
+		if (device.currentValue("colorTemperature") != colorTemp) {
 			isChange = true
 			deviceStatus << ["colorTemp" : colorTemp]
 			sendEvent(name: "colorTemperature", value: colorTemp)
@@ -688,142 +661,181 @@ def getColorName(hue){ // library marker davegut.bulbTools, line 68
 
 //	Capability Color Temperature for RGB Devices ===== // library marker davegut.bulbTools, line 104
 def getCtHslValue(kelvin) { // library marker davegut.bulbTools, line 105
-	kelvin = 100 * Math.round(kelvin / 100) // library marker davegut.bulbTools, line 106
-	switch(kelvin) { // library marker davegut.bulbTools, line 107
-		case 1000: rgb= [255, 56, 0]; break // library marker davegut.bulbTools, line 108
-		case 1100: rgb= [255, 71, 0]; break // library marker davegut.bulbTools, line 109
-		case 1200: rgb= [255, 83, 0]; break // library marker davegut.bulbTools, line 110
-		case 1300: rgb= [255, 93, 0]; break // library marker davegut.bulbTools, line 111
-		case 1400: rgb= [255, 101, 0]; break // library marker davegut.bulbTools, line 112
-		case 1500: rgb= [255, 109, 0]; break // library marker davegut.bulbTools, line 113
-		case 1600: rgb= [255, 115, 0]; break // library marker davegut.bulbTools, line 114
-		case 1700: rgb= [255, 121, 0]; break // library marker davegut.bulbTools, line 115
-		case 1800: rgb= [255, 126, 0]; break // library marker davegut.bulbTools, line 116
-		case 1900: rgb= [255, 131, 0]; break // library marker davegut.bulbTools, line 117
-		case 2000: rgb= [255, 138, 18]; break // library marker davegut.bulbTools, line 118
-		case 2100: rgb= [255, 142, 33]; break // library marker davegut.bulbTools, line 119
-		case 2200: rgb= [255, 147, 44]; break // library marker davegut.bulbTools, line 120
-		case 2300: rgb= [255, 152, 54]; break // library marker davegut.bulbTools, line 121
-		case 2400: rgb= [255, 157, 63]; break // library marker davegut.bulbTools, line 122
-		case 2500: rgb= [255, 161, 72]; break // library marker davegut.bulbTools, line 123
-		case 2600: rgb= [255, 165, 79]; break // library marker davegut.bulbTools, line 124
-		case 2700: rgb= [255, 169, 87]; break // library marker davegut.bulbTools, line 125
-		case 2800: rgb= [255, 173, 94]; break // library marker davegut.bulbTools, line 126
-		case 2900: rgb= [255, 177, 101]; break // library marker davegut.bulbTools, line 127
-		case 3000: rgb= [255, 180, 107]; break // library marker davegut.bulbTools, line 128
-		case 3100: rgb= [255, 184, 114]; break // library marker davegut.bulbTools, line 129
-		case 3200: rgb= [255, 187, 120]; break // library marker davegut.bulbTools, line 130
-		case 3300: rgb= [255, 190, 126]; break // library marker davegut.bulbTools, line 131
-		case 3400: rgb= [255, 193, 132]; break // library marker davegut.bulbTools, line 132
-		case 3500: rgb= [255, 196, 137]; break // library marker davegut.bulbTools, line 133
-		case 3600: rgb= [255, 199, 143]; break // library marker davegut.bulbTools, line 134
-		case 3700: rgb= [255, 201, 148]; break // library marker davegut.bulbTools, line 135
-		case 3800: rgb= [255, 204, 153]; break // library marker davegut.bulbTools, line 136
-		case 3900: rgb= [255, 206, 159]; break // library marker davegut.bulbTools, line 137
-		case 4000: rgb= [255, 209, 163]; break // library marker davegut.bulbTools, line 138
-		case 4100: rgb= [255, 211, 168]; break // library marker davegut.bulbTools, line 139
-		case 4200: rgb= [255, 213, 173]; break // library marker davegut.bulbTools, line 140
-		case 4300: rgb= [255, 215, 177]; break // library marker davegut.bulbTools, line 141
-		case 4400: rgb= [255, 217, 182]; break // library marker davegut.bulbTools, line 142
-		case 4500: rgb= [255, 219, 186]; break // library marker davegut.bulbTools, line 143
-		case 4600: rgb= [255, 221, 190]; break // library marker davegut.bulbTools, line 144
-		case 4700: rgb= [255, 223, 194]; break // library marker davegut.bulbTools, line 145
-		case 4800: rgb= [255, 225, 198]; break // library marker davegut.bulbTools, line 146
-		case 4900: rgb= [255, 227, 202]; break // library marker davegut.bulbTools, line 147
-		case 5000: rgb= [255, 228, 206]; break // library marker davegut.bulbTools, line 148
-		case 5100: rgb= [255, 230, 210]; break // library marker davegut.bulbTools, line 149
-		case 5200: rgb= [255, 232, 213]; break // library marker davegut.bulbTools, line 150
-		case 5300: rgb= [255, 233, 217]; break // library marker davegut.bulbTools, line 151
-		case 5400: rgb= [255, 235, 220]; break // library marker davegut.bulbTools, line 152
-		case 5500: rgb= [255, 236, 224]; break // library marker davegut.bulbTools, line 153
-		case 5600: rgb= [255, 238, 227]; break // library marker davegut.bulbTools, line 154
-		case 5700: rgb= [255, 239, 230]; break // library marker davegut.bulbTools, line 155
-		case 5800: rgb= [255, 240, 233]; break // library marker davegut.bulbTools, line 156
-		case 5900: rgb= [255, 242, 236]; break // library marker davegut.bulbTools, line 157
-		case 6000: rgb= [255, 243, 239]; break // library marker davegut.bulbTools, line 158
-		case 6100: rgb= [255, 244, 242]; break // library marker davegut.bulbTools, line 159
-		case 6200: rgb= [255, 245, 245]; break // library marker davegut.bulbTools, line 160
-		case 6300: rgb= [255, 246, 247]; break // library marker davegut.bulbTools, line 161
-		case 6400: rgb= [255, 248, 251]; break // library marker davegut.bulbTools, line 162
-		case 6500: rgb= [255, 249, 253]; break // library marker davegut.bulbTools, line 163
-		case 6600: rgb= [254, 249, 255]; break // library marker davegut.bulbTools, line 164
-		case 6700: rgb= [252, 247, 255]; break // library marker davegut.bulbTools, line 165
-		case 6800: rgb= [249, 246, 255]; break // library marker davegut.bulbTools, line 166
-		case 6900: rgb= [247, 245, 255]; break // library marker davegut.bulbTools, line 167
-		case 7000: rgb= [245, 243, 255]; break // library marker davegut.bulbTools, line 168
-		case 7100: rgb= [243, 242, 255]; break // library marker davegut.bulbTools, line 169
-		case 7200: rgb= [240, 241, 255]; break // library marker davegut.bulbTools, line 170
-		case 7300: rgb= [239, 240, 255]; break // library marker davegut.bulbTools, line 171
-		case 7400: rgb= [237, 239, 255]; break // library marker davegut.bulbTools, line 172
-		case 7500: rgb= [235, 238, 255]; break // library marker davegut.bulbTools, line 173
-		case 7600: rgb= [233, 237, 255]; break // library marker davegut.bulbTools, line 174
-		case 7700: rgb= [231, 236, 255]; break // library marker davegut.bulbTools, line 175
-		case 7800: rgb= [230, 235, 255]; break // library marker davegut.bulbTools, line 176
-		case 7900: rgb= [228, 234, 255]; break // library marker davegut.bulbTools, line 177
-		case 8000: rgb= [227, 233, 255]; break // library marker davegut.bulbTools, line 178
-		case 8100: rgb= [225, 232, 255]; break // library marker davegut.bulbTools, line 179
-		case 8200: rgb= [224, 231, 255]; break // library marker davegut.bulbTools, line 180
-		case 8300: rgb= [222, 230, 255]; break // library marker davegut.bulbTools, line 181
-		case 8400: rgb= [221, 230, 255]; break // library marker davegut.bulbTools, line 182
-		case 8500: rgb= [220, 229, 255]; break // library marker davegut.bulbTools, line 183
-		case 8600: rgb= [218, 229, 255]; break // library marker davegut.bulbTools, line 184
-		case 8700: rgb= [217, 227, 255]; break // library marker davegut.bulbTools, line 185
-		case 8800: rgb= [216, 227, 255]; break // library marker davegut.bulbTools, line 186
-		case 8900: rgb= [215, 226, 255]; break // library marker davegut.bulbTools, line 187
-		case 9000: rgb= [214, 225, 255]; break // library marker davegut.bulbTools, line 188
-		case 9100: rgb= [212, 225, 255]; break // library marker davegut.bulbTools, line 189
-		case 9200: rgb= [211, 224, 255]; break // library marker davegut.bulbTools, line 190
-		case 9300: rgb= [210, 223, 255]; break // library marker davegut.bulbTools, line 191
-		case 9400: rgb= [209, 223, 255]; break // library marker davegut.bulbTools, line 192
-		case 9500: rgb= [208, 222, 255]; break // library marker davegut.bulbTools, line 193
-		case 9600: rgb= [207, 221, 255]; break // library marker davegut.bulbTools, line 194
-		case 9700: rgb= [207, 221, 255]; break // library marker davegut.bulbTools, line 195
-		case 9800: rgb= [206, 220, 255]; break // library marker davegut.bulbTools, line 196
-		case 9900: rgb= [205, 220, 255]; break // library marker davegut.bulbTools, line 197
-		case 10000: rgb= [207, 218, 255]; break // library marker davegut.bulbTools, line 198
-		case 10100: rgb= [207, 218, 255]; break // library marker davegut.bulbTools, line 199
-		case 10200: rgb= [206, 217, 255]; break // library marker davegut.bulbTools, line 200
-		case 10300: rgb= [205, 217, 255]; break // library marker davegut.bulbTools, line 201
-		case 10400: rgb= [204, 216, 255]; break // library marker davegut.bulbTools, line 202
-		case 10500: rgb= [204, 216, 255]; break // library marker davegut.bulbTools, line 203
-		case 10600: rgb= [203, 215, 255]; break // library marker davegut.bulbTools, line 204
-		case 10700: rgb= [202, 215, 255]; break // library marker davegut.bulbTools, line 205
-		case 10800: rgb= [202, 214, 255]; break // library marker davegut.bulbTools, line 206
-		case 10900: rgb= [201, 214, 255]; break // library marker davegut.bulbTools, line 207
-		case 11000: rgb= [200, 213, 255]; break // library marker davegut.bulbTools, line 208
-		case 11100: rgb= [200, 213, 255]; break // library marker davegut.bulbTools, line 209
-		case 11200: rgb= [199, 212, 255]; break // library marker davegut.bulbTools, line 210
-		case 11300: rgb= [198, 212, 255]; break // library marker davegut.bulbTools, line 211
-		case 11400: rgb= [198, 212, 255]; break // library marker davegut.bulbTools, line 212
-		case 11500: rgb= [197, 211, 255]; break // library marker davegut.bulbTools, line 213
-		case 11600: rgb= [197, 211, 255]; break // library marker davegut.bulbTools, line 214
-		case 11700: rgb= [197, 210, 255]; break // library marker davegut.bulbTools, line 215
-		case 11800: rgb= [196, 210, 255]; break // library marker davegut.bulbTools, line 216
-		case 11900: rgb= [195, 210, 255]; break // library marker davegut.bulbTools, line 217
-		case 12000: rgb= [195, 209, 255]; break // library marker davegut.bulbTools, line 218
-		default: // library marker davegut.bulbTools, line 219
-			logWarn("setRgbData: Unknown.") // library marker davegut.bulbTools, line 220
-			colorName = "Unknown" // library marker davegut.bulbTools, line 221
-	} // library marker davegut.bulbTools, line 222
-	log.warn rgb // library marker davegut.bulbTools, line 223
-	def hsvData = hubitat.helper.ColorUtils.rgbToHSV([rgb[0].toInteger(), rgb[1].toInteger(), rgb[2].toInteger()]) // library marker davegut.bulbTools, line 224
-	def hue = (0.5 + hsvData[0]).toInteger() // library marker davegut.bulbTools, line 225
-	def saturation = (0.5 + hsvData[1]).toInteger() // library marker davegut.bulbTools, line 226
-	def level = (0.5 + hsvData[2]).toInteger() // library marker davegut.bulbTools, line 227
-	def hslData = [ // library marker davegut.bulbTools, line 228
-		hue: hue, // library marker davegut.bulbTools, line 229
-		saturation: saturation, // library marker davegut.bulbTools, line 230
-		level: level // library marker davegut.bulbTools, line 231
-		] // library marker davegut.bulbTools, line 232
-	return hslData // library marker davegut.bulbTools, line 233
+	def temp = kelvin/100 // library marker davegut.bulbTools, line 106
+	def red // library marker davegut.bulbTools, line 107
+	def green // library marker davegut.bulbTools, line 108
+	def blue // library marker davegut.bulbTools, line 109
+	if( temp <= 66 ){  // library marker davegut.bulbTools, line 110
+        red = 255 // library marker davegut.bulbTools, line 111
+ 		green = temp // library marker davegut.bulbTools, line 112
+		green = 99.4708025861 * Math.log(green) - 161.1195681661; // library marker davegut.bulbTools, line 113
+		if( temp <= 19){ // library marker davegut.bulbTools, line 114
+			blue = 0 // library marker davegut.bulbTools, line 115
+		} else { // library marker davegut.bulbTools, line 116
+			blue = temp-10; // library marker davegut.bulbTools, line 117
+			blue = 138.5177312231 * Math.log(blue) - 305.0447927307 // library marker davegut.bulbTools, line 118
+		} // library marker davegut.bulbTools, line 119
+	} else { // library marker davegut.bulbTools, line 120
+		red = temp - 60 // library marker davegut.bulbTools, line 121
+		red = 329.698727446 * Math.pow(red, -0.1332047592) // library marker davegut.bulbTools, line 122
+		green = temp - 60 // library marker davegut.bulbTools, line 123
+		green = 288.1221695283 * Math.pow(green, -0.0755148492 ) // library marker davegut.bulbTools, line 124
+		blue = 255 // library marker davegut.bulbTools, line 125
+	} // library marker davegut.bulbTools, line 126
+	red = limitValue(red) // library marker davegut.bulbTools, line 127
+	green = limitValue(green) // library marker davegut.bulbTools, line 128
+	blue = limitValue(blue) // library marker davegut.bulbTools, line 129
 
+	def hsvData = hubitat.helper.ColorUtils.rgbToHSV([red, green, blue]) // library marker davegut.bulbTools, line 131
+	def hue = (0.5 + hsvData[0]).toInteger() // library marker davegut.bulbTools, line 132
+	def saturation = (0.5 + hsvData[1]).toInteger() // library marker davegut.bulbTools, line 133
+	def level = (0.5 + hsvData[2]).toInteger() // library marker davegut.bulbTools, line 134
+	def hslData = [ // library marker davegut.bulbTools, line 135
+		hue: hue, // library marker davegut.bulbTools, line 136
+		saturation: saturation, // library marker davegut.bulbTools, line 137
+		level: level // library marker davegut.bulbTools, line 138
+		] // library marker davegut.bulbTools, line 139
+	return hslData // library marker davegut.bulbTools, line 140
+} // library marker davegut.bulbTools, line 141
 
+def limitValue(value) { // library marker davegut.bulbTools, line 143
+	value = value + 0.5 // library marker davegut.bulbTools, line 144
+	if (value > 255) { value = 255 } // library marker davegut.bulbTools, line 145
+	else if (value < 0) { value = 0 } // library marker davegut.bulbTools, line 146
+	return value.toInteger() // library marker davegut.bulbTools, line 147
+} // library marker davegut.bulbTools, line 148
 
+def xxgetCtHslValue(kelvin) { // library marker davegut.bulbTools, line 150
+	kelvin = 100 * Math.round(kelvin / 100) // library marker davegut.bulbTools, line 151
+	switch(kelvin) { // library marker davegut.bulbTools, line 152
+		case 1000: rgb= [255, 56, 0]; break // library marker davegut.bulbTools, line 153
+		case 1100: rgb= [255, 71, 0]; break // library marker davegut.bulbTools, line 154
+		case 1200: rgb= [255, 83, 0]; break // library marker davegut.bulbTools, line 155
+		case 1300: rgb= [255, 93, 0]; break // library marker davegut.bulbTools, line 156
+		case 1400: rgb= [255, 101, 0]; break // library marker davegut.bulbTools, line 157
+		case 1500: rgb= [255, 109, 0]; break // library marker davegut.bulbTools, line 158
+		case 1600: rgb= [255, 115, 0]; break // library marker davegut.bulbTools, line 159
+		case 1700: rgb= [255, 121, 0]; break // library marker davegut.bulbTools, line 160
+		case 1800: rgb= [255, 126, 0]; break // library marker davegut.bulbTools, line 161
+		case 1900: rgb= [255, 131, 0]; break // library marker davegut.bulbTools, line 162
+		case 2000: rgb= [255, 138, 18]; break // library marker davegut.bulbTools, line 163
+		case 2100: rgb= [255, 142, 33]; break // library marker davegut.bulbTools, line 164
+		case 2200: rgb= [255, 147, 44]; break // library marker davegut.bulbTools, line 165
+		case 2300: rgb= [255, 152, 54]; break // library marker davegut.bulbTools, line 166
+		case 2400: rgb= [255, 157, 63]; break // library marker davegut.bulbTools, line 167
+		case 2500: rgb= [255, 161, 72]; break // library marker davegut.bulbTools, line 168
+		case 2600: rgb= [255, 165, 79]; break // library marker davegut.bulbTools, line 169
+		case 2700: rgb= [255, 169, 87]; break // library marker davegut.bulbTools, line 170
+		case 2800: rgb= [255, 173, 94]; break // library marker davegut.bulbTools, line 171
+		case 2900: rgb= [255, 177, 101]; break // library marker davegut.bulbTools, line 172
+		case 3000: rgb= [255, 180, 107]; break // library marker davegut.bulbTools, line 173
+		case 3100: rgb= [255, 184, 114]; break // library marker davegut.bulbTools, line 174
+		case 3200: rgb= [255, 187, 120]; break // library marker davegut.bulbTools, line 175
+		case 3300: rgb= [255, 190, 126]; break // library marker davegut.bulbTools, line 176
+		case 3400: rgb= [255, 193, 132]; break // library marker davegut.bulbTools, line 177
+		case 3500: rgb= [255, 196, 137]; break // library marker davegut.bulbTools, line 178
+		case 3600: rgb= [255, 199, 143]; break // library marker davegut.bulbTools, line 179
+		case 3700: rgb= [255, 201, 148]; break // library marker davegut.bulbTools, line 180
+		case 3800: rgb= [255, 204, 153]; break // library marker davegut.bulbTools, line 181
+		case 3900: rgb= [255, 206, 159]; break // library marker davegut.bulbTools, line 182
+		case 4000: rgb= [100, 209, 200]; break // library marker davegut.bulbTools, line 183
+		case 4100: rgb= [255, 211, 168]; break // library marker davegut.bulbTools, line 184
+		case 4200: rgb= [255, 213, 173]; break // library marker davegut.bulbTools, line 185
+		case 4300: rgb= [255, 215, 177]; break // library marker davegut.bulbTools, line 186
+		case 4400: rgb= [255, 217, 182]; break // library marker davegut.bulbTools, line 187
+		case 4500: rgb= [255, 219, 186]; break // library marker davegut.bulbTools, line 188
+		case 4600: rgb= [255, 221, 190]; break // library marker davegut.bulbTools, line 189
+		case 4700: rgb= [255, 223, 194]; break // library marker davegut.bulbTools, line 190
+		case 4800: rgb= [255, 225, 198]; break // library marker davegut.bulbTools, line 191
+		case 4900: rgb= [255, 227, 202]; break // library marker davegut.bulbTools, line 192
+		case 5000: rgb= [255, 228, 206]; break // library marker davegut.bulbTools, line 193
+		case 5100: rgb= [255, 230, 210]; break // library marker davegut.bulbTools, line 194
+		case 5200: rgb= [255, 232, 213]; break // library marker davegut.bulbTools, line 195
+		case 5300: rgb= [255, 233, 217]; break // library marker davegut.bulbTools, line 196
+		case 5400: rgb= [255, 235, 220]; break // library marker davegut.bulbTools, line 197
+		case 5500: rgb= [255, 236, 224]; break // library marker davegut.bulbTools, line 198
+		case 5600: rgb= [255, 238, 227]; break // library marker davegut.bulbTools, line 199
+		case 5700: rgb= [255, 239, 230]; break // library marker davegut.bulbTools, line 200
+		case 5800: rgb= [255, 240, 233]; break // library marker davegut.bulbTools, line 201
+		case 5900: rgb= [255, 242, 236]; break // library marker davegut.bulbTools, line 202
+		case 6000: rgb= [255, 243, 239]; break // library marker davegut.bulbTools, line 203
+		case 6100: rgb= [255, 244, 242]; break // library marker davegut.bulbTools, line 204
+		case 6200: rgb= [255, 245, 245]; break // library marker davegut.bulbTools, line 205
+		case 6300: rgb= [255, 246, 247]; break // library marker davegut.bulbTools, line 206
+		case 6400: rgb= [255, 248, 251]; break // library marker davegut.bulbTools, line 207
+		case 6500: rgb= [255, 249, 253]; break // library marker davegut.bulbTools, line 208
+		case 6600: rgb= [254, 249, 255]; break // library marker davegut.bulbTools, line 209
+		case 6700: rgb= [252, 247, 255]; break // library marker davegut.bulbTools, line 210
+		case 6800: rgb= [249, 246, 255]; break // library marker davegut.bulbTools, line 211
+		case 6900: rgb= [247, 245, 255]; break // library marker davegut.bulbTools, line 212
+		case 7000: rgb= [245, 243, 255]; break // library marker davegut.bulbTools, line 213
+		case 7100: rgb= [243, 242, 255]; break // library marker davegut.bulbTools, line 214
+		case 7200: rgb= [240, 241, 255]; break // library marker davegut.bulbTools, line 215
+		case 7300: rgb= [239, 240, 255]; break // library marker davegut.bulbTools, line 216
+		case 7400: rgb= [237, 239, 255]; break // library marker davegut.bulbTools, line 217
+		case 7500: rgb= [235, 238, 255]; break // library marker davegut.bulbTools, line 218
+		case 7600: rgb= [233, 237, 255]; break // library marker davegut.bulbTools, line 219
+		case 7700: rgb= [231, 236, 255]; break // library marker davegut.bulbTools, line 220
+		case 7800: rgb= [230, 235, 255]; break // library marker davegut.bulbTools, line 221
+		case 7900: rgb= [228, 234, 255]; break // library marker davegut.bulbTools, line 222
+		case 8000: rgb= [227, 233, 255]; break // library marker davegut.bulbTools, line 223
+		case 8100: rgb= [225, 232, 255]; break // library marker davegut.bulbTools, line 224
+		case 8200: rgb= [224, 231, 255]; break // library marker davegut.bulbTools, line 225
+		case 8300: rgb= [222, 230, 255]; break // library marker davegut.bulbTools, line 226
+		case 8400: rgb= [221, 230, 255]; break // library marker davegut.bulbTools, line 227
+		case 8500: rgb= [220, 229, 255]; break // library marker davegut.bulbTools, line 228
+		case 8600: rgb= [218, 229, 255]; break // library marker davegut.bulbTools, line 229
+		case 8700: rgb= [217, 227, 255]; break // library marker davegut.bulbTools, line 230
+		case 8800: rgb= [216, 227, 255]; break // library marker davegut.bulbTools, line 231
+		case 8900: rgb= [215, 226, 255]; break // library marker davegut.bulbTools, line 232
+		case 9000: rgb= [214, 225, 255]; break // library marker davegut.bulbTools, line 233
+		case 9100: rgb= [212, 225, 255]; break // library marker davegut.bulbTools, line 234
+		case 9200: rgb= [211, 224, 255]; break // library marker davegut.bulbTools, line 235
+		case 9300: rgb= [210, 223, 255]; break // library marker davegut.bulbTools, line 236
+		case 9400: rgb= [209, 223, 255]; break // library marker davegut.bulbTools, line 237
+		case 9500: rgb= [208, 222, 255]; break // library marker davegut.bulbTools, line 238
+		case 9600: rgb= [207, 221, 255]; break // library marker davegut.bulbTools, line 239
+		case 9700: rgb= [207, 221, 255]; break // library marker davegut.bulbTools, line 240
+		case 9800: rgb= [206, 220, 255]; break // library marker davegut.bulbTools, line 241
+		case 9900: rgb= [205, 220, 255]; break // library marker davegut.bulbTools, line 242
+		case 10000: rgb= [207, 218, 255]; break // library marker davegut.bulbTools, line 243
+		case 10100: rgb= [207, 218, 255]; break // library marker davegut.bulbTools, line 244
+		case 10200: rgb= [206, 217, 255]; break // library marker davegut.bulbTools, line 245
+		case 10300: rgb= [205, 217, 255]; break // library marker davegut.bulbTools, line 246
+		case 10400: rgb= [204, 216, 255]; break // library marker davegut.bulbTools, line 247
+		case 10500: rgb= [204, 216, 255]; break // library marker davegut.bulbTools, line 248
+		case 10600: rgb= [203, 215, 255]; break // library marker davegut.bulbTools, line 249
+		case 10700: rgb= [202, 215, 255]; break // library marker davegut.bulbTools, line 250
+		case 10800: rgb= [202, 214, 255]; break // library marker davegut.bulbTools, line 251
+		case 10900: rgb= [201, 214, 255]; break // library marker davegut.bulbTools, line 252
+		case 11000: rgb= [200, 213, 255]; break // library marker davegut.bulbTools, line 253
+		case 11100: rgb= [200, 213, 255]; break // library marker davegut.bulbTools, line 254
+		case 11200: rgb= [199, 212, 255]; break // library marker davegut.bulbTools, line 255
+		case 11300: rgb= [198, 212, 255]; break // library marker davegut.bulbTools, line 256
+		case 11400: rgb= [198, 212, 255]; break // library marker davegut.bulbTools, line 257
+		case 11500: rgb= [197, 211, 255]; break // library marker davegut.bulbTools, line 258
+		case 11600: rgb= [197, 211, 255]; break // library marker davegut.bulbTools, line 259
+		case 11700: rgb= [197, 210, 255]; break // library marker davegut.bulbTools, line 260
+		case 11800: rgb= [196, 210, 255]; break // library marker davegut.bulbTools, line 261
+		case 11900: rgb= [195, 210, 255]; break // library marker davegut.bulbTools, line 262
+		case 12000: rgb= [195, 209, 255]; break // library marker davegut.bulbTools, line 263
+		default: // library marker davegut.bulbTools, line 264
+			logWarn("setRgbData: Unknown.") // library marker davegut.bulbTools, line 265
+			colorName = "Unknown" // library marker davegut.bulbTools, line 266
+	} // library marker davegut.bulbTools, line 267
+	def hsvData = hubitat.helper.ColorUtils.rgbToHSV([rgb[0].toInteger(), rgb[1].toInteger(), rgb[2].toInteger()]) // library marker davegut.bulbTools, line 268
+	def hue = (0.5 + hsvData[0]).toInteger() // library marker davegut.bulbTools, line 269
+	def saturation = (0.5 + hsvData[1]).toInteger() // library marker davegut.bulbTools, line 270
+	def level = (0.5 + hsvData[2]).toInteger() // library marker davegut.bulbTools, line 271
+	def hslData = [ // library marker davegut.bulbTools, line 272
+		hue: hue, // library marker davegut.bulbTools, line 273
+		saturation: saturation, // library marker davegut.bulbTools, line 274
+		level: level // library marker davegut.bulbTools, line 275
+		] // library marker davegut.bulbTools, line 276
+	return hslData // library marker davegut.bulbTools, line 277
+} // library marker davegut.bulbTools, line 278
 
-
-} // library marker davegut.bulbTools, line 239
-
-//	End of File // library marker davegut.bulbTools, line 241
+//	End of File // library marker davegut.bulbTools, line 280
 
 // ~~~~~ end include (33) davegut.bulbTools ~~~~~
 
@@ -1284,59 +1296,71 @@ def setCommsData(commsType) { // library marker davegut.kasaCommon, line 443
 	pauseExecution(1000) // library marker davegut.kasaCommon, line 454
 } // library marker davegut.kasaCommon, line 455
 
-//	===== Utility Methods ===== // library marker davegut.kasaCommon, line 457
-private outputXOR(command) { // library marker davegut.kasaCommon, line 458
-	def str = "" // library marker davegut.kasaCommon, line 459
-	def encrCmd = "" // library marker davegut.kasaCommon, line 460
- 	def key = 0xAB // library marker davegut.kasaCommon, line 461
-	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommon, line 462
-		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommon, line 463
-		key = str // library marker davegut.kasaCommon, line 464
-		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommon, line 465
-	} // library marker davegut.kasaCommon, line 466
-   	return encrCmd // library marker davegut.kasaCommon, line 467
-} // library marker davegut.kasaCommon, line 468
+def ledOn() { // library marker davegut.kasaCommon, line 457
+	logDebug("ledOn: Setting LED to on") // library marker davegut.kasaCommon, line 458
+	sendCmd("""{"system":{"set_led_off":{"off":0},""" + // library marker davegut.kasaCommon, line 459
+			""""get_sysinfo":{}}}""") // library marker davegut.kasaCommon, line 460
+} // library marker davegut.kasaCommon, line 461
 
-private inputXOR(encrResponse) { // library marker davegut.kasaCommon, line 470
-	String[] strBytes = encrResponse.split("(?<=\\G.{2})") // library marker davegut.kasaCommon, line 471
-	def cmdResponse = "" // library marker davegut.kasaCommon, line 472
-	def key = 0xAB // library marker davegut.kasaCommon, line 473
-	def nextKey // library marker davegut.kasaCommon, line 474
-	byte[] XORtemp // library marker davegut.kasaCommon, line 475
-	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommon, line 476
-		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommon, line 477
-		XORtemp = nextKey ^ key // library marker davegut.kasaCommon, line 478
-		key = nextKey // library marker davegut.kasaCommon, line 479
-		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommon, line 480
-	} // library marker davegut.kasaCommon, line 481
-	return cmdResponse // library marker davegut.kasaCommon, line 482
-} // library marker davegut.kasaCommon, line 483
+def ledOff() { // library marker davegut.kasaCommon, line 463
+	logDebug("ledOff: Setting LED to off") // library marker davegut.kasaCommon, line 464
+	sendCmd("""{"system":{"set_led_off":{"off":1},""" + // library marker davegut.kasaCommon, line 465
+			""""get_sysinfo":{}}}""") // library marker davegut.kasaCommon, line 466
+} // library marker davegut.kasaCommon, line 467
 
-def logTrace(msg){ // library marker davegut.kasaCommon, line 485
-	log.trace "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 486
-} // library marker davegut.kasaCommon, line 487
+//	===== Utility Methods ===== // library marker davegut.kasaCommon, line 469
+private outputXOR(command) { // library marker davegut.kasaCommon, line 470
+	def str = "" // library marker davegut.kasaCommon, line 471
+	def encrCmd = "" // library marker davegut.kasaCommon, line 472
+ 	def key = 0xAB // library marker davegut.kasaCommon, line 473
+	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommon, line 474
+		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommon, line 475
+		key = str // library marker davegut.kasaCommon, line 476
+		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommon, line 477
+	} // library marker davegut.kasaCommon, line 478
+   	return encrCmd // library marker davegut.kasaCommon, line 479
+} // library marker davegut.kasaCommon, line 480
 
-def logInfo(msg) { // library marker davegut.kasaCommon, line 489
-	if (descriptionText == true) {  // library marker davegut.kasaCommon, line 490
-		log.info "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 491
-	} // library marker davegut.kasaCommon, line 492
-} // library marker davegut.kasaCommon, line 493
+private inputXOR(encrResponse) { // library marker davegut.kasaCommon, line 482
+	String[] strBytes = encrResponse.split("(?<=\\G.{2})") // library marker davegut.kasaCommon, line 483
+	def cmdResponse = "" // library marker davegut.kasaCommon, line 484
+	def key = 0xAB // library marker davegut.kasaCommon, line 485
+	def nextKey // library marker davegut.kasaCommon, line 486
+	byte[] XORtemp // library marker davegut.kasaCommon, line 487
+	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommon, line 488
+		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommon, line 489
+		XORtemp = nextKey ^ key // library marker davegut.kasaCommon, line 490
+		key = nextKey // library marker davegut.kasaCommon, line 491
+		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommon, line 492
+	} // library marker davegut.kasaCommon, line 493
+	return cmdResponse // library marker davegut.kasaCommon, line 494
+} // library marker davegut.kasaCommon, line 495
 
-def logDebug(msg){ // library marker davegut.kasaCommon, line 495
-	if(debug == true) { // library marker davegut.kasaCommon, line 496
-		log.debug "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 497
-	} // library marker davegut.kasaCommon, line 498
+def logTrace(msg){ // library marker davegut.kasaCommon, line 497
+	log.trace "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 498
 } // library marker davegut.kasaCommon, line 499
 
-def debugOff() { // library marker davegut.kasaCommon, line 501
-	device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 502
-	logInfo("debugLogOff: Debug logging is off.") // library marker davegut.kasaCommon, line 503
-} // library marker davegut.kasaCommon, line 504
+def logInfo(msg) { // library marker davegut.kasaCommon, line 501
+	if (descriptionText == true) {  // library marker davegut.kasaCommon, line 502
+		log.info "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 503
+	} // library marker davegut.kasaCommon, line 504
+} // library marker davegut.kasaCommon, line 505
 
-def logWarn(msg){ // library marker davegut.kasaCommon, line 506
-	log.warn "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 507
-} // library marker davegut.kasaCommon, line 508
+def logDebug(msg){ // library marker davegut.kasaCommon, line 507
+	if(debug == true) { // library marker davegut.kasaCommon, line 508
+		log.debug "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 509
+	} // library marker davegut.kasaCommon, line 510
+} // library marker davegut.kasaCommon, line 511
 
-//	End of File // library marker davegut.kasaCommon, line 510
+def debugOff() { // library marker davegut.kasaCommon, line 513
+	device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 514
+	logInfo("debugLogOff: Debug logging is off.") // library marker davegut.kasaCommon, line 515
+} // library marker davegut.kasaCommon, line 516
+
+def logWarn(msg){ // library marker davegut.kasaCommon, line 518
+	log.warn "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommon, line 519
+} // library marker davegut.kasaCommon, line 520
+
+//	End of File // library marker davegut.kasaCommon, line 522
 
 // ~~~~~ end include (1) davegut.kasaCommon ~~~~~
