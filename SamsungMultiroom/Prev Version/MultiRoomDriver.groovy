@@ -14,28 +14,12 @@ and limitations under the  License.
 		THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
 		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
 ===== History =============================================================================
-2020
-04.20	3.1.0	Update for Hubitat Package Manager
-06.15	3.2.0	a.	Added URLStationPlayback functions per request.
-				b.	Limit debug logging to 30 minutes.
-08.11	3.2.1	Fixed button call function for urlPlayback to call correct preset.
-08.16	3.2.2	Fixed presetCreate to work properly with urlPresets.
-08.21	3.3.0	Update Code for the below:
-				a.	Added capability PushableButton linking directly to existing Push method
-				b.	Added blank audio stream (1 second) to starting queue, alleviating
-					the "bonk" in the middle of an actual notification.
-09.12	3.3.3	Includes 3.3.1 and 3.3.2.  Updates to queing functions to preclude hung queue.
-				a.	Modified and simplified queue functions
-				b.	Created new exposed command "kickStartQueue".  Will run after last queued
-					message and can be called at any time.
-				c.	Modified refresh and setTrackDescription functions to NOT update when
-					playing URLs.  The device itself contains no data on the URL and this
-					causes invalid data to be written to the data value "trackData".  This
-					then causes a failure in the recovery queue.
-09.15	3.3.4	Update to correct several errors.
+04.30.21	3.3.6	a.	Change sendSyncCommand timeout to 5 seconds.
+					b.	Added on-line chech / attribute.  if off-line, will not buffer
+						TTS messages.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.3.4" }
+def driverVer() { return "3.3.6" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -43,6 +27,8 @@ metadata {
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/MultiRoomDriver.groovy"
 			   ){
+		capability "Switch"
+		capability "Switch Level"
 		capability "MusicPlayer"
 		capability "AudioVolume"
 		capability "SpeechSynthesis"
@@ -61,6 +47,7 @@ metadata {
 		command "repeat"
 		command "shuffle"
 		command "stopAllActivity"
+		attribute "isConnected", "string"
 		//	===== Samsung Player Preset Capability =====
 		attribute "Preset_1", "string"
 		attribute "Preset_2", "string"
@@ -96,6 +83,7 @@ metadata {
 		command "groupDelete", [[name: "Group Number", type: "NUMBER"]]
 		//	===== Queue Restart =====
 		command "kickStartQueue"
+		command "clearQueue"
 	}
 	preferences {
 		def refreshRate = ["1" : "Refresh every 1 minute",
@@ -135,23 +123,25 @@ def installed() {
 def updated() {
 	log.info "Updating .."
 	unschedule()
-	if (!device.currentValue("numberOfButtons")) {
-		sendEvent(name: "numberOfButtons", value: "28")
-	}
+	sendEvent(name: "numberOfButtons", value: "29")
 	state.triggered = false
 	state.updateTrackDescription = true
 	if(!state.urlPresetData) { state.urlPresetData = [:] }
 	state.urlPlayback = false
 	state.playingNotification = false
-	state.playQueue = []
 	state.spkType = getDataValue("spkType")
 	state.groupType = getDataValue("groupType")
 	state.trackIcon = ""
+	state.playQueue = []
 	if (state.recoveryData) { state.remove("recoveryData") }
 
 	if (debug == true) { runIn(1800, debugLogOff) }
 	logInfo("Debug logging is: ${debug}.")
 	logInfo("Description text logging is ${descriptionText}.")
+	clearQueue()
+	sendEvent(name: "isConnected", value: "yes")
+	checkConnected()
+	runEvery1Minute(checkConnected)
 	switch(rate) {
 		case "1" :
 			runEvery1Minute(refresh)
@@ -166,6 +156,33 @@ def updated() {
 			runEvery30Minutes(refresh)
 	}
 	refresh()
+}
+
+def checkConnected() {
+	logDebug("checkConnected")
+	def test = 	sendSyncCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
+	def isConnected = "yes"
+	if (test == "commsError"){
+		isConnected = "no"
+	}
+	if (isConnected != device.currentValue("isConnected")) {
+		sendEvent(name: "isConnected", value: isConnected)
+	}
+}
+
+//	===== Capability Switch for Amazon Integration =====
+def on() {
+	//	Requires Rule Machine to be of use.
+	if (device.currentValue("switch") == "off") {
+		sendEvent(name: "switch", value: "on")
+	}
+}
+			 
+def off() {
+	//	Requires Rule Machine to be of use.
+	if (device.currentValue("switch") == "on") {
+		sendEvent(name: "switch", value: "off")
+	}
 }
 
 //	========== Capability Music Player ==========
@@ -464,6 +481,14 @@ def getVolume() {
 	sendCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
 }
 
+def muteUnmute() {
+	if (device.currentValue("mute") == "unmuted") {
+		mute()
+	} else {
+		unmute()
+	}
+}
+
 def mute() {
 	logDebug("mute")
 	sendCmd("/UIC?cmd=%3Cname%3ESetMute%3C/name%3E" +
@@ -589,7 +614,8 @@ def playTrackAndResume(trackData, volume=null) {
 
 //	========== Play Queue Execution ==========
 def addToQueue(trackUri, duration, volume, resumePlay){
-	logDebug("addToQueue: ${trackUri},${duration},${volume},${resumePlay}") 
+	logDebug("addToQueue: ${trackUri},${duration},${volume},${resumePlay}")
+	if (device.currentValue("isConnected") == "no") { return }
 	duration = duration + 3
 	playData = ["trackUri": trackUri, 
 				"duration": duration,
@@ -609,8 +635,10 @@ def startPlayViaQueue(resumePlay) {
 	getSource()
 	setTrackDescription()
 	state.recoveryVolume = device.currentValue("volume")
-	def blankTrack = convertToTrack("     ")
-	execPlay(blankTrack.uri, true)
+	if (getDataValue("hwType") == "Speaker") {
+		def blankTrack = convertToTrack("     ")
+		execPlay(blankTrack.uri, true)
+	}
 	runIn(1, playViaQueue, [data: resumePlay])
 }
 
@@ -704,6 +732,14 @@ def kickStartQueue(resumePlay = true) {
 	}
 }
 
+def clearQueue() {
+	logDebug("clearQueue")
+	state.remove("playQueue")
+	pauseExecution(5000)
+	state.playQueue = []
+	state.playingNotification = false
+}
+
 //	========== Capability Pushable Button ==========
 def push(pushed) {
 	logDebug("push: button = ${pushed}, trigger = ${state.triggered}")
@@ -753,33 +789,15 @@ def push(pushed) {
 				sendEvent(name: "Trigger", value: "notArmed")
 			}
 			break
-		case 12:		//	Toggle Input Source
-			inputSource()
-			break
-		case 13:		//	Toggle Programmed Equalizer Presets
-			equalPreset()
-			break
-		case 14:		//	Toggle Repeat
-			repeat()
-			break
-		case 15:		//	Toggle Shuffle
-			shuffle()
-			break
-		case 16:		//	Stop Playing Group of Speakers
-			groupStop()
-			break
-		case 17:		//	Volume Up
-			volumeUp()
-			break
-		case 18:		//	Volume Down
-			volumeDown()
-			break
-		case 19:		//	Stop Player
-			stopAllActivity()
-			break
-		case 20:
-			refresh()
-			break
+		case 12: inputSource(); break
+		case 13: equalPreset(); break
+		case 14: repeat(); break
+		case 15: shuffle(); break
+		case 16: groupStop(); break
+		case 17: volumeUp(); break
+		case 18: volumeDown(); break
+		case 19: stopAllActivity(); break
+		case 20: refresh(); break
 		case 21 :		//	Preset 1
 		case 22 :		//	Preset 2
 		case 23 :		//	Preset 3
@@ -795,8 +813,9 @@ def push(pushed) {
 				sendEvent(name: "Trigger", value: "notArmed")
 			}
 			break
+		case 29 : muteUnmute(); break
 		default:
-			logWarn("${device.label}: Invalid Preset Number (must be 0 thru 28)!")
+			logWarn("${device.label}: Invalid Preset Number (must be 0 thru 29)!")
 			break
 	}
 }
@@ -805,6 +824,7 @@ def unTrigger() { state.triggered = false }
 
 //	========== Capability Refresh ==========
 def refresh() {
+	if (device.currentValue("isConnected") == "no") { return }
 	if (state.playingNotification == true) {
 		logDebug("refresh: ignored while playing notifications")
 		return
@@ -909,10 +929,6 @@ def inputSource(source = null) {
 		def sources = new JSONObject(getDataValue("inputSources"))
 		def totalSources = sources.length().toInteger()
 		def currentSource = device.currentValue("inputSource")
-		if (!currentSource) {
-			inputSource(defaultSource)
-			return
-		}
 		for (int i = 1; i < totalSources + 1; i++) {
 			if (sources."${i}" == currentSource) {
 				def sourceNo = i
@@ -1361,7 +1377,7 @@ private sendSyncCmd(command){
 	def host = "http://${getDataValue("deviceIP")}:55001"
 	logDebug("sendSyncCmd: Command= ${command}, host = ${host}")
 	try {
-		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 45]) { resp ->
+		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 5]) { resp ->
 			if(resp.status != 200) {
 				logDebug("sendSyncCmd, Command ${command}: Error return: ${resp.status}")
 				return
@@ -1436,7 +1452,7 @@ def extractData(respMethod, respData) {
 			} else {
 				sendEvent(name: "mute", value: "unmuted")
 			}
-				break
+			break
 //	Speaker Control Response Methods
 		case "CurrentFunc":
 			def inputSource = respData.function
@@ -1524,7 +1540,6 @@ def extractData(respMethod, respData) {
 	}
 	return respMethod
 }
-
 
 //	===== Utility Methods =====
 def logInfo(msg) {
