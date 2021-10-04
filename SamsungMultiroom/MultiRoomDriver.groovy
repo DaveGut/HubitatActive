@@ -15,11 +15,16 @@ and limitations under the  License.
 		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
 ===== History =============================================================================
 04.30.21	3.3.6	a.	Change sendSyncCommand timeout to 5 seconds.
-					b.	Added on-line chech / attribute.  if off-line, will not buffer
+					b.	Added on-line check / attribute.  if off-line, will not buffer
 						TTS messages.
+			3.3.7	a.	On now starts a check-connect that verifies connection for TTS.
+						Off turns off this function and sets to not-connected.
+					b.	Added check for all sendEvents to not send the event unless there
+						is a change in the attribute.
+					b.	Fixed null error in scheduling trace description.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
-def driverVer() { return "3.3.6" }
+def driverVer() { return "3.3.8Dev" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -132,6 +137,7 @@ def updated() {
 	state.spkType = getDataValue("spkType")
 	state.groupType = getDataValue("groupType")
 	state.trackIcon = ""
+	state.remove("playQueue")
 	state.playQueue = []
 	if (state.recoveryData) { state.remove("recoveryData") }
 
@@ -160,29 +166,31 @@ def updated() {
 
 def checkConnected() {
 	logDebug("checkConnected")
-	def test = 	sendSyncCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
-	def isConnected = "yes"
-	if (test == "commsError"){
-		isConnected = "no"
+	def isConnected
+	try{
+		httpGet([uri: "http://${getDataValue("deviceIP")}:8001/api/v2/", timeout: 1]) { resp ->
+			isConnected = "yes"
+		}
+	} catch (error) {
+			isConnected = "no"
 	}
-	if (isConnected != device.currentValue("isConnected")) {
-		sendEvent(name: "isConnected", value: isConnected)
-	}
+	setEvent("isConnected", isConnected)
 }
 
 //	===== Capability Switch for Amazon Integration =====
 def on() {
 	//	Requires Rule Machine to be of use.
-	if (device.currentValue("switch") == "off") {
-		sendEvent(name: "switch", value: "on")
-	}
+	setEvent("switch", "on")
+	sendEvent(name: "isConnected", value: "yes")
+	runEvery1Minute(checkConnected)
+	checkConnected()
 }
 			 
 def off() {
 	//	Requires Rule Machine to be of use.
-	if (device.currentValue("switch") == "on") {
-		sendEvent(name: "switch", value: "off")
-	}
+	setEvent("switch", "off")
+	unschedule(checkConnected)
+	sendEvent(name: "isConnected", value: "off")
 }
 
 //	========== Capability Music Player ==========
@@ -286,11 +294,10 @@ def playTrack(trackData, volume = null) {
 	if (trackData.toString()[0] != "[") {
 		trackData = [url: trackData, name: trackData]
 	}
-		
-	sendEvent(name: "trackDescription", value: trackData.name)
+	setEvent("trackDescription", trackData.name)
 	trackData = new JSONObject(trackData)
-	sendEvent(name: "trackData", value: trackData)
-	sendEvent(name: "status", value: "playing")
+	setEvent("trackData", trackData)
+	setEvent("status", "playing")
 	state.urlPlayback = true
 	logDebug("playTrack: attempting to start play of ${trackData.url}")
 	execPlay(trackData.url, 0)
@@ -305,6 +312,7 @@ def getPlayStatus() {
 	}
 }
 
+///////////////////////////////////////////////////////
 def setTrackDescription() {
 	unschedule("schedSetTrackDescription")
 	if (state.urlPlayback == true) {
@@ -322,18 +330,33 @@ def setTrackDescription() {
 	if (subMode == "cp") {
 		trackData = sendSyncCmd("/CPM?cmd=%3Cname%3EGetRadioInfo%3C/name%3E")
 	} else {
-		trackData = "{type: ${subMode}, player: Unknown, artist: ukn, title: ukn}"
+		trackData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetMusicInfo%3C/name%3E")
+//		trackData = "{type: ${subMode}, player: Unknown, artist: ukn, title: ukn}"
 	}
 	
 	try{
 		trackData = new JSONObject(trackData)
+//log.error trackData
+		/*
+{"playIndex":83,
+	"artist":"John Denver",
+		album":"Greatest Hits Vol. 2",
+ "deviceUdn":"55076f6e-6b79-4d65-6436-0090a9d9118f",
+	 "parentId2":"unknown",
+		 "type":"dlna",
+			 "title":"My Sweet Lady",
+				 "playbackType":"playlist",
+					 "parentId":"unknown",
+						 "objectId":"0$1$11$136R29441"}
+		*/
+	
 	} catch (error) {
 		logDebug("setTrackData: ${trackData}")
 		trackData = new JSONObject("{type: ukn, player: Unknown, artist: ukn, title: ukn, error: DATA PARSE ERROR}")
 	}
 	trackDescription = "${trackData.artist}: ${trackData.title}"
-	sendEvent(name: "trackDescription", value: trackDescription)
-	sendEvent(name: "trackData", value: trackData)
+	setEvent("trackDescription", trackDescription)
+	setEvent("trackData", trackData)
 	return trackData
 }
 
@@ -346,8 +369,13 @@ def schedSetTrackDescription() {
 	def trackData = parseJson(device.currentValue("trackData"))
 	def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentPlayTime%3C/name%3E")
 	def timelength
-	if (trackData.title == "Commercial") { timelength = trackData.trackLength.toInteger() }
-	else { timelength = respData.timelength.toInteger() }
+	if (trackData.title == "Commercial") {
+		timelength = trackData.trackLength.toInteger()
+	} else if (respData.timeLength) {
+		timelength = respData.timelength.toInteger()
+	} else {
+		timelength = 60
+	}
 	def playtime = respData.playtime.toInteger()
 	if (timelength == 1 && playtime == 0) { timelength = 0 }
 	if (timelength == null || timelength == 0) {
@@ -398,7 +426,7 @@ def parseMusicInfo(respData) {
 	}
 	
 	state.trackIcon = ""
-	sendEvent(name: "trackDescription", value: "${trackDescription}")
+	setEvent("trackDescription", trackDescription)
 	runIn(2, schedSetTrackDescription)
 	return trackData
 }
@@ -639,6 +667,7 @@ def startPlayViaQueue(resumePlay) {
 		def blankTrack = convertToTrack("     ")
 		execPlay(blankTrack.uri, true)
 	}
+	pause()
 	runIn(1, playViaQueue, [data: resumePlay])
 }
 
@@ -691,6 +720,7 @@ def execPlay(trackUri, resumePlay) {
 	}
 }
 
+////////////////////////////////////////////////////
 def resumePlayer(resumePlay) {
 	if (state.playQueue.size() > 0) {
 		playViaQueue(resumePlay)
@@ -704,6 +734,7 @@ def resumePlayer(resumePlay) {
 
 	def trackData = new JSONObject(device.currentValue("trackData"))
 	def subMode = device.currentValue("subMode")
+//log.error subMode
 	logDebug("resumePlayer: restoring play, track data = ${trackData}")
 
 	if (state.urlPlayback == true) {
@@ -719,8 +750,15 @@ def resumePlayer(resumePlay) {
 					"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${trackData.player}%22/%3E" +
 					"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${trackData.path}%22/%3E")
 		}
-		play()
-	} 
+//		play()
+	} else if (subMode == "dlna") {
+		sendSyncCmd("/UIC?cmd=%3Cname%3ESetFunc%3C/name%3E" +
+					"%3Cp%20type=%22str%22%20name=%22function%22%20val=%22wifi%22/%3E" +
+				    "%3Cp%20type=%22str%22%20name=%22submode%22%20val=%22dlna%22/%3E")
+//		pauseExecution(2000)	
+//		play()
+	}
+	play()
 }
 
 def kickStartQueue(resumePlay = true) {
@@ -888,7 +926,7 @@ def shuffle() {
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
 		logWarn("shuffle does not work for input source")
 		return
-	} else if (state.urlPlayback == false) {
+	} else if (state.urlPlayback == true) {
 		logInfo("shuffle commands do not work during URL Playback.")
 		return
 	}
@@ -966,9 +1004,10 @@ def presetCreate(preset) {
 	if (trackData.type != "cp") {
 		logWarn("presetCreate: Can't create channel preset from media from source!")
 		return
-	} else 	if (trackData.player == "Amazon" || trackData.player == "AmazonPrime") {
-		logWarn("presetCreate: Preset not currently supported for Amazon")
-		return
+//	} else 	if (trackData.player == "Amazon" || trackData.player == "AmazonPrime") {
+//		logWarn("presetCreate: Preset not currently supported for Amazon")
+//		amazonPresetCreate()
+//		return
 	}
 
 	state."Preset_${preset}_Data" = [:]
@@ -994,8 +1033,8 @@ def presetPlay(preset) {
 		logWarn("presetPlay: Preset Not Set!")
 		return
 	}
-	sendEvent(name: "inputSource", value: "wifi")
-	sendEvent(name: "subMode", value: "cp")
+	setEvent("inputSource", "wifi")
+	setEvent("subMode", "cp")
 
 	if (psData.playerNo != "99") {
 		def service = sendSyncCmd("/CPM?cmd=%3Cname%3ESetCpService%3C/name%3E" +
@@ -1006,9 +1045,7 @@ def presetPlay(preset) {
 			"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${psData.player}%22/%3E" +
 			"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${psData.path}%22/%3E")
 	play()
-//	playbackControl("play")
 	runIn(20, refresh)
-//	runIn(10, play)
 	logInfo("presetPlay: Playing ${psName}")
 }
 
@@ -1344,6 +1381,7 @@ private sendSpeakCmd(String action, Map body){
 	sendHubCommand(hubCmd)
 }
 
+//private sendCmd(command){
 private sendCmd(command){
 	def host = "${getDataValue("deviceIP")}:55001"
 	logDebug("sendCmd: Command= ${command}, host = ${host}")
@@ -1376,6 +1414,7 @@ def parse(resp) {
 private sendSyncCmd(command){
 	def host = "http://${getDataValue("deviceIP")}:55001"
 	logDebug("sendSyncCmd: Command= ${command}, host = ${host}")
+//logTrace("sendSyncCmd: Command= ${command}, host = ${host}")
 	try {
 		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 5]) { resp ->
 			if(resp.status != 200) {
@@ -1398,6 +1437,7 @@ private sendSyncCmd(command){
 
 def extractData(respMethod, respData) {
 	logDebug("extractData: method = ${respMethod}, data = ${respData}")
+//logTrace("extractData: method = ${respMethod}, data = ${respData}")
 	switch(respMethod) {
 		case "SkipInfo":
 			logWarn("respParse_${respMethod}: Function Failed. ${respData.errcode} / ${respData.errmessage}")
@@ -1408,7 +1448,7 @@ def extractData(respMethod, respData) {
 //	Music Player Response Methods
 		case "MediaBufferStartEvent":
 		case "StartPlaybackEvent":
-			sendEvent(name: "status", value: "playing")
+			setEvent("status", "playing")
 			state.updateTrackDescription = true
 			runIn(2, setTrackDescription)
 			break
@@ -1417,14 +1457,14 @@ def extractData(respMethod, respData) {
  		case "PausePlaybackEvent":
 		case "StopPlaybackEvent":
 			if (state.urlPlayback == true) { return }
-			sendEvent(name: "status", value: "paused")
+			setEvent("status", "paused")
 			state.updateTrackDescription = false
 			break
 		case "PlayStatus":
 		case "PlaybackStatus":
-			if (respData.playstatus == "play") { sendEvent(name: "status", value: "playing") }
-			else if (respData.playstatus == "pause") { sendEvent(name: "status", value: "paused") }
-			else if (respData.playstatus == "stop") { sendEvent(name: "status", value: "stopped") }
+			if (respData.playstatus == "playing") {  setEvent("status", "paused") }
+			else if (respData.playstatus == "pause") { setEvent("status", "paused") }
+			else if (respData.playstatus == "stop") { setEvent("status", "stopped") }
 			return respData.playstatus
 			break
 		case "MusicInfo":
@@ -1442,24 +1482,21 @@ def extractData(respMethod, respData) {
 			def volScale = 30
 			if (getDataValue("hwType") == "Soundbar") { volScale = 100 }
 			volume = Math.round(100*volume/volScale).toInteger()
-			sendEvent(name: "level", value: volume)
-			sendEvent(name: "volume", value: volume)
+			setEvent("level", volume)
+			setEvent("volume", volume)
 			return volume
 			break
 		case "MuteStatus":
-			if (respData.mute == "on") {
-				sendEvent(name: "mute", value: "muted")
-			} else {
-				sendEvent(name: "mute", value: "unmuted")
-			}
+			if (respData.mute == "on") { setEvent("mute", "muted")
+			} else { setEvent("mute", "unmuted") }
 			break
 //	Speaker Control Response Methods
 		case "CurrentFunc":
 			def inputSource = respData.function
 			def subMode = respData.submode
 			if (inputSource != "wifi") { subMode = "none" }
-			sendEvent(name: "inputSource", value: inputSource)
-			sendEvent(name: "subMode", value: subMode)
+			setEvent("inputSource", inputSource)
+			setEvent("subMode", subMode)
 			return [inputSource: inputSource, subMode: subMode]
 			break
 		case "7BandEQList":
@@ -1467,7 +1504,7 @@ def extractData(respMethod, respData) {
 			break
 		case "7bandEQMode":
 		case "CurrentEQMode":
-			sendEvent(name: "eqPreset", value: "${respData.presetname}")
+			setEvent("eqPreset", "${respData.presetname}")
 			return respData
 			break
 		case "RepeatMode":
@@ -1478,19 +1515,19 @@ def extractData(respMethod, respData) {
 			} else if (subMode == "cp") {
 				repeatMode = respData.repeatmode
 			}
-			sendEvent(name: "repeat", value: "${repeatMode}")
+			setEvent("repeat", "${repeatMode}")
 			break
 		case "ShuffleMode":
-			sendEvent(name: "shuffle", value: "${respData.shuffle}")
+			setEvent("shuffle", "${respData.shuffle}")
 			break
 		case "ToggleShuffle":
 			def shuffleMode = "off"
 			if (respData.shufflemode == "1") { shuffleMode = "on" }
-			sendEvent(name: "shuffle", value: "${shuffleMode}")
+			setEvent("shuffle", "${shuffleMode}")
 			break
 //	Group Speaker Response Methods
 		case "ChVolMultich":
-			sendEvent(name: "multiChVol", value: "${respData.channelvolume}")
+			setEvent("multiChVol", "${respData.channelvolume}")
 			break
 		case "AcmMode":
 			def sourceMac = respData.audiosourcemacaddr
@@ -1541,7 +1578,17 @@ def extractData(respMethod, respData) {
 	return respMethod
 }
 
+def setEvent(evtName, newValue) {
+	if (device.currentValue(evtName) != newValue) {
+		sendEvent(name: evtName, value: newValue)
+	}
+}
+
 //	===== Utility Methods =====
+def logTrace(msg) {
+	if (descriptionText == true) { log.trace "${device.label} ${driverVer()} ${msg}" }
+}
+
 def logInfo(msg) {
 	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
 }
