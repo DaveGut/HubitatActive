@@ -343,7 +343,7 @@ def sendLanCmd(command) {
 		 destinationAddress: "${getDataValue("deviceIP")}:9999",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
 		 parseWarning: true,
-		 timeout: 2])
+		 timeout: 10])
 	sendHubCommand(myHubAction)
 }
 
