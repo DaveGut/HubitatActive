@@ -319,7 +319,7 @@ def findDevices() {
 	for(int i = 2; i < 255; i++) {
 		def deviceIP = "${lanSegment}.${i.toString()}"
 		sendLanCmd(deviceIP, """{"system":{"get_sysinfo":{}}}""", "parseLanData")
-		pauseExecution(25)
+		pauseExecution(100)
 	}
 	if (useKasaCloud == true) {
 		logInfo("findDevices: ${cloudGetDevices()}")
@@ -548,7 +548,7 @@ private sendLanCmd(ip, command, action) {
 		 destinationAddress: "${ip}:9999",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
 		 parseWarning: true,
-		 timeout: 3,
+		 timeout: 10,
 		 callback: action])
 	sendHubCommand(myHubAction)
 }
