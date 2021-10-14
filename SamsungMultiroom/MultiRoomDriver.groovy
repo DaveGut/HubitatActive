@@ -398,16 +398,15 @@ def parseMusicInfo(respData) {
 			def timeSplit = timeLength.toString().split(":")
 			timeLength = 60 * timeSplit[1].toInteger() + timeSplit[2].toInteger()
 		}
-		def parentId =  respData.parentid
-		if (parentId == "") { parentId = "unknown" }
-		
+		def folderData = getFolderData(respData.objectid.toString(), deviceUdn)
+		def parentId = folderData[0]
 		def source = getSource()
 		def subMode = source.subMode
 		trackData = "{"
 		trackData += "title: ${title}, album: ${album}, artist: ${artist}, "
-		trackData += "playbackType: ${respData.playbacktype}, "
 		trackData += "playerType: ${respData.playertype}, "
-		trackData += "parentId: ${parentId}, "
+		trackData += "parentId: ${folderData[0]}, "
+		trackData += "folderName: ${folderData[1]}, "
 		trackData += "deviceUdn: ${deviceUdn}, "
 		trackData += "playIndex: ${respData.playindex}, "
 		trackData += "objectId: ${respData.objectid}, "
@@ -420,6 +419,63 @@ def parseMusicInfo(respData) {
 	state.trackThumbnail = "${respData.thumbnail}"
 	state.trackData = trackData
 	return trackData
+}
+
+def getFolderData(objectId, deviceUdn) {
+	logDebug("getFolderData: objectId = ${objectId}, deviceUdn = ${deviceUdn}")
+	def nextObjId
+	def folderName
+
+//	1.  Get object ID for top folder "Music"
+	def dirData = dirCmd(deviceUdn, "0")
+	dirData.musiclist.music.each{
+		if (it.type == "CONTAINER") {
+			def object_id = it.@object_id.toString()
+			def objIdLen = object_id.length()
+			if (objectId.substring(0,object_id.length()) == object_id) {
+				folderName = it.title
+				nextObjId = it.@object_id
+			}
+		}
+	}
+
+//	2.  get ID for next folder level if music ID is not container
+	dirData = dirCmd(deviceUdn, nextObjId)
+	dirData.musiclist.music.each{
+		if (it.type == "CONTAINER") {
+			def object_id = it.@object_id.toString()
+			def objIdLen = object_id.length()
+			if (objectId.substring(0,object_id.length()) == object_id) {
+				folderName = it.title
+				nextObjId = it.@object_id
+			}
+		}
+	}
+	
+//	3.  get ID for next folder level if music ID is not container
+	dirData = dirCmd(deviceUdn, nextObjId)
+	dirData.musiclist.music.each{
+		if (it.type == "CONTAINER") {
+			def object_id = it.@object_id.toString()
+			def objIdLen = object_id.length()
+			if (objectId.substring(0,object_id.length()) == object_id) {
+				folderName = it.title
+				nextObjId = it.@object_id
+			}
+		}
+	}
+	
+return [nextObjId, folderName]
+}
+
+def dirCmd(deviceUdn, objId) {
+	def dirData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetMusicListByID%3C/name%3E" +
+							  "%3Cp%20type=%22str%22%20name=%22device_udn%22%20val=%22uuid:${deviceUdn}%22/%3E" +
+							  "%3Cp%20type=%22str%22%20name=%22filter%22%20val=%22folder%22/%3E" +
+							  "%3Cp%20type=%22str%22%20name=%22parentid%22%20val=%22${objId}%22/%3E" +
+							  "%3Cp%20type=%22dec%22%20name=%22liststartindex%22%20val=%220%22/%3E" +
+							  "%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%2210%22/%3E")
+	return dirData
 }
 
 def parseRadioInfo(respData) {
@@ -1011,11 +1067,11 @@ def presetCreate(preset, name = "NotSet") {
 			presetData["type"] = trackData.type
 			presetData["name"] = name
 			presetData["deviceUdn"] = trackData.deviceUdn
-			presetData["playerType"] = trackData.playerType
+//			presetData["playerType"] = trackData.playerType
 			presetData["parentId"] = trackData.parentId
 			presetData["objectId"] = resp.musiclist.music.@object_id.toString()
-			presetData["objectId"] = resp.musiclist.music.@object_id.toString()
 			presetData["playTime"] = "0"
+			presetData["playIndex"] = "0"
 			state."Preset_${preset}_Data" = presetData
 		}
 	} else if (trackData.type == "cp") {
@@ -1047,8 +1103,8 @@ def presetPlay(preset, shuffle) {
 		logWarn("presetPlay: Preset Not Set!")
 		return
 	}
-	stop()
 	if (psData.type == "cp") {
+		stop()
 		if (psData.playerNo != "99") {
 			def service = sendSyncCmd("/CPM?cmd=%3Cname%3ESetCpService%3C/name%3E" +
 					"%3Cp%20type=%22dec%22%20name=%22cpservice_id%22%20val=%22${psData.playerNo}%22/%3E")
