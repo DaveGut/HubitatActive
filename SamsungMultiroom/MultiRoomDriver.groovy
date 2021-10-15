@@ -1091,7 +1091,7 @@ def presetCreate(preset, name = "NotSet") {
 	logInfo("presetCreate: create preset ${preset}, data = ${presetData}")
 }
 
-def presetPlay(preset, shuffle) {
+def presetPlay(preset, shuffle = "on") {
 	def psName = device.currentValue("Preset_${preset}")
 	def psData = state."Preset_${preset}_Data"
 	logDebug("presetPlay: preset = ${preset}, psName = ${psName}, " +
