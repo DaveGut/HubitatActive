@@ -398,15 +398,15 @@ def parseMusicInfo(respData) {
 			def timeSplit = timeLength.toString().split(":")
 			timeLength = 60 * timeSplit[1].toInteger() + timeSplit[2].toInteger()
 		}
-		def folderData = getFolderData(respData.objectid.toString(), deviceUdn)
-		def parentId = folderData[0]
-		def source = getSource()
+		def parentId = respData.parentid
+//		def folderData = getFolderData(respData.objectid.toString(), deviceUdn)
+//		if (getDataValue("hwType") == "Soundbar") { parentId = folderData[0] }		def source = getSource()
 		def subMode = source.subMode
 		trackData = "{"
 		trackData += "title: ${title}, album: ${album}, artist: ${artist}, "
 		trackData += "playerType: ${respData.playertype}, "
 		trackData += "parentId: ${folderData[0]}, "
-		trackData += "folderName: ${folderData[1]}, "
+//		trackData += "folderName: ${folderData[1]}, "
 		trackData += "deviceUdn: ${deviceUdn}, "
 		trackData += "playIndex: ${respData.playindex}, "
 		trackData += "objectId: ${respData.objectid}, "
@@ -474,7 +474,7 @@ def dirCmd(deviceUdn, objId) {
 							  "%3Cp%20type=%22str%22%20name=%22filter%22%20val=%22folder%22/%3E" +
 							  "%3Cp%20type=%22str%22%20name=%22parentid%22%20val=%22${objId}%22/%3E" +
 							  "%3Cp%20type=%22dec%22%20name=%22liststartindex%22%20val=%220%22/%3E" +
-							  "%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%2230%22/%3E")
+							  "%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%2210%22/%3E")
 	return dirData
 }
 
