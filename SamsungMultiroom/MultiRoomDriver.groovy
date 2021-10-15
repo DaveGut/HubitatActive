@@ -474,7 +474,7 @@ def dirCmd(deviceUdn, objId) {
 							  "%3Cp%20type=%22str%22%20name=%22filter%22%20val=%22folder%22/%3E" +
 							  "%3Cp%20type=%22str%22%20name=%22parentid%22%20val=%22${objId}%22/%3E" +
 							  "%3Cp%20type=%22dec%22%20name=%22liststartindex%22%20val=%220%22/%3E" +
-							  "%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%2210%22/%3E")
+							  "%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%2240%22/%3E")
 	return dirData
 }
 
