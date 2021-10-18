@@ -1,11 +1,11 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.4.0",
+  "version": "6.4.1",
   "minimumHEVersion": "2.2.6",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
-  "dateReleased": "2021-09-06","releaseNotes": "Added Light Strip driver. Added bulb preset functions for Color Bulbs.","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
+  "dateReleased": "2021-10-18","releaseNotes": "Added Light Strip driver. Added bulb preset functions for Color Bulbs.","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
