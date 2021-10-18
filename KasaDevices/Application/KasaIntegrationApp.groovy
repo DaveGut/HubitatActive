@@ -13,7 +13,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 3.	Modified LANcommunications timeouts and error handling to account for changes 
 	in Hubitat platform.
 ===================================================================================================*/
-def driverVer() { return "6.4.1" }
+def appVersion() { return "6.4.1" }
 def rel() { return "7" }
 import groovy.json.JsonSlurper
 
