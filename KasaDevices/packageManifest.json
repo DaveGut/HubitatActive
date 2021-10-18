@@ -1,7 +1,7 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.4.0",
+  "version": "6.4.1",
   "minimumHEVersion": "2.2.6",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
