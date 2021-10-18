@@ -350,7 +350,7 @@ def listDevicesByIp() {
 	deviceList << "<b>DeviceIp:  Alias,  DeviceType,  Installed</b>"
 	devices.each{
 		def installed = "NO"
-		def isChild = getChildDevice(dni)
+		def isChild = getChildDevice(it.value.dni)
 		if (isChild) {
 			installed = "YES"
 		}
@@ -381,7 +381,7 @@ def listDevicesByName() {
 	deviceList << "<b>Alias:  DeviceType,  DeviceIP,  Installed</b>"
 	devices.each{
 		def installed = ""
-		def isChild = getChildDevice(dni)
+		def isChild = getChildDevice(it.value.dni)
 		if (isChild) {
 			installed = "installed"
 		}
