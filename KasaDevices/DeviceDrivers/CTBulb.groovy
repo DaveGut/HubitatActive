@@ -421,157 +421,155 @@ def sendCmd(command) { // library marker davegut.kasaCommunications, line 10
 
 def sendLanCmd(command) { // library marker davegut.kasaCommunications, line 20
 	logDebug("sendLanCmd: command = ${command}") // library marker davegut.kasaCommunications, line 21
-logTrace("sendLanCmd: command = ${command}") // library marker davegut.kasaCommunications, line 22
-	state.lastCommand = command // library marker davegut.kasaCommunications, line 23
-	def myHubAction = new hubitat.device.HubAction( // library marker davegut.kasaCommunications, line 24
-		outputXOR(command), // library marker davegut.kasaCommunications, line 25
-		hubitat.device.Protocol.LAN, // library marker davegut.kasaCommunications, line 26
-		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT, // library marker davegut.kasaCommunications, line 27
-		 destinationAddress: "${getDataValue("deviceIP")}:9999", // library marker davegut.kasaCommunications, line 28
-		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING, // library marker davegut.kasaCommunications, line 29
-		 parseWarning: true, // library marker davegut.kasaCommunications, line 30
-		 timeout: 5]) // library marker davegut.kasaCommunications, line 31
-	try { // library marker davegut.kasaCommunications, line 32
-		sendHubCommand(myHubAction) // library marker davegut.kasaCommunications, line 33
-	} catch (e) { // library marker davegut.kasaCommunications, line 34
-		logWarn("sendLanCmd: LAN Error = ${e}") // library marker davegut.kasaCommunications, line 35
-		handleCommsError() // library marker davegut.kasaCommunications, line 36
-	} // library marker davegut.kasaCommunications, line 37
-} // library marker davegut.kasaCommunications, line 38
+	state.lastCommand = command // library marker davegut.kasaCommunications, line 22
+	def myHubAction = new hubitat.device.HubAction( // library marker davegut.kasaCommunications, line 23
+		outputXOR(command), // library marker davegut.kasaCommunications, line 24
+		hubitat.device.Protocol.LAN, // library marker davegut.kasaCommunications, line 25
+		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT, // library marker davegut.kasaCommunications, line 26
+		 destinationAddress: "${getDataValue("deviceIP")}:9999", // library marker davegut.kasaCommunications, line 27
+		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING, // library marker davegut.kasaCommunications, line 28
+		 parseWarning: true, // library marker davegut.kasaCommunications, line 29
+		 timeout: 5]) // library marker davegut.kasaCommunications, line 30
+	try { // library marker davegut.kasaCommunications, line 31
+		sendHubCommand(myHubAction) // library marker davegut.kasaCommunications, line 32
+	} catch (e) { // library marker davegut.kasaCommunications, line 33
+		logWarn("sendLanCmd: LAN Error = ${e}") // library marker davegut.kasaCommunications, line 34
+		handleCommsError() // library marker davegut.kasaCommunications, line 35
+	} // library marker davegut.kasaCommunications, line 36
+} // library marker davegut.kasaCommunications, line 37
 
-def parse(message) { // library marker davegut.kasaCommunications, line 40
-	def resp = parseLanMessage(message) // library marker davegut.kasaCommunications, line 41
-log.trace resp.type // library marker davegut.kasaCommunications, line 42
-	if (resp.type == "LAN_TYPE_UDPCLIENT") { // library marker davegut.kasaCommunications, line 43
-		def clearResp = inputXOR(resp.payload) // library marker davegut.kasaCommunications, line 44
-		if (clearResp.length() > 1022) { // library marker davegut.kasaCommunications, line 45
-			clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}" // library marker davegut.kasaCommunications, line 46
-		} // library marker davegut.kasaCommunications, line 47
-		def cmdResp = new JsonSlurper().parseText(clearResp) // library marker davegut.kasaCommunications, line 48
-		distResp(cmdResp) // library marker davegut.kasaCommunications, line 49
-	} else { // library marker davegut.kasaCommunications, line 50
-		logWarn("parse: LAN Error = ${resp.type}") // library marker davegut.kasaCommunications, line 51
-		handleCommsError() // library marker davegut.kasaCommunications, line 52
-	} // library marker davegut.kasaCommunications, line 53
-} // library marker davegut.kasaCommunications, line 54
+def parse(message) { // library marker davegut.kasaCommunications, line 39
+	def resp = parseLanMessage(message) // library marker davegut.kasaCommunications, line 40
+	if (resp.type == "LAN_TYPE_UDPCLIENT") { // library marker davegut.kasaCommunications, line 41
+		def clearResp = inputXOR(resp.payload) // library marker davegut.kasaCommunications, line 42
+		if (clearResp.length() > 1022) { // library marker davegut.kasaCommunications, line 43
+			clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}" // library marker davegut.kasaCommunications, line 44
+		} // library marker davegut.kasaCommunications, line 45
+		def cmdResp = new JsonSlurper().parseText(clearResp) // library marker davegut.kasaCommunications, line 46
+		distResp(cmdResp) // library marker davegut.kasaCommunications, line 47
+	} else { // library marker davegut.kasaCommunications, line 48
+		logWarn("parse: LAN Error = ${resp.type}") // library marker davegut.kasaCommunications, line 49
+		handleCommsError() // library marker davegut.kasaCommunications, line 50
+	} // library marker davegut.kasaCommunications, line 51
+} // library marker davegut.kasaCommunications, line 52
 
-def sendKasaCmd(command) { // library marker davegut.kasaCommunications, line 56
-	logDebug("sendKasaCmd: ${command}") // library marker davegut.kasaCommunications, line 57
-	state.lastCommand = command // library marker davegut.kasaCommunications, line 58
-	runIn(5, handleCommsError) // library marker davegut.kasaCommunications, line 59
-	def cmdResponse = "" // library marker davegut.kasaCommunications, line 60
-	def cmdBody = [ // library marker davegut.kasaCommunications, line 61
-		method: "passthrough", // library marker davegut.kasaCommunications, line 62
-		params: [ // library marker davegut.kasaCommunications, line 63
-			deviceId: getDataValue("deviceId"), // library marker davegut.kasaCommunications, line 64
-			requestData: "${command}" // library marker davegut.kasaCommunications, line 65
-		] // library marker davegut.kasaCommunications, line 66
-	] // library marker davegut.kasaCommunications, line 67
-	def sendCloudCmdParams = [ // library marker davegut.kasaCommunications, line 68
-		uri: "${parent.kasaCloudUrl}/?token=${parent.kasaToken}", // library marker davegut.kasaCommunications, line 69
-		requestContentType: 'application/json', // library marker davegut.kasaCommunications, line 70
-		contentType: 'application/json', // library marker davegut.kasaCommunications, line 71
-		headers: ['Accept':'application/json; version=1, */*; q=0.01'], // library marker davegut.kasaCommunications, line 72
-		timeout: 5, // library marker davegut.kasaCommunications, line 73
-		body : new groovy.json.JsonBuilder(cmdBody).toString() // library marker davegut.kasaCommunications, line 74
-	] // library marker davegut.kasaCommunications, line 75
-	try { // library marker davegut.kasaCommunications, line 76
-		httpPostJson(sendCloudCmdParams) {resp -> // library marker davegut.kasaCommunications, line 77
-			if (resp.status == 200 && resp.data.error_code == 0) { // library marker davegut.kasaCommunications, line 78
-				def jsonSlurper = new groovy.json.JsonSlurper() // library marker davegut.kasaCommunications, line 79
-				distResp(jsonSlurper.parseText(resp.data.result.responseData)) // library marker davegut.kasaCommunications, line 80
-			} else { // library marker davegut.kasaCommunications, line 81
-				def errMsg = "CLOUD Error = ${resp.data}" // library marker davegut.kasaCommunications, line 82
-				logWarn("sendKasaCmd: ${errMsg}]") // library marker davegut.kasaCommunications, line 83
-			} // library marker davegut.kasaCommunications, line 84
-		} // library marker davegut.kasaCommunications, line 85
-	} catch (e) { // library marker davegut.kasaCommunications, line 86
-		def errMsg = "CLOUD Error = ${e}" // library marker davegut.kasaCommunications, line 87
-		logWarn("sendKasaCmd: ${errMsg}]") // library marker davegut.kasaCommunications, line 88
-	} // library marker davegut.kasaCommunications, line 89
-} // library marker davegut.kasaCommunications, line 90
+def sendKasaCmd(command) { // library marker davegut.kasaCommunications, line 54
+	logDebug("sendKasaCmd: ${command}") // library marker davegut.kasaCommunications, line 55
+	state.lastCommand = command // library marker davegut.kasaCommunications, line 56
+	runIn(5, handleCommsError) // library marker davegut.kasaCommunications, line 57
+	def cmdResponse = "" // library marker davegut.kasaCommunications, line 58
+	def cmdBody = [ // library marker davegut.kasaCommunications, line 59
+		method: "passthrough", // library marker davegut.kasaCommunications, line 60
+		params: [ // library marker davegut.kasaCommunications, line 61
+			deviceId: getDataValue("deviceId"), // library marker davegut.kasaCommunications, line 62
+			requestData: "${command}" // library marker davegut.kasaCommunications, line 63
+		] // library marker davegut.kasaCommunications, line 64
+	] // library marker davegut.kasaCommunications, line 65
+	def sendCloudCmdParams = [ // library marker davegut.kasaCommunications, line 66
+		uri: "${parent.kasaCloudUrl}/?token=${parent.kasaToken}", // library marker davegut.kasaCommunications, line 67
+		requestContentType: 'application/json', // library marker davegut.kasaCommunications, line 68
+		contentType: 'application/json', // library marker davegut.kasaCommunications, line 69
+		headers: ['Accept':'application/json; version=1, */*; q=0.01'], // library marker davegut.kasaCommunications, line 70
+		timeout: 5, // library marker davegut.kasaCommunications, line 71
+		body : new groovy.json.JsonBuilder(cmdBody).toString() // library marker davegut.kasaCommunications, line 72
+	] // library marker davegut.kasaCommunications, line 73
+	try { // library marker davegut.kasaCommunications, line 74
+		httpPostJson(sendCloudCmdParams) {resp -> // library marker davegut.kasaCommunications, line 75
+			if (resp.status == 200 && resp.data.error_code == 0) { // library marker davegut.kasaCommunications, line 76
+				def jsonSlurper = new groovy.json.JsonSlurper() // library marker davegut.kasaCommunications, line 77
+				distResp(jsonSlurper.parseText(resp.data.result.responseData)) // library marker davegut.kasaCommunications, line 78
+			} else { // library marker davegut.kasaCommunications, line 79
+				def errMsg = "CLOUD Error = ${resp.data}" // library marker davegut.kasaCommunications, line 80
+				logWarn("sendKasaCmd: ${errMsg}]") // library marker davegut.kasaCommunications, line 81
+			} // library marker davegut.kasaCommunications, line 82
+		} // library marker davegut.kasaCommunications, line 83
+	} catch (e) { // library marker davegut.kasaCommunications, line 84
+		def errMsg = "CLOUD Error = ${e}" // library marker davegut.kasaCommunications, line 85
+		logWarn("sendKasaCmd: ${errMsg}]") // library marker davegut.kasaCommunications, line 86
+	} // library marker davegut.kasaCommunications, line 87
+} // library marker davegut.kasaCommunications, line 88
 
-def handleCommsError() { // library marker davegut.kasaCommunications, line 92
-	def count = state.errorCount + 1 // library marker davegut.kasaCommunications, line 93
-	state.errorCount = count // library marker davegut.kasaCommunications, line 94
-	def message = "handleCommsError: Count: ${count}." // library marker davegut.kasaCommunications, line 95
-	if (count <= 3) { // library marker davegut.kasaCommunications, line 96
-		message += "\n\t\t\t Retransmitting command, try = ${count}" // library marker davegut.kasaCommunications, line 97
-		runIn(1, sendCmd, [data: state.lastCommand]) // library marker davegut.kasaCommunications, line 98
-	} else if (count == 4) { // library marker davegut.kasaCommunications, line 99
-		setCommsError() // library marker davegut.kasaCommunications, line 100
-		message += "\n\t\t\t Setting Comms Error." // library marker davegut.kasaCommunications, line 101
-	} // library marker davegut.kasaCommunications, line 102
-	logDebug(message) // library marker davegut.kasaCommunications, line 103
-} // library marker davegut.kasaCommunications, line 104
+def handleCommsError() { // library marker davegut.kasaCommunications, line 90
+	def count = state.errorCount + 1 // library marker davegut.kasaCommunications, line 91
+	state.errorCount = count // library marker davegut.kasaCommunications, line 92
+	def message = "handleCommsError: Count: ${count}." // library marker davegut.kasaCommunications, line 93
+	if (count <= 3) { // library marker davegut.kasaCommunications, line 94
+		message += "\n\t\t\t Retransmitting command, try = ${count}" // library marker davegut.kasaCommunications, line 95
+		runIn(1, sendCmd, [data: state.lastCommand]) // library marker davegut.kasaCommunications, line 96
+	} else if (count == 4) { // library marker davegut.kasaCommunications, line 97
+		setCommsError() // library marker davegut.kasaCommunications, line 98
+		message += "\n\t\t\t Setting Comms Error." // library marker davegut.kasaCommunications, line 99
+	} // library marker davegut.kasaCommunications, line 100
+	logDebug(message) // library marker davegut.kasaCommunications, line 101
+} // library marker davegut.kasaCommunications, line 102
 
-def setCommsError() { // library marker davegut.kasaCommunications, line 106
-	def message = "setCommsError: Four consecutive errors.  Setting commsError to true." // library marker davegut.kasaCommunications, line 107
-	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>." // library marker davegut.kasaCommunications, line 108
-	if (device.currentValue("commsError") == "false") { // library marker davegut.kasaCommunications, line 109
-		sendEvent(name: "commsError", value: "true") // library marker davegut.kasaCommunications, line 110
-		message += "\n\t\t${parent.fixConnection(device.currentValue("connection"))}" // library marker davegut.kasaCommunications, line 111
-		logWarn message // library marker davegut.kasaCommunications, line 112
-	} // library marker davegut.kasaCommunications, line 113
-} // library marker davegut.kasaCommunications, line 114
+def setCommsError() { // library marker davegut.kasaCommunications, line 104
+	def message = "setCommsError: Four consecutive errors.  Setting commsError to true." // library marker davegut.kasaCommunications, line 105
+	message += "\n\t\t<b>ErrorData = ${ErrorData}</b>." // library marker davegut.kasaCommunications, line 106
+	if (device.currentValue("commsError") == "false") { // library marker davegut.kasaCommunications, line 107
+		sendEvent(name: "commsError", value: "true") // library marker davegut.kasaCommunications, line 108
+		message += "\n\t\t${parent.fixConnection(device.currentValue("connection"))}" // library marker davegut.kasaCommunications, line 109
+		logWarn message // library marker davegut.kasaCommunications, line 110
+	} // library marker davegut.kasaCommunications, line 111
+} // library marker davegut.kasaCommunications, line 112
 
-def resetCommsError() { // library marker davegut.kasaCommunications, line 116
-	unschedule(handleCommsError) // library marker davegut.kasaCommunications, line 117
-	sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommunications, line 118
-	state.errorCount = 0 // library marker davegut.kasaCommunications, line 119
-} // library marker davegut.kasaCommunications, line 120
+def resetCommsError() { // library marker davegut.kasaCommunications, line 114
+	unschedule(handleCommsError) // library marker davegut.kasaCommunications, line 115
+	sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommunications, line 116
+	state.errorCount = 0 // library marker davegut.kasaCommunications, line 117
+} // library marker davegut.kasaCommunications, line 118
 
-private outputXOR(command) { // library marker davegut.kasaCommunications, line 122
-	def str = "" // library marker davegut.kasaCommunications, line 123
-	def encrCmd = "" // library marker davegut.kasaCommunications, line 124
- 	def key = 0xAB // library marker davegut.kasaCommunications, line 125
-	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommunications, line 126
-		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommunications, line 127
-		key = str // library marker davegut.kasaCommunications, line 128
-		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommunications, line 129
-	} // library marker davegut.kasaCommunications, line 130
-   	return encrCmd // library marker davegut.kasaCommunications, line 131
-} // library marker davegut.kasaCommunications, line 132
+private outputXOR(command) { // library marker davegut.kasaCommunications, line 120
+	def str = "" // library marker davegut.kasaCommunications, line 121
+	def encrCmd = "" // library marker davegut.kasaCommunications, line 122
+ 	def key = 0xAB // library marker davegut.kasaCommunications, line 123
+	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommunications, line 124
+		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommunications, line 125
+		key = str // library marker davegut.kasaCommunications, line 126
+		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommunications, line 127
+	} // library marker davegut.kasaCommunications, line 128
+   	return encrCmd // library marker davegut.kasaCommunications, line 129
+} // library marker davegut.kasaCommunications, line 130
 
-private inputXOR(encrResponse) { // library marker davegut.kasaCommunications, line 134
-	String[] strBytes = encrResponse.split("(?<=\\G.{2})") // library marker davegut.kasaCommunications, line 135
-	def cmdResponse = "" // library marker davegut.kasaCommunications, line 136
-	def key = 0xAB // library marker davegut.kasaCommunications, line 137
-	def nextKey // library marker davegut.kasaCommunications, line 138
-	byte[] XORtemp // library marker davegut.kasaCommunications, line 139
-	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommunications, line 140
-		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommunications, line 141
-		XORtemp = nextKey ^ key // library marker davegut.kasaCommunications, line 142
-		key = nextKey // library marker davegut.kasaCommunications, line 143
-		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommunications, line 144
-	} // library marker davegut.kasaCommunications, line 145
-	return cmdResponse // library marker davegut.kasaCommunications, line 146
-} // library marker davegut.kasaCommunications, line 147
+private inputXOR(encrResponse) { // library marker davegut.kasaCommunications, line 132
+	String[] strBytes = encrResponse.split("(?<=\\G.{2})") // library marker davegut.kasaCommunications, line 133
+	def cmdResponse = "" // library marker davegut.kasaCommunications, line 134
+	def key = 0xAB // library marker davegut.kasaCommunications, line 135
+	def nextKey // library marker davegut.kasaCommunications, line 136
+	byte[] XORtemp // library marker davegut.kasaCommunications, line 137
+	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommunications, line 138
+		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommunications, line 139
+		XORtemp = nextKey ^ key // library marker davegut.kasaCommunications, line 140
+		key = nextKey // library marker davegut.kasaCommunications, line 141
+		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommunications, line 142
+	} // library marker davegut.kasaCommunications, line 143
+	return cmdResponse // library marker davegut.kasaCommunications, line 144
+} // library marker davegut.kasaCommunications, line 145
 
-def logTrace(msg){ // library marker davegut.kasaCommunications, line 149
-	log.trace "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 150
-} // library marker davegut.kasaCommunications, line 151
+def logTrace(msg){ // library marker davegut.kasaCommunications, line 147
+	log.trace "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 148
+} // library marker davegut.kasaCommunications, line 149
 
-def logInfo(msg) { // library marker davegut.kasaCommunications, line 153
-	if (descriptionText == true) {  // library marker davegut.kasaCommunications, line 154
-		log.info "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 155
-	} // library marker davegut.kasaCommunications, line 156
-} // library marker davegut.kasaCommunications, line 157
+def logInfo(msg) { // library marker davegut.kasaCommunications, line 151
+	if (descriptionText == true) {  // library marker davegut.kasaCommunications, line 152
+		log.info "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 153
+	} // library marker davegut.kasaCommunications, line 154
+} // library marker davegut.kasaCommunications, line 155
 
-def logDebug(msg){ // library marker davegut.kasaCommunications, line 159
-	if(debug == true) { // library marker davegut.kasaCommunications, line 160
-		log.debug "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 161
-	} // library marker davegut.kasaCommunications, line 162
-} // library marker davegut.kasaCommunications, line 163
+def logDebug(msg){ // library marker davegut.kasaCommunications, line 157
+	if(debug == true) { // library marker davegut.kasaCommunications, line 158
+		log.debug "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 159
+	} // library marker davegut.kasaCommunications, line 160
+} // library marker davegut.kasaCommunications, line 161
 
-def debugOff() { // library marker davegut.kasaCommunications, line 165
-	device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.kasaCommunications, line 166
-	logInfo("debugLogOff: Debug logging is off.") // library marker davegut.kasaCommunications, line 167
-} // library marker davegut.kasaCommunications, line 168
+def debugOff() { // library marker davegut.kasaCommunications, line 163
+	device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.kasaCommunications, line 164
+	logInfo("debugLogOff: Debug logging is off.") // library marker davegut.kasaCommunications, line 165
+} // library marker davegut.kasaCommunications, line 166
 
-def logWarn(msg){ // library marker davegut.kasaCommunications, line 170
-	log.warn "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 171
-} // library marker davegut.kasaCommunications, line 172
+def logWarn(msg){ // library marker davegut.kasaCommunications, line 168
+	log.warn "[${type()} / ${driverVer()} / ${device.label}]| ${msg}" // library marker davegut.kasaCommunications, line 169
+} // library marker davegut.kasaCommunications, line 170
 
 // ~~~~~ end include (97) davegut.kasaCommunications ~~~~~
 
@@ -626,133 +624,132 @@ def getPower() { // library marker davegut.kasaEnergyMonitor, line 38
 } // library marker davegut.kasaEnergyMonitor, line 48
 
 def setPower(response) { // library marker davegut.kasaEnergyMonitor, line 50
-log.trace response // library marker davegut.kasaEnergyMonitor, line 51
-	def power = response.power // library marker davegut.kasaEnergyMonitor, line 52
-	if (power == null) { power = response.power_mw / 1000 } // library marker davegut.kasaEnergyMonitor, line 53
-	power = Math.round(10*(power))/10 // library marker davegut.kasaEnergyMonitor, line 54
-	def curPwr = device.currentValue("power") // library marker davegut.kasaEnergyMonitor, line 55
-	if (curPwr < 5 && (power > curPwr + 0.3 || power < curPwr - 0.3)) { // library marker davegut.kasaEnergyMonitor, line 56
-		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 57
-		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 58
-	} else if (power > curPwr + 5 || power < curPwr - 5) { // library marker davegut.kasaEnergyMonitor, line 59
-		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 60
-		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 61
-	} // library marker davegut.kasaEnergyMonitor, line 62
-} // library marker davegut.kasaEnergyMonitor, line 63
+	def power = response.power // library marker davegut.kasaEnergyMonitor, line 51
+	if (power == null) { power = response.power_mw / 1000 } // library marker davegut.kasaEnergyMonitor, line 52
+	power = Math.round(10*(power))/10 // library marker davegut.kasaEnergyMonitor, line 53
+	def curPwr = device.currentValue("power") // library marker davegut.kasaEnergyMonitor, line 54
+	if (curPwr < 5 && (power > curPwr + 0.3 || power < curPwr - 0.3)) { // library marker davegut.kasaEnergyMonitor, line 55
+		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 56
+		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 57
+	} else if (power > curPwr + 5 || power < curPwr - 5) { // library marker davegut.kasaEnergyMonitor, line 58
+		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 59
+		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 60
+	} // library marker davegut.kasaEnergyMonitor, line 61
+} // library marker davegut.kasaEnergyMonitor, line 62
 
-def getEnergyToday() { // library marker davegut.kasaEnergyMonitor, line 65
-	logDebug("getEnergyToday") // library marker davegut.kasaEnergyMonitor, line 66
-	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 67
-	if (type().contains("Multi")) { // library marker davegut.kasaEnergyMonitor, line 68
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 69
-				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 70
-	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 71
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 72
-	} else { // library marker davegut.kasaEnergyMonitor, line 73
-		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 74
-	} // library marker davegut.kasaEnergyMonitor, line 75
-} // library marker davegut.kasaEnergyMonitor, line 76
+def getEnergyToday() { // library marker davegut.kasaEnergyMonitor, line 64
+	logDebug("getEnergyToday") // library marker davegut.kasaEnergyMonitor, line 65
+	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 66
+	if (type().contains("Multi")) { // library marker davegut.kasaEnergyMonitor, line 67
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 68
+				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 69
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 70
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 71
+	} else { // library marker davegut.kasaEnergyMonitor, line 72
+		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 73
+	} // library marker davegut.kasaEnergyMonitor, line 74
+} // library marker davegut.kasaEnergyMonitor, line 75
 
-def setEnergyToday(response) { // library marker davegut.kasaEnergyMonitor, line 78
-	logDebug("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 79
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 80
-	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 81
-	def energy = data.energy // library marker davegut.kasaEnergyMonitor, line 82
-	if (energy == null) { energy = data.energy_wh/1000 } // library marker davegut.kasaEnergyMonitor, line 83
-	energy -= device.currentValue("currMonthTotal") // library marker davegut.kasaEnergyMonitor, line 84
-	energy = Math.round(100*energy)/100 // library marker davegut.kasaEnergyMonitor, line 85
-	def currEnergy = device.currentValue("energy") // library marker davegut.kasaEnergyMonitor, line 86
-	if (currEnergy < energy + 0.05) { // library marker davegut.kasaEnergyMonitor, line 87
-		sendEvent(name: "energy", value: energy, descriptionText: "KiloWatt Hours", unit: "KWH") // library marker davegut.kasaEnergyMonitor, line 88
-		logDebug("setEngrToday: [energy: ${energy}]") // library marker davegut.kasaEnergyMonitor, line 89
-	} // library marker davegut.kasaEnergyMonitor, line 90
-	setThisMonth(response) // library marker davegut.kasaEnergyMonitor, line 91
-} // library marker davegut.kasaEnergyMonitor, line 92
+def setEnergyToday(response) { // library marker davegut.kasaEnergyMonitor, line 77
+	logDebug("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 78
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 79
+	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 80
+	def energy = data.energy // library marker davegut.kasaEnergyMonitor, line 81
+	if (energy == null) { energy = data.energy_wh/1000 } // library marker davegut.kasaEnergyMonitor, line 82
+	energy -= device.currentValue("currMonthTotal") // library marker davegut.kasaEnergyMonitor, line 83
+	energy = Math.round(100*energy)/100 // library marker davegut.kasaEnergyMonitor, line 84
+	def currEnergy = device.currentValue("energy") // library marker davegut.kasaEnergyMonitor, line 85
+	if (currEnergy < energy + 0.05) { // library marker davegut.kasaEnergyMonitor, line 86
+		sendEvent(name: "energy", value: energy, descriptionText: "KiloWatt Hours", unit: "KWH") // library marker davegut.kasaEnergyMonitor, line 87
+		logDebug("setEngrToday: [energy: ${energy}]") // library marker davegut.kasaEnergyMonitor, line 88
+	} // library marker davegut.kasaEnergyMonitor, line 89
+	setThisMonth(response) // library marker davegut.kasaEnergyMonitor, line 90
+} // library marker davegut.kasaEnergyMonitor, line 91
 
-def setThisMonth(response) { // library marker davegut.kasaEnergyMonitor, line 94
-	logDebug("setThisMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 95
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 96
-	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 97
-	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 98
-	def totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 99
-	if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 100
-		totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 101
-	} // library marker davegut.kasaEnergyMonitor, line 102
-	totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 103
-	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 104
-	if (day != 1) {  // library marker davegut.kasaEnergyMonitor, line 105
-		avgEnergy = totEnergy /(day - 1)  // library marker davegut.kasaEnergyMonitor, line 106
-	} // library marker davegut.kasaEnergyMonitor, line 107
-	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 108
+def setThisMonth(response) { // library marker davegut.kasaEnergyMonitor, line 93
+	logDebug("setThisMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 94
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 95
+	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 96
+	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 97
+	def totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 98
+	if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 99
+		totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 100
+	} // library marker davegut.kasaEnergyMonitor, line 101
+	totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 102
+	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 103
+	if (day != 1) {  // library marker davegut.kasaEnergyMonitor, line 104
+		avgEnergy = totEnergy /(day - 1)  // library marker davegut.kasaEnergyMonitor, line 105
+	} // library marker davegut.kasaEnergyMonitor, line 106
+	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 107
 
-	sendEvent(name: "currMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 110
-			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 111
-	sendEvent(name: "currMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 112
-			  descriptionText: "KiloWatt Hours per Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 113
-	logDebug("setThisMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 114
-	if (month != 1) { // library marker davegut.kasaEnergyMonitor, line 115
-		setLastMonth(response) // library marker davegut.kasaEnergyMonitor, line 116
-	} else { // library marker davegut.kasaEnergyMonitor, line 117
-		def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 118
-		if (type().contains("Multi")) { // library marker davegut.kasaEnergyMonitor, line 119
-			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 120
-					""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 121
-		} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 122
-			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 123
-		} else { // library marker davegut.kasaEnergyMonitor, line 124
-			sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 125
-		} // library marker davegut.kasaEnergyMonitor, line 126
-	} // library marker davegut.kasaEnergyMonitor, line 127
-} // library marker davegut.kasaEnergyMonitor, line 128
+	sendEvent(name: "currMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 109
+			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 110
+	sendEvent(name: "currMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 111
+			  descriptionText: "KiloWatt Hours per Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 112
+	logDebug("setThisMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 113
+	if (month != 1) { // library marker davegut.kasaEnergyMonitor, line 114
+		setLastMonth(response) // library marker davegut.kasaEnergyMonitor, line 115
+	} else { // library marker davegut.kasaEnergyMonitor, line 116
+		def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 117
+		if (type().contains("Multi")) { // library marker davegut.kasaEnergyMonitor, line 118
+			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 119
+					""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 120
+		} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 121
+			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 122
+		} else { // library marker davegut.kasaEnergyMonitor, line 123
+			sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 124
+		} // library marker davegut.kasaEnergyMonitor, line 125
+	} // library marker davegut.kasaEnergyMonitor, line 126
+} // library marker davegut.kasaEnergyMonitor, line 127
 
-def setLastMonth(response) { // library marker davegut.kasaEnergyMonitor, line 130
-	logDebug("setLastMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 131
-	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 132
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 133
-	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 134
-	def lastMonth // library marker davegut.kasaEnergyMonitor, line 135
-	if (month == 1) { // library marker davegut.kasaEnergyMonitor, line 136
-		lastMonth = 12 // library marker davegut.kasaEnergyMonitor, line 137
-	} else { // library marker davegut.kasaEnergyMonitor, line 138
-		lastMonth = month - 1 // library marker davegut.kasaEnergyMonitor, line 139
-	} // library marker davegut.kasaEnergyMonitor, line 140
-	def monthLength // library marker davegut.kasaEnergyMonitor, line 141
-	switch(lastMonth) { // library marker davegut.kasaEnergyMonitor, line 142
-		case 4: // library marker davegut.kasaEnergyMonitor, line 143
-		case 6: // library marker davegut.kasaEnergyMonitor, line 144
-		case 9: // library marker davegut.kasaEnergyMonitor, line 145
-		case 11: // library marker davegut.kasaEnergyMonitor, line 146
-			monthLength = 30 // library marker davegut.kasaEnergyMonitor, line 147
-			break // library marker davegut.kasaEnergyMonitor, line 148
-		case 2: // library marker davegut.kasaEnergyMonitor, line 149
-			monthLength = 28 // library marker davegut.kasaEnergyMonitor, line 150
-			if (year == 2020 || year == 2024 || year == 2028) { monthLength = 29 } // library marker davegut.kasaEnergyMonitor, line 151
-			break // library marker davegut.kasaEnergyMonitor, line 152
-		default: // library marker davegut.kasaEnergyMonitor, line 153
-			monthLength = 31 // library marker davegut.kasaEnergyMonitor, line 154
-	} // library marker davegut.kasaEnergyMonitor, line 155
-	def data = response.month_list.find { it.month == lastMonth } // library marker davegut.kasaEnergyMonitor, line 156
-	def totEnergy // library marker davegut.kasaEnergyMonitor, line 157
-	if (data == null) { // library marker davegut.kasaEnergyMonitor, line 158
-		totEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 159
-	} else { // library marker davegut.kasaEnergyMonitor, line 160
-		totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 161
-		if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 162
-			totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 163
-		} // library marker davegut.kasaEnergyMonitor, line 164
-		totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 165
-	} // library marker davegut.kasaEnergyMonitor, line 166
-	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 167
-	if (day !=1) { // library marker davegut.kasaEnergyMonitor, line 168
-		avgEnergy = totEnergy /(day - 1) // library marker davegut.kasaEnergyMonitor, line 169
-	} // library marker davegut.kasaEnergyMonitor, line 170
-	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 171
-	sendEvent(name: "lastMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 172
-			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 173
-	sendEvent(name: "lastMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 174
-			  descriptionText: "KiloWatt Hoursper Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 175
-	logDebug("setLastMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 176
-} // library marker davegut.kasaEnergyMonitor, line 177
+def setLastMonth(response) { // library marker davegut.kasaEnergyMonitor, line 129
+	logDebug("setLastMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 130
+	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 131
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 132
+	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 133
+	def lastMonth // library marker davegut.kasaEnergyMonitor, line 134
+	if (month == 1) { // library marker davegut.kasaEnergyMonitor, line 135
+		lastMonth = 12 // library marker davegut.kasaEnergyMonitor, line 136
+	} else { // library marker davegut.kasaEnergyMonitor, line 137
+		lastMonth = month - 1 // library marker davegut.kasaEnergyMonitor, line 138
+	} // library marker davegut.kasaEnergyMonitor, line 139
+	def monthLength // library marker davegut.kasaEnergyMonitor, line 140
+	switch(lastMonth) { // library marker davegut.kasaEnergyMonitor, line 141
+		case 4: // library marker davegut.kasaEnergyMonitor, line 142
+		case 6: // library marker davegut.kasaEnergyMonitor, line 143
+		case 9: // library marker davegut.kasaEnergyMonitor, line 144
+		case 11: // library marker davegut.kasaEnergyMonitor, line 145
+			monthLength = 30 // library marker davegut.kasaEnergyMonitor, line 146
+			break // library marker davegut.kasaEnergyMonitor, line 147
+		case 2: // library marker davegut.kasaEnergyMonitor, line 148
+			monthLength = 28 // library marker davegut.kasaEnergyMonitor, line 149
+			if (year == 2020 || year == 2024 || year == 2028) { monthLength = 29 } // library marker davegut.kasaEnergyMonitor, line 150
+			break // library marker davegut.kasaEnergyMonitor, line 151
+		default: // library marker davegut.kasaEnergyMonitor, line 152
+			monthLength = 31 // library marker davegut.kasaEnergyMonitor, line 153
+	} // library marker davegut.kasaEnergyMonitor, line 154
+	def data = response.month_list.find { it.month == lastMonth } // library marker davegut.kasaEnergyMonitor, line 155
+	def totEnergy // library marker davegut.kasaEnergyMonitor, line 156
+	if (data == null) { // library marker davegut.kasaEnergyMonitor, line 157
+		totEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 158
+	} else { // library marker davegut.kasaEnergyMonitor, line 159
+		totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 160
+		if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 161
+			totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 162
+		} // library marker davegut.kasaEnergyMonitor, line 163
+		totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 164
+	} // library marker davegut.kasaEnergyMonitor, line 165
+	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 166
+	if (day !=1) { // library marker davegut.kasaEnergyMonitor, line 167
+		avgEnergy = totEnergy /(day - 1) // library marker davegut.kasaEnergyMonitor, line 168
+	} // library marker davegut.kasaEnergyMonitor, line 169
+	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 170
+	sendEvent(name: "lastMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 171
+			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 172
+	sendEvent(name: "lastMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 173
+			  descriptionText: "KiloWatt Hoursper Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 174
+	logDebug("setLastMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 175
+} // library marker davegut.kasaEnergyMonitor, line 176
 
 // ~~~~~ end include (98) davegut.kasaEnergyMonitor ~~~~~
 
@@ -1036,3 +1033,4 @@ def updatePresets(bulbPresets) { // library marker davegut.bulbTools, line 133
 } // library marker davegut.bulbTools, line 136
 
 // ~~~~~ end include (33) davegut.bulbTools ~~~~~
+
