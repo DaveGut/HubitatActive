@@ -19,7 +19,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 	c.	Ping IP Tool.  Allow pinging an individual IP to see if the device is seen by HE.
 	d.	Reset the Device Database.  Zeroizes the DB then rediscovers devices.
 ===================================================================================================*/
-def appVersion() { return "6.4.2" }
+def appVersion() { return "6.4.3" }
 def rel() { return "1" }
 import groovy.json.JsonSlurper
 
@@ -123,13 +123,6 @@ def startPage() {
 					   uninstall: true,
 					   install: true) {
 		section() {
-			input "appSetup", "bool",
-				title: "<b>Cloud, Lan and Device Control Setup</b>",
-				submitOnChange: true,
-				defaultalue: false
-			paragraph "<b>Current Configuration:  token</b> = ${kasaToken}, <b>Cloud Device Control</b> = ${useCloud}, " +
-				"<b>discMethod</b> = ${searchMethod}, <b>LanSegments</b> = ${segments}, " +
-				"<b>hostRange</b> = ${range}"
 			if (appSetup) {
 				href "kasaAuthenticationPage",
 					title: "<b>Kasa Login and Token Update</b>",
@@ -163,8 +156,15 @@ def startPage() {
 					title: "<b>Host Address Range</b> (ex: 5, 100)",
 					submitOnChange: true
 			}
+			paragraph "<b>Current Configuration:  token</b> = ${kasaToken}, <b>Cloud Device Control</b> = ${useCloud}, " +
+				"<b>discMethod</b> = ${searchMethod}, <b>LanSegments</b> = ${segments}, " +
+				"<b>hostRange</b> = ${range}"
+			input "appSetup", "bool",
+				title: "<b>Modify Configuration</b>",
+				submitOnChange: true,
+				defaultalue: false
+			paragraph "\n"
 
-			paragraph ""
 			href "addDevicesPage",
 				title: "<b>Install Kasa Devices</b>",
 				description: "Also updates all device IP addresses."
@@ -299,7 +299,7 @@ def removeDevicesPage() {
 
 def listDevicesByIp() {
 	logInfo("listDevicesByIp")
-	def theList
+	def theList = ""
 	def devices = state.devices
 	if (devices == null) {
 		theList += "<b>No devices in the device database.</b>"
@@ -335,7 +335,7 @@ def listDevicesByName() {
 	logInfo("listDevicesByName")
 	state.listDevices = [:]
 	def devices = state.devices
-	def theList
+	def theList = ""
 	if (devices == null) {
 		theList += "<b>No devices in the device database.</b>"
 	} else {
@@ -858,6 +858,7 @@ def sendKasaCmd(cmdData) {
 		headers: ['Accept':'application/json; version=1, */*; q=0.01'],
 		body : new groovy.json.JsonBuilder(cmdData.cmdBody).toString()
 	]
+log.trace commandParams
 	def respData
 	httpPostJson(commandParams) {resp ->
 		if (resp.status == 200 && resp.data.error_code == 0) {
@@ -906,14 +907,14 @@ private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 
 def debugOff() { app.updateSetting("debugLog", false) }
 
-def logTrace(msg){ log.trace "[KasaInt/${appVersion()}_R${rel()}] ${msg}" }
+def logTrace(msg){ log.trace "[KasaInt/${appVersion()}] ${msg}" }
 
 def logDebug(msg){
-	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}_R${rel()}]: ${msg}" }
+	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}]: ${msg}" }
 }
 
-def logInfo(msg){ log.info "[KasaInt/${appVersion()}_R${rel()}]: ${msg}" }
+def logInfo(msg){ log.info "[KasaInt/${appVersion()}]: ${msg}" }
 
-def logWarn(msg) { log.warn "[KasaInt/${appVersion()}_R${rel()}]: ${msg}" }
+def logWarn(msg) { log.warn "[KasaInt/${appVersion()}]: ${msg}" }
 
 //	end-of-file
