@@ -19,8 +19,8 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 	c.	Ping IP Tool.  Allow pinging an individual IP to see if the device is seen by HE.
 	d.	Reset the Device Database.  Zeroizes the DB then rediscovers devices.
 ===================================================================================================*/
-def appVersion() { return "6.4.3-r2" }
-def rel() { return "1" }
+def appVersion() { return "6.4.3" }
+def rel() { return "2" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -919,14 +919,14 @@ private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 
 def debugOff() { app.updateSetting("debugLog", false) }
 
-def logTrace(msg){ log.trace "[KasaInt/${appVersion()}] ${msg}" }
+def logTrace(msg){ log.trace "[KasaInt/${appVersion()}-r${rel()}] ${msg}" }
 
 def logDebug(msg){
-	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}]: ${msg}" }
+	if(debugLog == true) { log.debug "[KasaInt/${appVersion()}-r${rel()}] ${msg}" }
 }
 
-def logInfo(msg){ log.info "[KasaInt/${appVersion()}]: ${msg}" }
+def logInfo(msg){ log.info "[KasaInt/${appVersion()}-r${rel()}] ${msg}" }
 
-def logWarn(msg) { log.warn "[KasaInt/${appVersion()}]: ${msg}" }
+def logWarn(msg) { log.warn "[KasaInt/${appVersion()}-r${rel()}] ${msg}" }
 
 //	end-of-file
