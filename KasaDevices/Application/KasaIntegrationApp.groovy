@@ -20,7 +20,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 	d.	Reset the Device Database.  Zeroizes the DB then rediscovers devices.
 ===================================================================================================*/
 def appVersion() { return "6.4.3" }
-def rel() { return "2" }
+def rel() { return "3" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -626,12 +626,12 @@ def addDevices() {
 	selectedAddDevices.each { dni ->
 		//	See if any installing devices are IP = CLOUD. 
 		//	If so, set useKasaCloud to true so device can be controlled.
-		if (device.value.ip == "CLOUD") {
-			app?.updateSetting("useKasaCloud", true)
-		}
 		def isChild = getChildDevice(dni)
 		if (!isChild) {
 			def device = state.devices.find { it.value.dni == dni }
+			if (device.value.ip == "CLOUD") {
+				app?.updateSetting("useKasaCloud", true)
+			}
 			def deviceData = [:]
 			deviceData["deviceIP"] = device.value.ip
 			deviceData["plugNo"] = device.value.plugNo
