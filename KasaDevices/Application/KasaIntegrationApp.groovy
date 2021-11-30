@@ -277,7 +277,7 @@ def removeDevicesPage() {
 		def installed = false
 		def isChild = getChildDevice(it.value.dni)
 		if (isChild) {
-			installedDevices["${it.value.dni}"] = "${it.value.alias}, type = ${it.value.type}"
+			installedDevices["${it.value.dni}"] = "${it.value.alias}, type = ${it.value.type}, dni = ${it.value.dni}"
 		}
 	}
 	logDebug("removeDevicesPage: newDevices = ${newDevices}")
