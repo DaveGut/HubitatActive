@@ -20,7 +20,7 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 	d.	Reset the Device Database.  Zeroizes the DB then rediscovers devices.
 ===================================================================================================*/
 def appVersion() { return "6.4.3" }
-def rel() { return "3" }
+def rel() { return "4" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -510,7 +510,7 @@ def parseDeviceData(cmdResp, ip = "CLOUD") {
 	logDebug("parseDeviceData: ${cmdResp} //  ${ip}")
 	def dni
 	if (cmdResp.mic_mac) {
-		dni = cmdResp.mic_mac.replace(/:/, "")
+		dni = cmdResp.mic_mac
 	} else {
 		dni = cmdResp.mac.replace(/:/, "")
 	}
