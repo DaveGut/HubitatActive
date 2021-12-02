@@ -198,6 +198,35 @@ def presetLevel(percentage) {
 			""""system" :{"get_sysinfo" :{}}}""")
 }
 
+def startLevelChange(direction) {
+	if (direction == "up") { levelUp() }
+	else { levelDown() }
+}
+
+def stopLevelChange() {
+	unschedule(levelUp)
+	unschedule(levelDown)
+}
+
+def levelUp() {
+	def curLevel = device.currentValue("level").toInteger()
+	if (curLevel == 100) { return }
+	def newLevel = curLevel + 4
+	if (newLevel > 100) { newLevel = 100 }
+	setLevel(newLevel, 0)
+	runIn(1, levelUp)
+}
+
+def levelDown() {
+	def curLevel = device.currentValue("level").toInteger()
+	if (curLevel == 0) { return }
+	def newLevel = curLevel - 4
+	if (newLevel < 0) { newLevel = 0 }
+	setLevel(newLevel, 0)
+	if (newLevel == 0) { off() }
+	runIn(1, levelDown)
+}
+
 def refresh() {
 	logDebug("refresh")
 	poll()
