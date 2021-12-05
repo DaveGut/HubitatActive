@@ -12,7 +12,7 @@ Device Capabilities:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 
 Device Preferences:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/prefs.pdf
 
-Troubleshooting GuideL  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/trouble.pdf
+Troubleshooting Guide:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/trouble.pdf
 
 ## Driver and Application Links
 
