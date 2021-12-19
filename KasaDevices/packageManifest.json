@@ -48,7 +48,7 @@
     },
     {
       "id": "fc669da3-d9ef-4452-9a8e-53be2b4f214b",
-      "name": "Plug Switch",
+      "name": "Plug Switch except Dimmer",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Plug-Switch.groovy",
       "required": false
