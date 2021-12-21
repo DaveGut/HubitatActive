@@ -10,7 +10,7 @@
       "description": "Kasa Plug, Switch, and Bulb Integration supporting both cloud and LAN integration."
     },
     {
-      "name": "Cloud Kasa Devices Integration",
+      "name": "DEPRICATED Cloud Kasa Devices Integration",
       "category": "",
       "tags": ["Tools & Utilities"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCloudDevices/packageManifest.json",
