@@ -1,11 +1,11 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.5.0",
+  "version": "6.4.3",
   "minimumHEVersion": "2.2.6",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
-  "dateReleased": "2021-20-21","releaseNotes": "Finalized Dimming Switch driver. Eliminated need for EM Plug, EM MultiPlug, and MultiPlug Drivers (merged with Plug Switch).","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
+  "dateReleased": "2021-11-26","releaseNotes": "Added name sync function.  Fixed minor comms anomalies.","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
@@ -19,24 +19,17 @@
   ],
   "drivers": [
     {
-      "id": "bfcc31f8-8f99-4b2a-9606-9935470be1a8",
-      "name": "Color Bulb",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/ColorBulb.groovy",
-      "required": false
-    },
-    {
       "id": "0ad65cbc-b996-49ae-8586-bfe0b4883db1",
-      "name": "Color Temp Bulb",
+      "name": "Color Temp Bulb (LB120, KL120)",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy",
       "required": false
     },
     {
-      "id": "cc145de3-2a51-48e2-b562-59dc7ada533c",
-      "name": "Mono/White Bulb",
+      "id": "bfcc31f8-8f99-4b2a-9606-9935470be1a8",
+      "name": "Color Bulb (KB130, LB130, KL130, LB230)",
       "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/WhiteBulb.groovy",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/ColorBulb.groovy",
       "required": false
     },
     {
@@ -47,6 +40,13 @@
       "required": false
     },
     {
+      "id": "cc145de3-2a51-48e2-b562-59dc7ada533c",
+      "name": "Mono Bulb (KB100, KL50/60/110, LB100/110/200)",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/WhiteBulb.groovy",
+      "required": false
+    },
+    {
       "id": "0b4cf809-2f00-4e5b-935b-47ca694c5124",
       "name": "Dimming Switch (HS220)",
       "namespace": "davegut",
@@ -54,31 +54,31 @@
       "required": false
     },
     {
-      "id": "fc669da3-d9ef-4452-9a8e-53be2b4f214b",
-      "name": "All Plugs/Switches except Dimmer",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Plug-Switch.groovy",
-      "required": false
-    },
-    {
       "id": "e40aa2f0-d715-4583-bcf8-6bb6cad697f3",
-      "name": "DEPRECATED EM Multi Plug",
+      "name": "EM Multi Plug (HS300)",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Multi-Plug.groovy",
       "required": false
     },
     {
       "id": "20b1ec51-ad69-49a6-85ec-f22497acd6d0",
-      "name": "DEPRECATED EM Plug",
+      "name": "EM Plug (HS110)",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Plug.groovy",
       "required": false
     },
     {
       "id": "63876fc9-ba9d-4ff7-bf21-d58432a1c594",
-      "name": "DEPRECATED Multi Plug",
+      "name": "Multi Plug (HS107, KP200/303/400)",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Multi-Plug.groovy",
+      "required": false
+    },
+    {
+      "id": "fc669da3-d9ef-4452-9a8e-53be2b4f214b",
+      "name": "Plug Switch (HS100/103/105/200/210, KP100)",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Plug-Switch.groovy",
       "required": false
     }
   ]
