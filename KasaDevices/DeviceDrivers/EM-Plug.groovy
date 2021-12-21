@@ -118,9 +118,8 @@ def distResp(response) {
 		} else if (response.system.set_dev_alias) {
 			if (response.system.set_dev_alias.err_code != 0) {
 				logWarn("distResp: Name Sync from Hubitat to Device returned an error.")
-			} else {
-				device.updateSetting("nameSync",[type:"enum", value:"none"])
 			}
+			device.updateSetting("nameSync",[type:"enum", value:"none"])
 		} else {
 			logWarn("distResp: Unhandled response = ${response}")
 		}
