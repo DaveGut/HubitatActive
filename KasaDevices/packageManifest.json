@@ -1,11 +1,11 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.4.3",
+  "version": "6.5.0",
   "minimumHEVersion": "2.2.6",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
-  "dateReleased": "2021-11-26","releaseNotes": "Added name sync function.  Fixed minor comms anomalies.","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
+  "dateReleased": "2021-12-22","releaseNotes": "Finalized Dimming Switch.  Eliminated need for EM and multi-plug drivers.","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
@@ -48,7 +48,7 @@
     },
     {
       "id": "fc669da3-d9ef-4452-9a8e-53be2b4f214b",
-      "name": "Plug Switch",
+      "name": "All Plug Switch exceot Dimmer",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Plug-Switch.groovy",
       "required": false
@@ -62,21 +62,21 @@
     },
     {
       "id": "e40aa2f0-d715-4583-bcf8-6bb6cad697f3",
-      "name": "EM Multi Plug",
+      "name": "OLD EM Multi Plug",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Multi-Plug.groovy",
       "required": false
     },
     {
       "id": "20b1ec51-ad69-49a6-85ec-f22497acd6d0",
-      "name": "EM Plug",
+      "name": "OLD EM Plug",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/EM-Plug.groovy",
       "required": false
     },
     {
       "id": "63876fc9-ba9d-4ff7-bf21-d58432a1c594",
-      "name": "Multi Plug",
+      "name": "OLD Multi Plug",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Multi-Plug.groovy",
       "required": false
