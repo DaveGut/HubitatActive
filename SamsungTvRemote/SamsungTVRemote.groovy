@@ -626,6 +626,7 @@ def artMode() {
 		logInfo("artMode: Command not executed. Not a frameTv.")
 		return
 	}
+	getArtModeStatus()
 	def onOff = "on"
 	if (device.currentValue("artModeStatus") == "on") {
 		onOff = "off"
