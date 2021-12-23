@@ -255,6 +255,10 @@ def distResp(response) {
 
 def updateBulbData(status) {
 	logDebug("updateBulbData: ${status}")
+	if (nameSync == "device") {
+		device.setLabel(status.alias)
+		device.updateSetting("nameSync",[type:"enum", value:"none"])
+	}
 	status = status.light_state
 	def deviceStatus = [:]
 	def onOff = "on"
@@ -314,11 +318,6 @@ def updateBulbData(status) {
 		logInfo("updateBulbData: Status = ${deviceStatus}")
 	}
 	if(emFunction) { getPower() }
-	
-	if (nameSync == "device") {
-		device.setLabel(status.alias)
-		device.updateSetting("nameSync",[type:"enum", value:"none"])
-	}
 }
 
 //	===== includes =====
