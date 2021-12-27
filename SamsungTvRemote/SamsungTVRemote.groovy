@@ -640,6 +640,9 @@ def artMode() {
 }
 
 def getArtModeStatus() {
+    if(getDataValue("frameTv") == "false") {
+    	logDebug("artMode: not retrieving status, not a frameTv.")
+    }
 	def data = [request:"get_artmode_status",
 				id: "${getDataValue("uuid")}"]
 	data = JsonOutput.toJson(data)
