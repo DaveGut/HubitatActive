@@ -761,7 +761,7 @@ def fixConnection(type) {
 	logInfo("fixData: Update ${type} data")
 	def message = ""
 	if (type == "LAN") {
-		if (pollEnable == false) {
+		if (pollEnabled == false) {
 			message = "unable to update data.  Updated in last 15 minutes."
 			return message
 		} else {
