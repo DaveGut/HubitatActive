@@ -866,165 +866,163 @@ def setupEmFunction() { // library marker davegut.kasaEnergyMonitor, line 10
 } // library marker davegut.kasaEnergyMonitor, line 33
 
 def distEmeter(emeterResp) { // library marker davegut.kasaEnergyMonitor, line 35
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 36
-	def lastMonth = month - 1 // library marker davegut.kasaEnergyMonitor, line 37
-	if (lastMonth == 0) { lastMonth = 12 } // library marker davegut.kasaEnergyMonitor, line 38
-	if (emeterResp.get_realtime) { // library marker davegut.kasaEnergyMonitor, line 39
-		setPower(emeterResp.get_realtime) // library marker davegut.kasaEnergyMonitor, line 40
-	} else if (emeterResp.get_monthstat.month_list.find { it.month == month }) { // library marker davegut.kasaEnergyMonitor, line 41
-		setEnergyToday(emeterResp.get_monthstat) // library marker davegut.kasaEnergyMonitor, line 42
-	} else if (emeterResp.get_monthstat.month_list.find { it.month == lastMonth }) { // library marker davegut.kasaEnergyMonitor, line 43
-		setLastMonth(emeterResp.get_monthstat) // library marker davegut.kasaEnergyMonitor, line 44
-	} else { // library marker davegut.kasaEnergyMonitor, line 45
-		logWarn("distEmeter: Unhandled response = ${response}") // library marker davegut.kasaEnergyMonitor, line 46
-	} // library marker davegut.kasaEnergyMonitor, line 47
-} // library marker davegut.kasaEnergyMonitor, line 48
+	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 36
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 37
+	def lastMonth = month - 1 // library marker davegut.kasaEnergyMonitor, line 38
+	if (lastMonth == 0) { lastMonth = 12 } // library marker davegut.kasaEnergyMonitor, line 39
+	if (emeterResp.get_realtime) { // library marker davegut.kasaEnergyMonitor, line 40
+		setPower(emeterResp.get_realtime) // library marker davegut.kasaEnergyMonitor, line 41
+	} else if (emeterResp.get_monthstat.month_list.find { it.month == month && it.year == year}) { // library marker davegut.kasaEnergyMonitor, line 42
+		setEnergyToday(emeterResp.get_monthstat) // library marker davegut.kasaEnergyMonitor, line 43
+	} else if (emeterResp.get_monthstat.month_list.find { it.month == lastMonth }) { // library marker davegut.kasaEnergyMonitor, line 44
+		setLastMonth(emeterResp.get_monthstat) // library marker davegut.kasaEnergyMonitor, line 45
+	} else { // library marker davegut.kasaEnergyMonitor, line 46
+		logWarn("distEmeter: Unhandled response = ${response}") // library marker davegut.kasaEnergyMonitor, line 47
+	} // library marker davegut.kasaEnergyMonitor, line 48
+} // library marker davegut.kasaEnergyMonitor, line 49
 
-def getPower() { // library marker davegut.kasaEnergyMonitor, line 50
-	logDebug("getPower") // library marker davegut.kasaEnergyMonitor, line 51
-	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 52
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 53
-				""""emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 54
-	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 55
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 56
-	} else { // library marker davegut.kasaEnergyMonitor, line 57
-		sendCmd("""{"emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 58
-	} // library marker davegut.kasaEnergyMonitor, line 59
-} // library marker davegut.kasaEnergyMonitor, line 60
+def getPower() { // library marker davegut.kasaEnergyMonitor, line 51
+	logDebug("getPower") // library marker davegut.kasaEnergyMonitor, line 52
+	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 53
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 54
+				""""emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 55
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 56
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 57
+	} else { // library marker davegut.kasaEnergyMonitor, line 58
+		sendCmd("""{"emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 59
+	} // library marker davegut.kasaEnergyMonitor, line 60
+} // library marker davegut.kasaEnergyMonitor, line 61
 
-def setPower(response) { // library marker davegut.kasaEnergyMonitor, line 62
-	logDebug("setPower: ${response}") // library marker davegut.kasaEnergyMonitor, line 63
-	def power = response.power // library marker davegut.kasaEnergyMonitor, line 64
-	if (power == null) { power = response.power_mw / 1000 } // library marker davegut.kasaEnergyMonitor, line 65
-	power = Math.round(10*(power))/10 // library marker davegut.kasaEnergyMonitor, line 66
-	def curPwr = device.currentValue("power") // library marker davegut.kasaEnergyMonitor, line 67
-	if (curPwr < 5 && (power > curPwr + 0.3 || power < curPwr - 0.3)) { // library marker davegut.kasaEnergyMonitor, line 68
-		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 69
-		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 70
-	} else if (power > curPwr + 5 || power < curPwr - 5) { // library marker davegut.kasaEnergyMonitor, line 71
-		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 72
-		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 73
-	} // library marker davegut.kasaEnergyMonitor, line 74
-} // library marker davegut.kasaEnergyMonitor, line 75
+def setPower(response) { // library marker davegut.kasaEnergyMonitor, line 63
+	logDebug("setPower: ${response}") // library marker davegut.kasaEnergyMonitor, line 64
+	def power = response.power // library marker davegut.kasaEnergyMonitor, line 65
+	if (power == null) { power = response.power_mw / 1000 } // library marker davegut.kasaEnergyMonitor, line 66
+	power = Math.round(10*(power))/10 // library marker davegut.kasaEnergyMonitor, line 67
+	def curPwr = device.currentValue("power") // library marker davegut.kasaEnergyMonitor, line 68
+	if (curPwr < 5 && (power > curPwr + 0.3 || power < curPwr - 0.3)) { // library marker davegut.kasaEnergyMonitor, line 69
+		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 70
+		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 71
+	} else if (power > curPwr + 5 || power < curPwr - 5) { // library marker davegut.kasaEnergyMonitor, line 72
+		sendEvent(name: "power", value: power, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 73
+		logDebug("polResp: power = ${power}") // library marker davegut.kasaEnergyMonitor, line 74
+	} // library marker davegut.kasaEnergyMonitor, line 75
+} // library marker davegut.kasaEnergyMonitor, line 76
 
-def getEnergyToday() { // library marker davegut.kasaEnergyMonitor, line 77
-	logDebug("getEnergyToday") // library marker davegut.kasaEnergyMonitor, line 78
-	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 79
-	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 80
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 81
-				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 82
-	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 83
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 84
-	} else { // library marker davegut.kasaEnergyMonitor, line 85
-		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 86
-	} // library marker davegut.kasaEnergyMonitor, line 87
-} // library marker davegut.kasaEnergyMonitor, line 88
+def getEnergyToday() { // library marker davegut.kasaEnergyMonitor, line 78
+	logDebug("getEnergyToday") // library marker davegut.kasaEnergyMonitor, line 79
+	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 80
+	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 81
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 82
+				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 83
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 84
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 85
+	} else { // library marker davegut.kasaEnergyMonitor, line 86
+		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 87
+	} // library marker davegut.kasaEnergyMonitor, line 88
+} // library marker davegut.kasaEnergyMonitor, line 89
 
-def setEnergyToday(response) { // library marker davegut.kasaEnergyMonitor, line 90
-	logDebug("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 91
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 92
-	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 93
-	def energy = data.energy // library marker davegut.kasaEnergyMonitor, line 94
-	if (energy == null) { energy = data.energy_wh/1000 } // library marker davegut.kasaEnergyMonitor, line 95
-	energy -= device.currentValue("currMonthTotal") // library marker davegut.kasaEnergyMonitor, line 96
-	energy = Math.round(100*energy)/100 // library marker davegut.kasaEnergyMonitor, line 97
-	def currEnergy = device.currentValue("energy") // library marker davegut.kasaEnergyMonitor, line 98
-	if (currEnergy < energy + 0.05) { // library marker davegut.kasaEnergyMonitor, line 99
-		sendEvent(name: "energy", value: energy, descriptionText: "KiloWatt Hours", unit: "KWH") // library marker davegut.kasaEnergyMonitor, line 100
-		logDebug("setEngrToday: [energy: ${energy}]") // library marker davegut.kasaEnergyMonitor, line 101
-	} // library marker davegut.kasaEnergyMonitor, line 102
-	setThisMonth(response) // library marker davegut.kasaEnergyMonitor, line 103
-} // library marker davegut.kasaEnergyMonitor, line 104
+def setEnergyToday(response) { // library marker davegut.kasaEnergyMonitor, line 91
+	logDebug("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 92
+logTrace("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 93
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 94
+	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 95
+	def energy = data.energy // library marker davegut.kasaEnergyMonitor, line 96
+	if (energy == null) { energy = data.energy_wh/1000 } // library marker davegut.kasaEnergyMonitor, line 97
+	energy -= device.currentValue("currMonthTotal") // library marker davegut.kasaEnergyMonitor, line 98
+	energy = Math.round(100*energy)/100 // library marker davegut.kasaEnergyMonitor, line 99
+	def currEnergy = device.currentValue("energy") // library marker davegut.kasaEnergyMonitor, line 100
+	if (currEnergy < energy + 0.05) { // library marker davegut.kasaEnergyMonitor, line 101
+		sendEvent(name: "energy", value: energy, descriptionText: "KiloWatt Hours", unit: "KWH") // library marker davegut.kasaEnergyMonitor, line 102
+		logDebug("setEngrToday: [energy: ${energy}]") // library marker davegut.kasaEnergyMonitor, line 103
+	} // library marker davegut.kasaEnergyMonitor, line 104
+	setThisMonth(response) // library marker davegut.kasaEnergyMonitor, line 105
+} // library marker davegut.kasaEnergyMonitor, line 106
 
-def setThisMonth(response) { // library marker davegut.kasaEnergyMonitor, line 106
-	logDebug("setThisMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 107
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 108
-	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 109
-	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 110
-	def totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 111
-	if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 112
-		totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 113
-	} // library marker davegut.kasaEnergyMonitor, line 114
-	totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 115
-	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 116
-//	Change != logic to ==.  Switched processing to get raw avgEnergy // library marker davegut.kasaEnergyMonitor, line 117
-	if (day == 1) { // library marker davegut.kasaEnergyMonitor, line 118
-		avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 119
-	} else { // library marker davegut.kasaEnergyMonitor, line 120
-		avgEnergy = totEnergy /(day - 1)  // library marker davegut.kasaEnergyMonitor, line 121
-	} // library marker davegut.kasaEnergyMonitor, line 122
-	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 123
-	sendEvent(name: "currMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 124
-			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 125
-	sendEvent(name: "currMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 126
-			  descriptionText: "KiloWatt Hours per Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 127
-	logDebug("setThisMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 128
-	//	Send data to setLastMonth // library marker davegut.kasaEnergyMonitor, line 129
-	if (month == 1) { // library marker davegut.kasaEnergyMonitor, line 130
-		def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 131
-		year = year - 1 // library marker davegut.kasaEnergyMonitor, line 132
-		if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 133
-			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 134
-					""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 135
-		} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 136
-			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 137
-		} else { // library marker davegut.kasaEnergyMonitor, line 138
-			sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 139
-		} // library marker davegut.kasaEnergyMonitor, line 140
-	} else { // library marker davegut.kasaEnergyMonitor, line 141
-		setLastMonth(response) // library marker davegut.kasaEnergyMonitor, line 142
-	} // library marker davegut.kasaEnergyMonitor, line 143
-} // library marker davegut.kasaEnergyMonitor, line 144
 
-def setLastMonth(response) { // library marker davegut.kasaEnergyMonitor, line 146
-	logDebug("setLastMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 147
-	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 148
-	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 149
-	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 150
-	def lastMonth // library marker davegut.kasaEnergyMonitor, line 151
-	if (month == 1) { // library marker davegut.kasaEnergyMonitor, line 152
-		lastMonth = 12 // library marker davegut.kasaEnergyMonitor, line 153
-	} else { // library marker davegut.kasaEnergyMonitor, line 154
-		lastMonth = month - 1 // library marker davegut.kasaEnergyMonitor, line 155
-	} // library marker davegut.kasaEnergyMonitor, line 156
-	def monthLength // library marker davegut.kasaEnergyMonitor, line 157
-	switch(lastMonth) { // library marker davegut.kasaEnergyMonitor, line 158
-		case 4: // library marker davegut.kasaEnergyMonitor, line 159
-		case 6: // library marker davegut.kasaEnergyMonitor, line 160
-		case 9: // library marker davegut.kasaEnergyMonitor, line 161
-		case 11: // library marker davegut.kasaEnergyMonitor, line 162
-			monthLength = 30 // library marker davegut.kasaEnergyMonitor, line 163
-			break // library marker davegut.kasaEnergyMonitor, line 164
-		case 2: // library marker davegut.kasaEnergyMonitor, line 165
-			monthLength = 28 // library marker davegut.kasaEnergyMonitor, line 166
-			if (year == 2020 || year == 2024 || year == 2028) { monthLength = 29 } // library marker davegut.kasaEnergyMonitor, line 167
-			break // library marker davegut.kasaEnergyMonitor, line 168
-		default: // library marker davegut.kasaEnergyMonitor, line 169
-			monthLength = 31 // library marker davegut.kasaEnergyMonitor, line 170
-	} // library marker davegut.kasaEnergyMonitor, line 171
-	def data = response.month_list.find { it.month == lastMonth } // library marker davegut.kasaEnergyMonitor, line 172
-	def totEnergy // library marker davegut.kasaEnergyMonitor, line 173
-	if (data == null) { // library marker davegut.kasaEnergyMonitor, line 174
-		totEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 175
-	} else { // library marker davegut.kasaEnergyMonitor, line 176
-		totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 177
-		if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 178
-			totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 179
-		} // library marker davegut.kasaEnergyMonitor, line 180
-		totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 181
-	} // library marker davegut.kasaEnergyMonitor, line 182
-	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 183
-	if (day == 1) { // library marker davegut.kasaEnergyMonitor, line 184
-		avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 185
-	} else { // library marker davegut.kasaEnergyMonitor, line 186
-		avgEnergy = totEnergy /(day - 1)  // library marker davegut.kasaEnergyMonitor, line 187
-	} // library marker davegut.kasaEnergyMonitor, line 188
-	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 189
-	sendEvent(name: "lastMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 190
-			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 191
-	sendEvent(name: "lastMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 192
-			  descriptionText: "KiloWatt Hoursper Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 193
-	logDebug("setLastMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 194
-} // library marker davegut.kasaEnergyMonitor, line 195
+def setThisMonth(response) { // library marker davegut.kasaEnergyMonitor, line 109
+	logDebug("setThisMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 110
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 111
+	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 112
+	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 113
+	def totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 114
+	if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 115
+		totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 116
+	} // library marker davegut.kasaEnergyMonitor, line 117
+	totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 118
+	def avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 119
+//	Change != logic to ==.  Switched processing to get raw avgEnergy // library marker davegut.kasaEnergyMonitor, line 120
+	if (day == 1) { // library marker davegut.kasaEnergyMonitor, line 121
+		avgEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 122
+	} else { // library marker davegut.kasaEnergyMonitor, line 123
+		avgEnergy = totEnergy /(day - 1)  // library marker davegut.kasaEnergyMonitor, line 124
+	} // library marker davegut.kasaEnergyMonitor, line 125
+	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 126
+	sendEvent(name: "currMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 127
+			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 128
+	sendEvent(name: "currMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 129
+			  descriptionText: "KiloWatt Hours per Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 130
+	logDebug("setThisMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 131
+	//	Send data to setLastMonth // library marker davegut.kasaEnergyMonitor, line 132
+	if (month == 1) { // library marker davegut.kasaEnergyMonitor, line 133
+		def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 134
+		year = year - 1 // library marker davegut.kasaEnergyMonitor, line 135
+		if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 136
+			sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 137
+					""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 138
+		} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 139
+			sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 140
+		} else { // library marker davegut.kasaEnergyMonitor, line 141
+			sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 142
+		} // library marker davegut.kasaEnergyMonitor, line 143
+	} else { // library marker davegut.kasaEnergyMonitor, line 144
+		setLastMonth(response) // library marker davegut.kasaEnergyMonitor, line 145
+	} // library marker davegut.kasaEnergyMonitor, line 146
+} // library marker davegut.kasaEnergyMonitor, line 147
+
+def setLastMonth(response) { // library marker davegut.kasaEnergyMonitor, line 149
+	logDebug("setLastMonth: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 150
+	def year = new Date().format("yyyy").toInteger() // library marker davegut.kasaEnergyMonitor, line 151
+	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 152
+	def day = new Date().format("d").toInteger() // library marker davegut.kasaEnergyMonitor, line 153
+	def lastMonth // library marker davegut.kasaEnergyMonitor, line 154
+	if (month == 1) { // library marker davegut.kasaEnergyMonitor, line 155
+		lastMonth = 12 // library marker davegut.kasaEnergyMonitor, line 156
+	} else { // library marker davegut.kasaEnergyMonitor, line 157
+		lastMonth = month - 1 // library marker davegut.kasaEnergyMonitor, line 158
+	} // library marker davegut.kasaEnergyMonitor, line 159
+	def monthLength // library marker davegut.kasaEnergyMonitor, line 160
+	switch(lastMonth) { // library marker davegut.kasaEnergyMonitor, line 161
+		case 4: // library marker davegut.kasaEnergyMonitor, line 162
+		case 6: // library marker davegut.kasaEnergyMonitor, line 163
+		case 9: // library marker davegut.kasaEnergyMonitor, line 164
+		case 11: // library marker davegut.kasaEnergyMonitor, line 165
+			monthLength = 30 // library marker davegut.kasaEnergyMonitor, line 166
+			break // library marker davegut.kasaEnergyMonitor, line 167
+		case 2: // library marker davegut.kasaEnergyMonitor, line 168
+			monthLength = 28 // library marker davegut.kasaEnergyMonitor, line 169
+			if (year == 2020 || year == 2024 || year == 2028) { monthLength = 29 } // library marker davegut.kasaEnergyMonitor, line 170
+			break // library marker davegut.kasaEnergyMonitor, line 171
+		default: // library marker davegut.kasaEnergyMonitor, line 172
+			monthLength = 31 // library marker davegut.kasaEnergyMonitor, line 173
+	} // library marker davegut.kasaEnergyMonitor, line 174
+	def data = response.month_list.find { it.month == lastMonth } // library marker davegut.kasaEnergyMonitor, line 175
+	def totEnergy // library marker davegut.kasaEnergyMonitor, line 176
+	if (data == null) { // library marker davegut.kasaEnergyMonitor, line 177
+		totEnergy = 0 // library marker davegut.kasaEnergyMonitor, line 178
+	} else { // library marker davegut.kasaEnergyMonitor, line 179
+		totEnergy = data.energy // library marker davegut.kasaEnergyMonitor, line 180
+		if (totEnergy == null) {  // library marker davegut.kasaEnergyMonitor, line 181
+			totEnergy = data.energy_wh/1000 // library marker davegut.kasaEnergyMonitor, line 182
+		} // library marker davegut.kasaEnergyMonitor, line 183
+		totEnergy = Math.round(100*totEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 184
+	} // library marker davegut.kasaEnergyMonitor, line 185
+	def avgEnergy = totEnergy / monthLength // library marker davegut.kasaEnergyMonitor, line 186
+	avgEnergy = Math.round(100*avgEnergy)/100 // library marker davegut.kasaEnergyMonitor, line 187
+	sendEvent(name: "lastMonthTotal", value: totEnergy,  // library marker davegut.kasaEnergyMonitor, line 188
+			  descriptionText: "KiloWatt Hours", unit: "kWh") // library marker davegut.kasaEnergyMonitor, line 189
+	sendEvent(name: "lastMonthAvg", value: avgEnergy,  // library marker davegut.kasaEnergyMonitor, line 190
+			  descriptionText: "KiloWatt Hoursper Day", unit: "kWh/D") // library marker davegut.kasaEnergyMonitor, line 191
+	logDebug("setLastMonth: Energy stats set to ${totEnergy} // ${avgEnergy}") // library marker davegut.kasaEnergyMonitor, line 192
+} // library marker davegut.kasaEnergyMonitor, line 193
 
 // ~~~~~ end include (260) davegut.kasaEnergyMonitor ~~~~~
