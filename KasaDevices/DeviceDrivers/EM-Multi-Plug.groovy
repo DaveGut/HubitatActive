@@ -818,7 +818,7 @@ def getEnergyToday() { // library marker davegut.kasaEnergyMonitor, line 78
 
 def setEnergyToday(response) { // library marker davegut.kasaEnergyMonitor, line 91
 	logDebug("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 92
-logTrace("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 93
+//logTrace("setEnergyToday: response = ${response}") // library marker davegut.kasaEnergyMonitor, line 93
 	def month = new Date().format("M").toInteger() // library marker davegut.kasaEnergyMonitor, line 94
 	def data = response.month_list.find { it.month == month } // library marker davegut.kasaEnergyMonitor, line 95
 	def energy = data.energy // library marker davegut.kasaEnergyMonitor, line 96
