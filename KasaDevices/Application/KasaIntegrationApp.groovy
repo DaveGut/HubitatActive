@@ -11,8 +11,9 @@ Changes since version 6:  https://github.com/DaveGut/HubitatActive/blob/master/K
 2.	Fixed internal comms to use variable vs hard-coded port.
 3.	Updated device database, addDevices, and updateDevices to add port to device data.
 4.	Removed some configuration items to simplify installation.
+6.5.1 = Updated error handling and range checking.
 ===================================================================================================*/
-def appVersion() { return "6.5.0" }
+def appVersion() { return "6.5.1" }
 def rel() { return "1" }
 import groovy.json.JsonSlurper
 
@@ -286,8 +287,6 @@ def addDevStatus() {
 	app?.removeSetting("selectedAddDevices")
 }
 
-def getDevices () { return state.devices }
-
 def removeDevicesPage() {
 	logInfo("removeDevicesPage")
 	def devices = state.devices
@@ -448,8 +447,6 @@ def dbReset() {
 
 //	===== Generate the device database =====
 def findDevices() {
-	state.remove("devices")
-	pauseExecution(1000)
 	state.devices = [:]
 	def start = state.hostArray.min().toInteger()
 	def finish = state.hostArray.max().toInteger() +1
@@ -503,9 +500,16 @@ def cloudGetDevices() {
 	def cmdData = [uri: "https://wap.tplinkcloud.com?token=${kasaToken}", 
 				   cmdBody: [method: "getDeviceList"]]
 	def respData = sendKasaCmd(cmdData)
-	if (respData.error) { return }
-	def cloudDevices = respData.deviceList
-	def cloudUrl = ""
+	def cloudDevices
+	def cloudUrl
+	if (respData.error_code == 0) {
+		cloudDevices = respData.result.deviceList
+		cloudUrl = ""
+	} else {
+		message = "Devices not returned from Kasa Cloud."
+		logWarn("cloudGetDevices: <b>Devices not returned from Kasa Cloud.</b> Return = ${respData}\n\r")
+		return message
+	}
 	cloudDevices.each {
 		if (it.deviceType != "IOT.SMARTPLUGSWITCH" && it.deviceType != "IOT.SMARTBULB") {
 			logInfo("<b>cloudGetDevice: Ignore device type ${it.deviceType}.")
@@ -523,21 +527,25 @@ def cloudGetDevices() {
 					   cmdBody: cmdBody]
 			def cmdResp
 			respData = sendKasaCmd(cmdData)
-			if (!respData.error) {
+			if (respData.error_code == 0) {
 				def jsonSlurper = new groovy.json.JsonSlurper()
-				cmdResp = jsonSlurper.parseText(respData.responseData)
+				cmdResp = jsonSlurper.parseText(respData.result.responseData)
 				parseDeviceData(cmdResp.system.get_sysinfo)
+			} else {
+				message = "Data for one or more devices not returned from Kasa Cloud.\n\r"
+				logWarn("cloudGetDevices: <b>Device datanot returned from Kasa Cloud.</b> Return = ${respData}\n\r")
+				return message
 			}
 		}
 	}
-	message += "Device data sent to parse methods."
+	message += "Available device data sent to parse methods.\n\r"
 	if (cloudUrl != "" && cloudUrl != kasaCloudUrl) {
 		app?.updateSetting("kasaCloudUrl", cloudUrl)
 		message += " kasaCloudUrl uptdated to ${cloudUrl}."
 	}
 	return message
 }
-////////////////////////////////////////////////////////////////////////////////
+
 def parseDeviceData(cmdResp, ip = "CLOUD", port = "CLOUD") {
 	logDebug("parseDeviceData: ${cmdResp} //  ${ip} // ${port}")
 	def dni
@@ -557,16 +565,8 @@ def parseDeviceData(cmdResp, ip = "CLOUD", port = "CLOUD") {
 	def feature = cmdResp.feature
 	if (kasaType == "IOT.SMARTPLUGSWITCH") {
 		type = "Kasa Plug Switch"
-//		if (feature == "TIM:ENE") {
-//			type = "Kasa EM Plug"
-//		}
 		if (cmdResp.brightness) {
 			type = "Kasa Dimming Switch"
-//		} else if (cmdResp.children) {
-//			type = "Kasa Multi Plug"
-//			if (feature == "TIM:ENE") {
-//				type = "Kasa EM Multi Plug"
-//			}
 		}
 	} else if (kasaType == "IOT.SMARTBULB") {
 		if (cmdResp.lighting_effect_state) {
@@ -724,11 +724,12 @@ def getToken() {
 	cmdData = [uri: "https://wap.tplinkcloud.com",
 			   cmdBody: cmdBody]
 	def respData = sendKasaCmd(cmdData)
-	if (respData.error) {
-		message = respData.error
+	if (respData.error_code == 0) {
+		app?.updateSetting("kasaToken", respData.result.token)
+		message = "Token updated to ${respData.result.token}"
 	} else {
-		app?.updateSetting("kasaToken", respData.token)
-		message = "Token updated to ${respData.token}"
+		message = "Token not updated.  See WARN message in Log."
+		logWarn("getToken: <b>Token not updated.</b> Return = ${respData}\n\r")
 	}
 	return message
 }
@@ -756,7 +757,6 @@ def schedGetToken() {
 }
 
 //	===== Device Service Methods =====
-//	fix IP numbers for communications
 def fixConnection(type) {
 	logInfo("fixData: Update ${type} data")
 	def message = ""
@@ -902,20 +902,20 @@ def sendKasaCmd(cmdData) {
 	def respData
 	try {
 		httpPostJson(commandParams) {resp ->
-			if (resp.status == 200 && resp.data.error_code == 0) {
-				respData = resp.data.result
+			if (resp.status == 200) {
+				respData = resp.data
 			} else {
-				def msg = "sendKasaCmd:\n<b>Error from the Kasa Cloud.</b> Most common cause is "
-				msg += "your Kasa Token has expired.  Run Kasa Login and Token update and try again."
-				msg += "\nAdditional Data: Error ${resp.data.error_code} = ${resp.data.msg}\n\n"
+				def msg = "sendKasaCmd: <b>HTTP Status not equal to 200.  Protocol error.  "
+				msg += "HTTP Protocol Status = ${resp.status}"
 				logWarn(msg)
-				respData = [error: "${resp.data.error_code} = ${resp.data.msg}"]
+				respData = [error_code: resp.status, msg: "HTTP Protocol Error"]
 			}
 		}
 	} catch (e) {
-		def msg = "sendKasaCmd:\n<b>Error in Cloud Communications.</b> The Kasa Cloud is unreachable."
+		def msg = "sendKasaCmd: <b>Error in Cloud Communications.</b> The Kasa Cloud is unreachable."
 		msg += "\nAdditional Data: Error = ${e}\n\n"
 		logWarn(msg)
+		respData = [error_code: 9999, msg: e]
 	}
 	return respData
 }
