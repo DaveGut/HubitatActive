@@ -7,7 +7,7 @@
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
-      "name": "Kasa Integration",
+      "name": "xKasa Integration",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy",
       "required": true,
