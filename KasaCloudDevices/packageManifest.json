@@ -18,8 +18,8 @@
   "drivers": [
     {
       "id": "0ad65cbc-b996-49ae-8586-bfe0b4883db1",
-      "name": "not for new install",
-      "name": "not for new install",
+      "name": "not for new install ColTempBulb",
+      "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy",
       "required": false
     },
