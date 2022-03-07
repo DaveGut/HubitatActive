@@ -432,6 +432,7 @@ def commsTestDisplay() {
 }
 	
 def dbReset() {
+	state.devices = [:]
 	logInfo("dbReset")
 	def action = findDevices()
 	return dynamicPage(name:"dbReset",
@@ -447,7 +448,6 @@ def dbReset() {
 
 //	===== Generate the device database =====
 def findDevices() {
-	state.devices = [:]
 	def start = state.hostArray.min().toInteger()
 	def finish = state.hostArray.max().toInteger() +1
 	state.portArray.each {
@@ -458,10 +458,11 @@ def findDevices() {
 			for(int i = start; i < finish; i++) {
 				def deviceIP = "${pollSegment}.${i.toString()}"
 				sendLanCmd(deviceIP, port, """{"system":{"get_sysinfo":{}}}""", "parseLanData")
-				pauseExecution(200)
+				pauseExecution(400)
 			}
 		}
 	}
+	pauseExecution(10000)
 	if (kasaToken && userName != "") {
 		logInfo("findDevices: ${cloudGetDevices()}")
 	} else {
@@ -759,27 +760,12 @@ def schedGetToken() {
 //	===== Device Service Methods =====
 def fixConnection(type) {
 	logInfo("fixData: Update ${type} data")
-	def message = ""
+	def message
 	if (type == "LAN") {
 		if (pollEnabled == false) {
 			message = "unable to update data.  Updated in last 15 minutes."
-			return message
 		} else {
-			def pollSegment
-			state.portArray.each {
-				def port = it.trim()
-				state.segArray.each {
-					pollSegment = it.trim()
-					for(int i = 1; i < 255; i++) {
-						def deviceIP = "${pollSegment}.${i.toString()}"
-						sendLanCmd(deviceIP, port, """{"system":{"get_sysinfo":{}}}""", "updateDeviceIps")
-						pauseExecution(50)
-					}
-				}
-			}
-			message = "updated IPs on segments ${state.segArray}"
-			runIn(900, pollEnable)
-			app?.updateSetting("pollEnabled", [type:"bool", value: false])
+			message = "FUNCTION DISABLED.  Use APPLICATION installKasaDevices to update IP addresses."
 		}
 	} else if (type == "CLOUD") {
 		message = "updated token: ${getToken()}."
@@ -789,18 +775,25 @@ def fixConnection(type) {
 
 def updateDeviceIps(response) {
 	def resp = parseLanMessage(response.description)
-	def parser = new JsonSlurper()
-	def cmdResp = parser.parseText(inputXOR(resp.payload)).system.get_sysinfo
 	def ip = convertHexToIP(resp.ip)
-	if (ip == "" || ip == null) { return }
-	def dni
-	if (cmdResp.mic_mac) { dni = cmdResp.mic_mac }
-	else { dni = cmdResp.mac.replace(/:/, "") }
-	def child = getChildDevice(dni)
-	if (child) {
-		child.updateDataValue("deviceIP", ip)
-		logInfo("updateDeviceIps: updated IP for device ${dni} to ${ip}.")
-	}		
+	if (resp.type == "LAN_TYPE_UDPCLIENT") {
+		def clearResp = inputXOR(resp.payload)
+		if (clearResp.length() > 1022) {
+			clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
+		}
+		def port = convertHexToInt(resp.port)
+		def cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
+		def dni
+		if (cmdResp.mic_mac) { dni = cmdResp.mic_mac }
+		else { dni = cmdResp.mac.replace(/:/, "") }
+		def child = getChildDevice(dni)
+		if (child) {
+			child.updateDataValue("deviceIP", ip)
+			logInfo("updateDeviceIps: updated IP for device ${dni} to ${ip}.")
+		}
+	} else {
+		logWarn("parseLanData: [ip = ${ip}, type = ${resp.type}")
+	}
 }
 
 def pollEnable() {
@@ -882,7 +875,7 @@ private sendLanCmd(ip, port, command, action) {
 		 destinationAddress: "${ip}:${port}",
 		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING,
 		 parseWarning: true,
-		 timeout: 10,
+		 timeout: 4,
 		 callback: action])
 	try {
 		sendHubCommand(myHubAction)
