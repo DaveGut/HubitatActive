@@ -1,13 +1,13 @@
 {
-  "packageName": "OLD Cloud xKasa Plugs, Switches and Bulbs",
+  "packageName": "OLD Cloud Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.5.1",
-  "minimumHEVersion": "2.2.6",
-  "dateReleased": "2022-01-01","releaseNotes":"NOT FOR NEW INSTALLATIONS!!!!",
+  "version": "6.5.2",
+  "minimumHEVersion": "2.3.1",
+  "dateReleased": "2022-031-25","releaseNotes":"NOT FOR NEW INSTALLATIONS!!!!",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
-      "name": "xKasa Integration",
+      "name": "Kasa Integration",
       "namespace": "davegut",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy",
       "required": true,
@@ -18,8 +18,8 @@
   "drivers": [
     {
       "id": "0ad65cbc-b996-49ae-8586-bfe0b4883db1",
-      "name": "not for new install ColTempBulb",
-      "namespace": "davegut",
+      "name": "not for new install",
+      "name": "not for new install",
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy",
       "required": false
     },
