@@ -1107,6 +1107,7 @@ def configureEnable() {
 
 def configureChildren() {
 	schedule("15 05 1 * * ?", updateConfigurations)
+	app?.updateSetting("pollEnabled", [type:"bool", value: true])
 	def fixConnect = fixConnection()
 	def manifestData = getManifestData()
 	def children = getChildDevices()
@@ -1184,7 +1185,7 @@ def execFixConnection() {
 		tokenUpd = true
 	}
 	message << [tokenUpdated: tokenUpd]
-	updateChildren()
+//	updateChildren()
 	return message
 }
 
