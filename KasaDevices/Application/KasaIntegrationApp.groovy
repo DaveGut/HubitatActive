@@ -431,7 +431,7 @@ def listDevices() {
 				driverVer = isChild.getDataValue("driverVersion")
 				installed = "Yes"
 			}
-			deviceList << "<b>${it.value.alias}</b>: [${it.value.ip}:${it.value.port}, ${it.value.rssi}, ${driverVer}, ${installed}]"
+			deviceList << "<b>${it.value.alias} - ${it.value.model}</b>: [${it.value.ip}:${it.value.port}, ${it.value.rssi}, ${driverVer}, ${installed}]"
 		}
 		deviceList.sort()
 		deviceList.each {
@@ -538,6 +538,7 @@ def findDevices() {
 	}
 	def delay = 50 * (finish - start) + 1000*commsTO()
 	pauseExecution(delay)
+	updateChildren()
 	return
 }
 
