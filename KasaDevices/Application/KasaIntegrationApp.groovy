@@ -607,9 +607,6 @@ def getLanData(response) {
 	}
 }
 
-
-
-
 def cloudGetDevices() {
 	logInfo("cloudGetDevices ${kasaToken}")
 	def message = ""
@@ -627,8 +624,7 @@ def cloudGetDevices() {
 		return message
 	}
 	cloudDevices.each {
-		if (it.deviceType != "IOT.SMARTPLUGSWITCH" && it.deviceType != "IOT.SMARTBULB" &&
-		    it.deviceType != "IOT.IPCAMERA") {
+		if (it.deviceType != "IOT.SMARTPLUGSWITCH" && it.deviceType != "IOT.SMARTBULB") {
 			logInfo("<b>cloudGetDevice: Ignore device type ${it.deviceType}.")
 		} else if (it.status == 0) {
 			logInfo("cloudGetDevice: Device name ${it.alias} is offline and not included.")
@@ -646,11 +642,14 @@ def cloudGetDevices() {
 			respData = sendKasaCmd(cmdData)
 			if (respData.error_code == 0) {
 				def jsonSlurper = new groovy.json.JsonSlurper()
-				cmdResp = jsonSlurper.parseText(respData.result.responseData).system.get_sysinfo
+				cmdResp = jsonSlurper.parseText(respData.result.responseData)
+////////////
+				cmdResp = cmdResp.system.get_sysinfo
 				if (cmdResp.system) {
 					cmdResp = cmdResp.system
 				}
 				parseDeviceData(cmdResp)
+////////////
 			} else {
 				message = "Data for one or more devices not returned from Kasa Cloud.\n\r"
 				logWarn("cloudGetDevices: <b>Device datanot returned from Kasa Cloud.</b> Return = ${respData}\n\r")
@@ -1111,7 +1110,6 @@ def configureEnable() {
 
 def configureChildren() {
 	schedule("15 05 1 * * ?", updateConfigurations)
-	app?.updateSetting("pollEnabled", [type:"bool", value: true])
 	def fixConnect = fixConnection()
 	def manifestData = getManifestData()
 	def children = getChildDevices()
@@ -1189,7 +1187,7 @@ def execFixConnection() {
 		tokenUpd = true
 	}
 	message << [tokenUpdated: tokenUpd]
-//	updateChildren()
+	updateChildren()
 	return message
 }
 
@@ -1450,3 +1448,4 @@ def logDebug(msg){
 def logInfo(msg) { log.info "[KasaInt: ${appVersion()}]: ${msg}" }
 
 def logWarn(msg) { log.warn "[KasaInt: ${appVersion()}]: ${msg}" }
+
