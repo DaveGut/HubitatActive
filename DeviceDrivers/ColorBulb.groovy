@@ -7,6 +7,18 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 						Kasa Devices.
 		Link to change details:
 			https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes-6_5_2.pdf
+
+Issue: Transition time null in method checkTransTime.
+Affects: all Bulbs, Light Strip, Dimming Switch.
+Resolution (future): In method checkTransTime, check for null transition time.  If null,
+1. set the device's value to 0 (so future calls will not require oorrecting), 
+2. set the value transTime to 0
+3. continue method.
+
+
+
+
+
 ===================================================================================================*/
 def driverVer() { return "6.5.2" }
 def type() { return "Color Bulb" }
@@ -316,9 +328,9 @@ def method() {
 }
 
 def checkTransTime(transTime) {
-	transTime = 1000* transTime.toInteger()
 	if (transTime == null || transTime < 0) { transTime = 0 }
-	else if (transTime > 8000) { transTime = 8000 }
+	transTime = 1000* transTime.toInteger()
+	if (transTime > 8000) { transTime = 8000 }
 	return transTime
 }
 
