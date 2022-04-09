@@ -286,8 +286,7 @@ def setSysInfo(status) {
 //	==================================================
 def setRelayState(onOff) {
 	logDebug("setRelayState: [switch: ${onOff}]")
-	sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-			""""system":{"set_relay_state":{"state":${onOff}},"get_sysinfo":{}}}""")
+	sendCmd("""{"system":{"set_relay_state":{"state":${onOff}},"get_sysinfo":{}}}""")
 }
 
 def setLedOff(onOff) {
@@ -297,9 +296,9 @@ def setLedOff(onOff) {
 }
 
 def checkTransTime(transTime) {
-	transTime = transTime.toInteger()
-	if (transTime < 100) { transTime = 100 }
-	else if (transTime > 8000) { transTime = 8000 }
+	if (transTime == null || transTime < 0) { transTime = 0 }
+	transTime = 1000* transTime.toInteger()
+	if (transTime > 8000) { transTime = 8000 }
 	return transTime
 }
 

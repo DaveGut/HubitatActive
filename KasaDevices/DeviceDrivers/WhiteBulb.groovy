@@ -199,9 +199,9 @@ def method() {
 }
 
 def checkTransTime(transTime) {
-	transTime = 1000* transTime.toInteger()
 	if (transTime == null || transTime < 0) { transTime = 0 }
-	else if (transTime > 8000) { transTime = 8000 }
+	transTime = 1000* transTime.toInteger()
+	if (transTime > 8000) { transTime = 8000 }
 	return transTime
 }
 
