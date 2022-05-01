@@ -1,9 +1,9 @@
 {
   "packageName": "OLD Cloud Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.5.3",
+  "version": "6.5.4",
   "minimumHEVersion": "2.3.1",
-  "dateReleased": "2022-04-23","releaseNotes":"NOT FOR NEW INSTALLATIONS!!!!",
+  "dateReleased": "2022-05-01","releaseNotes":"NOT FOR NEW INSTALLATIONS!!!!",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
