@@ -5,10 +5,12 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 6.5.2	Minor Changes: Energy Monitor Functios, Bulbs/Light Strips, Dimming Switch.
 		New Capability: Configuration. Selecting updates the version configuration of the APP and ALL
 						Kasa Devices.
+6.5.3	Bug Fix in Sync Names for multi-plugs.
+		sendEvent for switch will be sent at each poll to update Hub LastActivity for the device
 		Link to change details:
-			https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes-6_5_2.pdf
+			https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes-6_5_3.pdf
 ===================================================================================================*/
-def driverVer() { return "6.5.2" }
+def driverVer() { return "6.5.3" }
 def type() { return "Dimming Switch" }
 
 metadata {
@@ -266,8 +268,10 @@ def setSysInfo(status) {
 	if (switchStatus == 0) { onOff = "off" }
 	if (onOff != device.currentValue("switch")) {
 		updates << [switch: onOff]
-		sendEvent(name: "switch", value: onOff, type: "digital")
+		//	5.2.3	sendEvent(name: "switch", value: onOff, type: "digital")
 	}
+	sendEvent(name: "switch", value: onOff, type: "digital")	//	5.2.3
+
 	if (status.brightness != device.currentValue("level")) {
 		updates << [level: status.brightness]
 		sendEvent(name: "level", value: status.brightness, type: "digital")
@@ -286,8 +290,7 @@ def setSysInfo(status) {
 //	==================================================
 def setRelayState(onOff) {
 	logDebug("setRelayState: [switch: ${onOff}]")
-	sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" +
-			""""system":{"set_relay_state":{"state":${onOff}},"get_sysinfo":{}}}""")
+	sendCmd("""{"system":{"set_relay_state":{"state":${onOff}},"get_sysinfo":{}}}""")
 }
 
 def setLedOff(onOff) {
@@ -343,7 +346,7 @@ def getDimmerConfiguration() {
 
 
 
-// ~~~~~ start include (417) davegut.kasaCommon ~~~~~
+// ~~~~~ start include (545) davegut.kasaCommon ~~~~~
 library ( // library marker davegut.kasaCommon, line 1
 	name: "kasaCommon", // library marker davegut.kasaCommon, line 2
 	namespace: "davegut", // library marker davegut.kasaCommon, line 3
@@ -620,9 +623,9 @@ def setDeviceAlias(newAlias) { // library marker davegut.kasaCommon, line 268
 	} // library marker davegut.kasaCommon, line 274
 } // library marker davegut.kasaCommon, line 275
 
-// ~~~~~ end include (417) davegut.kasaCommon ~~~~~
+// ~~~~~ end include (545) davegut.kasaCommon ~~~~~
 
-// ~~~~~ start include (418) davegut.kasaCommunications ~~~~~
+// ~~~~~ start include (546) davegut.kasaCommunications ~~~~~
 library ( // library marker davegut.kasaCommunications, line 1
 	name: "kasaCommunications", // library marker davegut.kasaCommunications, line 2
 	namespace: "davegut", // library marker davegut.kasaCommunications, line 3
@@ -659,7 +662,7 @@ def sendCmd(command) { // library marker davegut.kasaCommunications, line 20
 } // library marker davegut.kasaCommunications, line 34
 
 def sendLanCmd(command, commsTo = 3) { // library marker davegut.kasaCommunications, line 36
-	logDebug("sendLanCmd: [commsTo: ${commsTo}, cmd: ${command}]") // library marker davegut.kasaCommunications, line 37
+	logDebug("sendLanCmd: [ip: ${getDataValue("deviceIP")}, commsTo: ${commsTo}, cmd: ${command}]") // library marker davegut.kasaCommunications, line 37
 	def myHubAction = new hubitat.device.HubAction( // library marker davegut.kasaCommunications, line 38
 		outputXOR(command), // library marker davegut.kasaCommunications, line 39
 		hubitat.device.Protocol.LAN, // library marker davegut.kasaCommunications, line 40
@@ -929,4 +932,4 @@ def logWarn(msg) { // library marker davegut.kasaCommunications, line 303
 	log.warn "[${device.getLabel()}: ${driverVer()}]: ${msg}" // library marker davegut.kasaCommunications, line 304
 } // library marker davegut.kasaCommunications, line 305
 
-// ~~~~~ end include (418) davegut.kasaCommunications ~~~~~
+// ~~~~~ end include (546) davegut.kasaCommunications ~~~~~

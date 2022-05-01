@@ -1,11 +1,11 @@
 {
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
-  "version": "6.5.3",
+  "version": "6.5.4",
   "minimumHEVersion": "2.3.1",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
-  "dateReleased": "2022-04-23","releaseNotes": "REQUIRES hub version 2.3.1. Moved sendEvent(switch) to support updating hub lastActivity. Fixed error in multiplug syncName(device) processing See: https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes-6_5_3.pdf","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
+  "dateReleased": "2022-05-01","releaseNotes": "Fixed transitionTime error for bulbs. Added 3 sec wait for getPower after updating switch valaue. See: https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Change_Descriptions.pdf","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
