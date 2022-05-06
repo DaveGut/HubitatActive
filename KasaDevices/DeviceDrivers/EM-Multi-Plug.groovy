@@ -521,8 +521,11 @@ import groovy.json.JsonSlurper // library marker davegut.kasaCommunications, lin
 
 def getPort() { // library marker davegut.kasaCommunications, line 12
 	def port = 9999 // library marker davegut.kasaCommunications, line 13
-	if (getDataValue("devicePort")) { // library marker davegut.kasaCommunications, line 14
-		port = getDataValue("devicePort") // library marker davegut.kasaCommunications, line 15
+	def val = getDataValue("devicePort")
+	if (val == "null") {
+		removeDataValue("devicePort")
+	} else if (val) {
+		port = val
 	} // library marker davegut.kasaCommunications, line 16
 	return port // library marker davegut.kasaCommunications, line 17
 } // library marker davegut.kasaCommunications, line 18
