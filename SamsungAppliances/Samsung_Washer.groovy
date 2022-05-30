@@ -1,4 +1,4 @@
-/*	===== HUBITAT Samsung Dryer Using SmartThings ==========================================
+/*	===== HUBITAT Samsung Washer Using SmartThings ==========================================
 		Copyright 2022 Dave Gutheinz
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file
 except in compliance with the License. You may obtain a copy of the License at:
@@ -21,27 +21,25 @@ e.	If errors, contact developer.
 def driverVer() { return "B0.1" }
 
 metadata {
-	definition (name: "Samsung HVAC",
+	definition (name: "Samsung Washer",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_HVAC.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
 			   ){
 		capability "Refresh"
-		capability "Switch"
-		capability "TemperatureMeasurement"
-		capability "ThermostatCoolingSetpoint"
-		capability "ThermostatFanMode"
-		command "setThermostatFanMode", [[
-			name: "Fan Mode",
-			constraints: ["on", "circulate", "auto", "high", "medium", "low"],
-			type: "ENUM"]]
-		capability "ThermostatMode"
-		command "setThermostatMode", [[
-			name: "Thermostat Mode",
-			constraints: ["auto", "off", "heat", "emergency heat", "cool", "dry", "wind"],
-			type: "ENUM"]]
-		attribute "autoCleaningMode", "string"
-		attribute "dustFilterStatus", "string"
+		attribute "switch", "string"
+		command "start"
+		command "pause"
+		command "stop"
+		attribute "machineState", "string"
+		attribute "kidsLock", "string"
+		attribute "remoteControlEnabled", "string"
+		attribute "completionTime", "string"
+		attribute "timeRemaining", "number"
+		attribute "waterTemperature", "string"
+		attribute "jobState", "string"
+		attribute "soilLevel", "string"
+		attribute "spinLevel", "string"
 	}
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
@@ -51,8 +49,6 @@ metadata {
 		if (stDeviceId) {
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
 				   options: ["1", "5", "10", "30"], defaultValue: "10")
-			input ("circSpeed", "enum", title: "Fan Circulate Speed",
-				   defaultValue: "medium", options: ["low", "medium", "high"])
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 			input ("infoLog", "bool",  
@@ -72,69 +68,17 @@ def updated() {
 	}
 }
 
-def on() { setOnOff("on") }
-def off() { setOnOff("off") }
-def setOnOff(onOff) {
+def start() { setMachineState("run") }
+def pause() { setMachineState("pause") }
+def stop() { setMachineState("stop") }
+def setMachineState(machState) {
 	def cmdData = [
 		component: "main",
-		capability: "switch",
-		command: onOff,
-		arguments: []]
+		capability: "dryerOperatingState",
+		command: "setMachineState",
+		arguments: [machState]]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setOnOff: [cmd: ${onOff}, ${cmdStatus}]")
-}
-
-def auto() { setThermostatMode("auto") }
-def cool() { setThermostatMode("cool") }
-def heat() { setThermostatMode("heat") }
-def emergencyHeat() {
-	logWarn("emergencyHeat: not available. Setting Thermostat to heat")
-	setThermostatMode("heat")
-}
-def setThermostatMode(thermostatMode) {
-// Modify to thermostatMode "off".
-	if (thermostatMode == "off") {
-		off()
-	} else {
-		def cmdData = [
-			component: "main",
-			capability: "airConditionerMode",
-			command: "setAirConditionerMode",
-			arguments: [thermostatMode]]
-		def cmdStatus = deviceCommand(cmdData)
-		logInfo("setThermostatMode: [cmd: ${thermostatMode}, ${cmdStatus}]")
-	}
-}
-
-def fanAuto() { setThermostatFanMode("auto") }
-def fanCirculate() { setThermostatFanMode("circulate") }
-def fanOn() { setThermostatFanMode("on") }
-def setThermostatFanMode(fanMode) {
-	//	supportedAcFanModes:[value:["auto", "low", "medium", "high"]]
-	//	Modified metadata to add above to default on, auto, circulate.
-	//	Handle on and circulate in respect to available modes from device.
-	if (fanMode == "circulate") {
-		fanMode = circSpeed
-	} else if (fanMode == "on") {
-		fanMode = "auto"
-	}
-	def cmdData = [
-		component: "main",
-		capability: "airConditionerFanMode",
-		command: "setFanMode",
-		arguments: [fanMode]]
-	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setThermostatFanMode: [cmd: ${fanMode}, ${cmdStatus}]")
-}
-
-def setCoolingSetpoint(setpoint) {
-	def cmdData = [
-		component: "main",
-		capability: "thermostatCoolingSetpoint",
-		command: "setCoolingSetpoint",
-		arguments: [setpoint]]
-	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setCoolingSetpoint: [cmd: ${setpoint}, ${cmdStatus}]")
+	logInfo("setMachineState: [cmd: ${machState}, status: ${cmdStatus}]")
 }
 
 def validateResp(resp, data) {
@@ -159,59 +103,80 @@ def validateResp(resp, data) {
 	}
 }
 
-def statusParse(parseData) {
+def statusParse(mainData) {
 	def logData = [:]
-	
-	def onOff = parseData.switch.switch.value
+
+	def onOff = mainData.switch.switch.value
 	if (device.currentValue("switch") != onOff) {
+		if (onOff == "off") {
+			setPollInterval(state.pollInterval)
+		} else {
+			runEvery1Minute(poll)
+		}
 		sendEvent(name: "switch", value: onOff)
 		logData << [switch: onOff]
 	}
 	
-	def tempUnit = parseData.temperatureMeasurement.temperature.unit
-	def temperature = parseData.temperatureMeasurement.temperature.value
-	if (device.currentValue("temperature") != temperature) {
-		sendEvent(name: "temperature", value: temperature, unit: tempUnit)
-		logData << [temperature: temperature]
+	def kidsLock = mainData["samsungce.kidsLock"].lockState.value
+	if (device.currentValue("kidsLock") != kidsLock) {
+		sendEvent(name: "kidsLock", value: kidsLock)
+		logData << [kidsLock: kidsLock]
 	}
 	
-	def thermostatMode = parseData.airConditionerMode.airConditionerMode.value
-	if (device.currentValue("thermostatMode") != thermostatMode) {
-		sendEvent(name: "thermostatMode", value: thermostatMode)
-		logData << [thermostatMode: thermostatMode]
+	def machineState = mainData.washerOperatingState.machineState.value
+	if (device.currentValue("machineState") != machineState) {
+		sendEvent(name: "machineState", value: machineState)
+		logData << [machineState: machineState]
+	}
+	
+	def jobState = mainData.washerOperatingState.washerJobState.value
+	if (device.currentValue("jobState") != jobState) {
+		sendEvent(name: "jobState", value: jobState)
+		logData << [machineState: jobState]
+	}
+	
+	def remoteControlEnabled = mainData.remoteControlStatus.remoteControlEnabled.value
+	if (device.currentValue("remoteControlEnabled") != remoteControlEnabled) {
+		sendEvent(name: "remoteControlEnabled", value: remoteControlEnabled)
+		logData << [remoteControlEnabled: remoteControlEnabled]
+	}
+	
+	def completionTime = mainData.washerOperatingState.completionTime.value
+	if (completionTime != null) {
+		def timeRemaining = calcTimeRemaining(completionTime)
+		if (device.currentValue("timeRemaining") != timeRemaining) {
+			sendEvent(name: "completionTime", value: completionTime)
+			sendEvent(name: "timeRemaining", value: timeRemaining)
+			logData << [completionTime: completionTime, timeRemaining: timeRemaining]
+		}
 	}
 
-	def coolingSetpoint = parseData.thermostatCoolingSetpoint.coolingSetpoint.value
-	if (device.currentValue("coolingSetpoint") != coolingSetpoint) {
-		sendEvent(name: "coolingSetpoint", value: coolingSetpoint, unit: tempUnit)
-		logData << [coolingSetpoint: coolingSetpoint]
+	def waterTemperature = mainData["custom.washerWaterTemperature"].washerWaterTemperature.value
+	if (device.currentValue("waterTemperature") != waterTemperature) {
+		sendEvent(name: "waterTemperature", value: waterTemperature)
+		logData << [waterTemperature: waterTemperature]
 	}
 
-	def thermostatFanMode = parseData.airConditionerFanMode.fanMode.value
-	if (device.currentValue("thermostatFanMode") != thermostatFanMode) {
-		sendEvent(name: "thermostatFanMode", value: thermostatFanMode)
-		logData << [thermostatFanMode: thermostatFanMode]
+	def soilLevel = mainData["custom.washerSoilLevel"].washerSoilLevel.value
+	if (device.currentValue("soilLevel") != soilLevel) {
+		sendEvent(name: "soilLevel", value: soilLevel)
+		logData << [soilLevel: soilLevel]
 	}
 
-	def dustFilterStatus = parseData["custom.dustFilter"].dustFilterStatus.value
-	if (device.currentValue("dustFilterStatus") != dustFilterStatus) {
-		sendEvent(name: "dustFilterStatus", value: dustFilterStatus)
-		logData << [dustFilterStatus: dustFilterStatus]
+	def spinLevel = mainData["custom.washerSpinLevel"].washerSpinLevel.value
+	if (device.currentValue("spinLevel") != spinLevel) {
+		sendEvent(name: "spinLevel", value: spinLevel)
+		logData << [spinLevel: spinLevel]
 	}
-
-	def autoCleaningMode = parseData["custom.autoCleaningMode"].autoCleaningMode.value
-	if (device.currentValue("autoCleaningMode") != autoCleaningMode) {
-		sendEvent(name: "autoCleaningMode", value: autoCleaningMode)
-		logData << [autoCleaningMode: autoCleaningMode]
-	}
-
+	
 	if (logData != [:]) {
 		logInfo("statusParse: ${logData}")
-}
+	}
 	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====
+
 
 
 
@@ -506,3 +471,48 @@ def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, lin
 } // library marker davegut.ST-Common, line 140
 
 // ~~~~~ end include (642) davegut.ST-Common ~~~~~
+
+// ~~~~~ start include (674) davegut.Samsung-Washer-Sim ~~~~~
+library ( // library marker davegut.Samsung-Washer-Sim, line 1
+	name: "Samsung-Washer-Sim", // library marker davegut.Samsung-Washer-Sim, line 2
+	namespace: "davegut", // library marker davegut.Samsung-Washer-Sim, line 3
+	author: "Dave Gutheinz", // library marker davegut.Samsung-Washer-Sim, line 4
+	description: "Simulator - Samsung Washer", // library marker davegut.Samsung-Washer-Sim, line 5
+	category: "utilities", // library marker davegut.Samsung-Washer-Sim, line 6
+	documentationLink: "" // library marker davegut.Samsung-Washer-Sim, line 7
+) // library marker davegut.Samsung-Washer-Sim, line 8
+
+def testData() { // library marker davegut.Samsung-Washer-Sim, line 10
+	def waterTemp = "hot" // library marker davegut.Samsung-Washer-Sim, line 11
+	def completionTime = "2022-05-27T17:56:26Z" // library marker davegut.Samsung-Washer-Sim, line 12
+	def machineState = "running" // library marker davegut.Samsung-Washer-Sim, line 13
+	def jobState = "spin" // library marker davegut.Samsung-Washer-Sim, line 14
+	def onOff = "off" // library marker davegut.Samsung-Washer-Sim, line 15
+	def kidsLock = "locked" // library marker davegut.Samsung-Washer-Sim, line 16
+	def soilLevel = "low" // library marker davegut.Samsung-Washer-Sim, line 17
+	def remoteControlEnabled = "false" // library marker davegut.Samsung-Washer-Sim, line 18
+	def spinLevel = "high" // library marker davegut.Samsung-Washer-Sim, line 19
+
+	return  [components:[ // library marker davegut.Samsung-Washer-Sim, line 21
+		main:[ // library marker davegut.Samsung-Washer-Sim, line 22
+			"custom.washerWaterTemperature":[washerWaterTemperature:[value:waterTemp]],  // library marker davegut.Samsung-Washer-Sim, line 23
+			washerOperatingState:[ // library marker davegut.Samsung-Washer-Sim, line 24
+				completionTime:[value:completionTime],  // library marker davegut.Samsung-Washer-Sim, line 25
+				machineState:[value:machineState],  // library marker davegut.Samsung-Washer-Sim, line 26
+				washerJobState:[value:jobState]],  // library marker davegut.Samsung-Washer-Sim, line 27
+			switch:[switch:[value:onOff]],  // library marker davegut.Samsung-Washer-Sim, line 28
+			"samsungce.kidsLock":[lockState:[value:kidsLock]],  // library marker davegut.Samsung-Washer-Sim, line 29
+			"custom.washerSoilLevel":[washerSoilLevel:[value:soilLevel]],  // library marker davegut.Samsung-Washer-Sim, line 30
+			remoteControlStatus:[remoteControlEnabled:[value:remoteControlEnabled]],  // library marker davegut.Samsung-Washer-Sim, line 31
+			"custom.washerSpinLevel":[washerSpinLevel:[value:spinLevel]] // library marker davegut.Samsung-Washer-Sim, line 32
+		]]] // library marker davegut.Samsung-Washer-Sim, line 33
+} // library marker davegut.Samsung-Washer-Sim, line 34
+
+def testResp(cmdData) { // library marker davegut.Samsung-Washer-Sim, line 36
+	return [ // library marker davegut.Samsung-Washer-Sim, line 37
+		cmdData: cmdData, // library marker davegut.Samsung-Washer-Sim, line 38
+		status: [status: "OK", // library marker davegut.Samsung-Washer-Sim, line 39
+				 results:[[id: "e9585885-3848-4fea-b0db-ece30ff1701e", status: "ACCEPTED"]]]] // library marker davegut.Samsung-Washer-Sim, line 40
+} // library marker davegut.Samsung-Washer-Sim, line 41
+
+// ~~~~~ end include (674) davegut.Samsung-Washer-Sim ~~~~~
