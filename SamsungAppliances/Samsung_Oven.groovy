@@ -1,4 +1,4 @@
-/*	===== HUBITAT Samsung Washer Using SmartThings ==========================================
+/*	===== HUBITAT Samsung HVAC Using SmartThings ==========================================
 		Copyright 2022 Dave Gutheinz
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file
 except in compliance with the License. You may obtain a copy of the License at:
@@ -21,34 +21,39 @@ e.	If errors, contact developer.
 def driverVer() { return "B0.1" }
 
 metadata {
-	definition (name: "Samsung Washer",
+	definition (name: "Samsung Oven",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven.groovy"
 			   ){
 		capability "Refresh"
-		attribute "switch", "string"
-		command "start"
-		command "pause"
-		command "stop"
-		attribute "machineState", "string"
+		capability "Contact Sensor"
+		capability "Thermostat Setpoint"
+		capability "Temperature Measurement"
+		command "pauseOven"
+		command "runOven"
+		command "stopOven"
+		command "setOvenSetpoint", ["NUMBER"]
 		attribute "kidsLock", "string"
-		attribute "remoteControlEnabled", "string"
+		attribute "cooktopState", "string"
+		attribute "remoteControl", "string"
 		attribute "completionTime", "string"
-		attribute "timeRemaining", "number"
-		attribute "waterTemperature", "string"
+		attribute "timeRemaining", "string"
+		attribute "ovenState", "string"
 		attribute "jobState", "string"
-		attribute "soilLevel", "string"
-		attribute "spinLevel", "string"
+		attribute "ovenMode", "string"
 	}
+
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
 		if (stApiKey) {
 			input ("stDeviceId", "string", title: "SmartThings Device ID", defaultValue: "")
 		}
 		if (stDeviceId) {
+///////////////////////////////
+//			input ("simulate", "bool", title: "Simulation Mode", defalutValue: false)
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
-				   options: ["1", "5", "10", "30"], defaultValue: "10")
+				   options: ["1", "5", "10", "30"], defaultValue: "5")
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 			input ("infoLog", "bool",  
@@ -65,121 +70,199 @@ def updated() {
 		logWarn("updated: ${commonStatus}")
 	} else {
 		logInfo("updated: ${commonStatus}")
+		def children = getChildDevices()
+		if (children == []) {
+			installChildren()
+		} else {
+			children.each {
+				it.updated()
+			}
+		}
 	}
+//////////////////////////////////////
+//	if (simulate == true) {
+//		updateDataValue("driverVersion", "SIMULATE")
+//		logWarn("updated: Device is in Simulate Data Mode")
+//	}
 }
 
-def start() { setMachineState("run") }
-def pause() { setMachineState("pause") }
-def stop() { setMachineState("stop") }
-def setMachineState(machState) {
+def pauseOven() {
+	setMachineState("paused", "main")
+}
+def runOven() {
+	setMachineState("running", "main")
+}
+def setMachineState(machineState, component) {
 	def cmdData = [
-		component: "main",
-		capability: "dryerOperatingState",
+		component: component,
+		capability: "ovenOperatingState",
 		command: "setMachineState",
-		arguments: [machState]]
+		arguments: [machineState]]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setMachineState: [cmd: ${machState}, status: ${cmdStatus}]")
+	logInfo("setMachineState: [comp: ${component}, state: ${machineState}, status: ${cmdStatus}]")
 }
 
+def stopOven(component = "main") {
+	def cmdData = [
+		component: component,
+		capability: "ovenOperatingState",
+		command: "stop",
+		arguments: []]
+	def cmdStatus = deviceCommand(cmdData)
+	logInfo("stopOven: [comp: ${component}, status: ${cmdStatus}]")
+}
+
+def setOvenSetpoint(setpoint, component = "main") {
+	def cmdData = [
+		component: component,
+		capability: "ovenSetpoint",
+		command: "setOvenSetpoint",
+		arguments: [setpoint]]
+	def cmdStatus = deviceCommand(cmdData)
+	logInfo("setOvenSetpoint: [comp: ${component}, setpoint: ${setpoint}, status: ${cmdStatus}]")
+}
+
+//	Device Status Parse Method
 def validateResp(resp, data) {
-	//	Fixed to generate logWarn as specified in design.
-	def respLog = [:]
+	def respLog = "OK"
+	def respData
 	if (resp.status == 200) {
 		try {
-			def respData = new JsonSlurper().parseText(resp.data)
-			statusParse(respData.components.main)
+			respData = new JsonSlurper().parseText(resp.data)
 		} catch (err) {
-			respLog << [status: "ERROR",
-						errorMsg: err,
-						respData: resp.data]
+			respLog = [status: "ERROR", errorMsg: err, respData: resp.data]
 		}
 	} else {
-		respLog << [status: "ERROR",
-					httpCode: resp.status,
-					errorMsg: resp.errorMessage]
+		respLog = [status: "ERROR", httpCode: resp.status, errorMsg: resp.errorMessage]
 	}
-	if (respLog != [:]) {
+	if (respLog == "OK") {
+		def children = getChildDevices()
+		children.each {
+			it.statusParse(respData)
+		}
+		statusParse(respData)
+	} else {
 		logWarn("validateResp: ${respLog}")
 	}
 }
 
-def statusParse(mainData) {
-	def logData = [:]
-
-	def onOff = mainData.switch.switch.value
-	if (device.currentValue("switch") != onOff) {
-		if (onOff == "off") {
-			setPollInterval(state.pollInterval)
-		} else {
-			runEvery1Minute(poll)
-		}
-		sendEvent(name: "switch", value: onOff)
-		logData << [switch: onOff]
+def statusParse(respData) {
+	try {
+		respData = respData.components.main
+	} catch (error) {
+		logWarn("statusParse: [respData: ${respData}, error: ${error}]")
+		return
 	}
+	def logData = [:]
+	def tempUnit = respData.temperatureMeasurement.temperature.unit
+	def temperature = respData.temperatureMeasurement.temperature.value
+	if (device.currentValue("temperature") != temperature) {
+			sendEvent(name: "temperature", value: temperature, unit: tempUnit)
+			logData << [temperature: temperature, unit: tempUnit]
+		}
 	
-	def kidsLock = mainData["samsungce.kidsLock"].lockState.value
+	def thermostatSetpoint = respData.ovenSetpoint.ovenSetpoint.value
+	if (device.currentValue("thermostatSetpoint") != thermostatSetpoint) {
+			sendEvent(name: "thermostatSetpoint", value: thermostatSetpoint, unit: tempUnit)
+			logData << [thermostatSetpoint: thermostatSetpoint, unit: tempUnit]
+		}
+	
+	def completionTime = respData.ovenOperatingState.completionTime.value
+	if (completionTime != null) {
+			sendEvent(name: "completionTime", value: completionTime)
+			logData << [completionTime: completionTime]
+			def timeRemaining = calcTimeRemaining(completionTime)
+			if (device.currentValue("timeRemaining") != timeRemaining) {
+				sendEvent(name: "timeRemaining", value: timeRemaining)
+				logData << [timeRemaining: timeRemaining]
+				if (timeRemaining == 0 && state.pollInterval == "1") {
+					setPollInterval("10")
+				} else if (timeRemaining > 0 && state.pollInterval == "10") {
+					setPollInterval("1")
+				}
+			}
+		}
+	
+	def kidsLock = respData["samsungce.kidsLock"].lockState.value
 	if (device.currentValue("kidsLock") != kidsLock) {
 		sendEvent(name: "kidsLock", value: kidsLock)
 		logData << [kidsLock: kidsLock]
 	}
-	
-	def machineState = mainData.washerOperatingState.machineState.value
-	if (device.currentValue("machineState") != machineState) {
-		sendEvent(name: "machineState", value: machineState)
-		logData << [machineState: machineState]
+
+	def cooktopState = respData["custom.cooktopOperatingState"].cooktopOperatingState.value
+	if (device.currentValue("cooktopState") != cooktopState) {
+		sendEvent(name: "cooktopState", value: cooktopState)
+		logData << [cooktopState: cooktopState]
 	}
-	
-	def jobState = mainData.washerOperatingState.washerJobState.value
+
+	def remoteControl = respData.remoteControlStatus.remoteControlEnabled.value
+	if (device.currentValue("remoteControl") != remoteControl) {
+		sendEvent(name: "remoteControl", value: remoteControl)
+		logData << [remoteControl: remoteControl]
+	}
+
+	def contact = respData["samsungce.doorState"].doorState.value
+	if (device.currentValue("contact") != contact) {
+		sendEvent(name: "contact", value: contact)
+		logData << [contact: contact]
+	}
+
+	def ovenState = respData.ovenOperatingState.machineState.value
+	if (device.currentValue("ovenState") != ovenState) {
+		sendEvent(name: "ovenState", value: ovenState)
+		logData << [ovenState: ovenState]
+	}
+
+	def jobState = respData.ovenOperatingState.ovenJobState.value
 	if (device.currentValue("jobState") != jobState) {
 		sendEvent(name: "jobState", value: jobState)
-		logData << [machineState: jobState]
-	}
-	
-	def remoteControlEnabled = mainData.remoteControlStatus.remoteControlEnabled.value
-	if (device.currentValue("remoteControlEnabled") != remoteControlEnabled) {
-		sendEvent(name: "remoteControlEnabled", value: remoteControlEnabled)
-		logData << [remoteControlEnabled: remoteControlEnabled]
-	}
-	
-	def completionTime = mainData.washerOperatingState.completionTime.value
-	if (completionTime != null) {
-		def timeRemaining = calcTimeRemaining(completionTime)
-		if (device.currentValue("timeRemaining") != timeRemaining) {
-			sendEvent(name: "completionTime", value: completionTime)
-			sendEvent(name: "timeRemaining", value: timeRemaining)
-			logData << [completionTime: completionTime, timeRemaining: timeRemaining]
-		}
+		logData << [jobState: jobState]
 	}
 
-	def waterTemperature = mainData["custom.washerWaterTemperature"].washerWaterTemperature.value
-	if (device.currentValue("waterTemperature") != waterTemperature) {
-		sendEvent(name: "waterTemperature", value: waterTemperature)
-		logData << [waterTemperature: waterTemperature]
-	}
-
-	def soilLevel = mainData["custom.washerSoilLevel"].washerSoilLevel.value
-	if (device.currentValue("soilLevel") != soilLevel) {
-		sendEvent(name: "soilLevel", value: soilLevel)
-		logData << [soilLevel: soilLevel]
-	}
-
-	def spinLevel = mainData["custom.washerSpinLevel"].washerSpinLevel.value
-	if (device.currentValue("spinLevel") != spinLevel) {
-		sendEvent(name: "spinLevel", value: spinLevel)
-		logData << [spinLevel: spinLevel]
+	def ovenMode = respData.ovenMode.ovenMode.value
+	if (device.currentValue("ovenMode") != ovenMode) {
+		sendEvent(name: "ovenMode", value: ovenMode)
+		logData << [ovenMode: ovenMode]
 	}
 	
 	if (logData != [:]) {
-		logInfo("statusParse: ${logData}")
+		logDebug("statusParse: ${logData}")
 	}
 	runIn(1, listAttributes)
+}
+
+//	===== Common Oven Parent/Child API Commands =====
+//	===== Child Installation =====
+def installChildren() {
+	addChild("probe")
+	pauseExecution(500)
+	addChild("cavity")
+	device.updateSetting("childInstall", [type:"bool", value: false])
+}
+
+def addChild(component) {
+	def dni = device.getDeviceNetworkId()
+	def childDni = dni + "-${component}"
+	def isChild = getChildDevice(childDni)
+	if (isChild) {
+		logInfo("installChildren: [component: ${component}, status: already installed]")
+	} else {
+		def type = "Samsung Oven ${component}"
+		try {
+			addChildDevice("davegut", "${type}", "${childDni}", [
+				"name": type, "label": component, component: component])
+			logInfo("addChild: [status: ADDED, label: ${component}, type: ${type}]")
+		} catch (error) {
+			logWarn("addChild: [status: FAILED, type: ${type}, dni: ${childDni}, component: ${component}, error: ${error}]")
+		}
+	}
 }
 
 //	===== Library Integration =====
 
 
 
-
+//#include davegut.Samsung-Oven-Sim
 
 // ~~~~~ start include (611) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
@@ -482,48 +565,3 @@ def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, lin
 } // library marker davegut.ST-Common, line 146
 
 // ~~~~~ end include (642) davegut.ST-Common ~~~~~
-
-// ~~~~~ start include (674) davegut.Samsung-Washer-Sim ~~~~~
-library ( // library marker davegut.Samsung-Washer-Sim, line 1
-	name: "Samsung-Washer-Sim", // library marker davegut.Samsung-Washer-Sim, line 2
-	namespace: "davegut", // library marker davegut.Samsung-Washer-Sim, line 3
-	author: "Dave Gutheinz", // library marker davegut.Samsung-Washer-Sim, line 4
-	description: "Simulator - Samsung Washer", // library marker davegut.Samsung-Washer-Sim, line 5
-	category: "utilities", // library marker davegut.Samsung-Washer-Sim, line 6
-	documentationLink: "" // library marker davegut.Samsung-Washer-Sim, line 7
-) // library marker davegut.Samsung-Washer-Sim, line 8
-
-def testData() { // library marker davegut.Samsung-Washer-Sim, line 10
-	def waterTemp = "hot" // library marker davegut.Samsung-Washer-Sim, line 11
-	def completionTime = "2022-05-27T17:56:26Z" // library marker davegut.Samsung-Washer-Sim, line 12
-	def machineState = "running" // library marker davegut.Samsung-Washer-Sim, line 13
-	def jobState = "spin" // library marker davegut.Samsung-Washer-Sim, line 14
-	def onOff = "off" // library marker davegut.Samsung-Washer-Sim, line 15
-	def kidsLock = "locked" // library marker davegut.Samsung-Washer-Sim, line 16
-	def soilLevel = "low" // library marker davegut.Samsung-Washer-Sim, line 17
-	def remoteControlEnabled = "false" // library marker davegut.Samsung-Washer-Sim, line 18
-	def spinLevel = "high" // library marker davegut.Samsung-Washer-Sim, line 19
-
-	return  [components:[ // library marker davegut.Samsung-Washer-Sim, line 21
-		main:[ // library marker davegut.Samsung-Washer-Sim, line 22
-			"custom.washerWaterTemperature":[washerWaterTemperature:[value:waterTemp]],  // library marker davegut.Samsung-Washer-Sim, line 23
-			washerOperatingState:[ // library marker davegut.Samsung-Washer-Sim, line 24
-				completionTime:[value:completionTime],  // library marker davegut.Samsung-Washer-Sim, line 25
-				machineState:[value:machineState],  // library marker davegut.Samsung-Washer-Sim, line 26
-				washerJobState:[value:jobState]],  // library marker davegut.Samsung-Washer-Sim, line 27
-			switch:[switch:[value:onOff]],  // library marker davegut.Samsung-Washer-Sim, line 28
-			"samsungce.kidsLock":[lockState:[value:kidsLock]],  // library marker davegut.Samsung-Washer-Sim, line 29
-			"custom.washerSoilLevel":[washerSoilLevel:[value:soilLevel]],  // library marker davegut.Samsung-Washer-Sim, line 30
-			remoteControlStatus:[remoteControlEnabled:[value:remoteControlEnabled]],  // library marker davegut.Samsung-Washer-Sim, line 31
-			"custom.washerSpinLevel":[washerSpinLevel:[value:spinLevel]] // library marker davegut.Samsung-Washer-Sim, line 32
-		]]] // library marker davegut.Samsung-Washer-Sim, line 33
-} // library marker davegut.Samsung-Washer-Sim, line 34
-
-def testResp(cmdData) { // library marker davegut.Samsung-Washer-Sim, line 36
-	return [ // library marker davegut.Samsung-Washer-Sim, line 37
-		cmdData: cmdData, // library marker davegut.Samsung-Washer-Sim, line 38
-		status: [status: "OK", // library marker davegut.Samsung-Washer-Sim, line 39
-				 results:[[id: "e9585885-3848-4fea-b0db-ece30ff1701e", status: "ACCEPTED"]]]] // library marker davegut.Samsung-Washer-Sim, line 40
-} // library marker davegut.Samsung-Washer-Sim, line 41
-
-// ~~~~~ end include (674) davegut.Samsung-Washer-Sim ~~~~~

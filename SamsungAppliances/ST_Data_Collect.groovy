@@ -1,182 +1,134 @@
-/*	===== HUBITAT Samsung Washer Using SmartThings ==========================================
+/*	===== HUBITAT INTEGRATION VERSION =====================================================
+Hubitat - Smart Things Data Collection for Hubitat Environment driver development
 		Copyright 2022 Dave Gutheinz
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file
-except in compliance with the License. You may obtain a copy of the License at:
-		http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software distributed under the
-License is distributed on an  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-either express or implied. See the License for the specific language governing permissions
-and limitations under the  License.
-===== HISTORY =============================================================================
-05.27	PASSED final testing for Beta Release.
-===== Installation Instructions Link =====
-https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
-===== Update Instructions =====
-a.	Use Browser import feature and select the default file.
-b.	Save the update to the driver.
-c.	Open a logging window and the device's edit page
-d.	Run a Save Preferences noting no ERRORS on the log page
-e.	If errors, contact developer.
 ===========================================================================================*/
-def driverVer() { return "B0.1" }
-
+def driverVer() { return "1.1" }
 metadata {
-	definition (name: "Samsung Washer",
+	definition (name: "ST Data Collect",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
+				importUrl: ""
 			   ){
-		capability "Refresh"
-		attribute "switch", "string"
-		command "start"
-		command "pause"
-		command "stop"
-		attribute "machineState", "string"
-		attribute "kidsLock", "string"
-		attribute "remoteControlEnabled", "string"
-		attribute "completionTime", "string"
-		attribute "timeRemaining", "number"
-		attribute "waterTemperature", "string"
-		attribute "jobState", "string"
-		attribute "soilLevel", "string"
-		attribute "spinLevel", "string"
 	}
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
 		if (stApiKey) {
 			input ("stDeviceId", "string", title: "SmartThings Device ID", defaultValue: "")
 		}
-		if (stDeviceId) {
-			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
-				   options: ["1", "5", "10", "30"], defaultValue: "10")
-			input ("debugLog", "bool",  
-				   title: "Enable debug logging for 30 minutes", defaultValue: false)
-			input ("infoLog", "bool",  
-				   title: "Enable description text logging", defaultValue: true)
-		}
 	}
 }
 
-def installed() { }
+def installed() { updated() }
 
 def updated() {
-	def commonStatus = commonUpdate()
-	if (commonStatus.status == "FAILED") {
-		logWarn("updated: ${commonStatus}")
+	def status = "OK"
+	def reason = "Success"
+	def updateData = [:]
+	if (!stApiKey || stApiKey == "") {
+		updateData << [status: "FAILED", reason: "No stApiKey"]
+	} else if (!stDeviceId || stDeviceId == "") {
+		getDeviceList()
+		updateData << [status: "FAILED", reason: "No stDeviceId"]
 	} else {
-		logInfo("updated: ${commonStatus}")
+		unschedule()
+		updateData << [status: "OK"]
+		updateData << [stDeviceId: stDeviceId]
+		if (!getDataValue("driverVersion") || 
+			getDataValue("driverVersion") != driverVer()) {
+			updateDataValue("driverVersion", driverVer())
+			updateData << [driverVer: driverVer()]
+		}
+		getDevDesc()
+		runIn(3, getDeviceStatus)
+	}
+	if (updateData.status == "FAILED") {
+		logWarn("updated: ${updateData}")
+	} else {
+		logInfo("updated: ${updateData}")
+	}
+}			  
+		
+def xxupdated() {
+	unschedule()
+	def updateData = [:]
+	def deviceData
+	def keyStatus = "OK"
+	def devIdStatus = "OK"
+	if (!stApiKey || stApiKey == "") {
+		keyStatus = "No stApiKey"
+	}
+	if (!stDeviceId || stDeviceId == "") {
+		devIdStatus = "No stDeviceId"
+	}
+	updateData << [status: [keyStatus: keyStatus, devIdStatus: devIdStatus]]
+	updateData << [stDeviceId: stDeviceId]
+	updateData << [debugLog: debugLog, infoLog: infoLog]
+	if (!getDataValue("driverVersion") || 
+		getDataValue("driverVersion") != driverVer()) {
+		updateDataValue("driverVersion", driverVer())
+		updateData << [driverVer: driverVer()]
+	}
+	logInfo updateData
+		if (keyStatus == "OK") {
+		if (devIdStatus != "OK") {
+			runIn(2, getDeviceList)
+			pauseExecution(5000)
+			logWarn("updated: Enter the device ID into Preference to continue.")
+		} else {
+			def sendData = [
+				path: "/devices/${stDeviceId.trim()}/status",
+				parse: "devParse"
+			]
+			asyncGet(sendData)
+		}
+	} else {
+		logWarn("updated: Enter the SmartThings API Key into Preference to continue.")
 	}
 }
 
-def start() { setMachineState("run") }
-def pause() { setMachineState("pause") }
-def stop() { setMachineState("stop") }
-def setMachineState(machState) {
-	def cmdData = [
-		component: "main",
-		capability: "dryerOperatingState",
-		command: "setMachineState",
-		arguments: [machState]]
-	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setMachineState: [cmd: ${machState}, status: ${cmdStatus}]")
+def getDevDesc() {
+	def sendData = [
+		path: "/devices/${stDeviceId.trim()}",
+		parse: "devDescParse"
+		]
+	asyncGet(sendData)
 }
 
-def validateResp(resp, data) {
-	//	Fixed to generate logWarn as specified in design.
-	def respLog = [:]
-	if (resp.status == 200) {
+def devDescParse(resp, data) {
+	if (resp.status != 200) {
+		logWarn("devDescParse: [error: InvalidResponse, respStatus: ${resp.status}]")
+	} else {
 		try {
 			def respData = new JsonSlurper().parseText(resp.data)
-			statusParse(respData.components.main)
+			log.trace "deviceDescription: ${respData}"
 		} catch (err) {
-			respLog << [status: "ERROR",
-						errorMsg: err,
-						respData: resp.data]
+			logWarn("devDescParse(: [noDataError: ${err}]")
 		}
-	} else {
-		respLog << [status: "ERROR",
-					httpCode: resp.status,
-					errorMsg: resp.errorMessage]
-	}
-	if (respLog != [:]) {
-		logWarn("validateResp: ${respLog}")
 	}
 }
 
-def statusParse(mainData) {
-	def logData = [:]
+def getDeviceStatus() {
+	def sendData = [
+		path: "/devices/${stDeviceId.trim()}/status",
+		parse: "devParse"
+	]
+	asyncGet(sendData)
+}
 
-	def onOff = mainData.switch.switch.value
-	if (device.currentValue("switch") != onOff) {
-		if (onOff == "off") {
-			setPollInterval(state.pollInterval)
-		} else {
-			runEvery1Minute(poll)
-		}
-		sendEvent(name: "switch", value: onOff)
-		logData << [switch: onOff]
-	}
-	
-	def kidsLock = mainData["samsungce.kidsLock"].lockState.value
-	if (device.currentValue("kidsLock") != kidsLock) {
-		sendEvent(name: "kidsLock", value: kidsLock)
-		logData << [kidsLock: kidsLock]
-	}
-	
-	def machineState = mainData.washerOperatingState.machineState.value
-	if (device.currentValue("machineState") != machineState) {
-		sendEvent(name: "machineState", value: machineState)
-		logData << [machineState: machineState]
-	}
-	
-	def jobState = mainData.washerOperatingState.washerJobState.value
-	if (device.currentValue("jobState") != jobState) {
-		sendEvent(name: "jobState", value: jobState)
-		logData << [machineState: jobState]
-	}
-	
-	def remoteControlEnabled = mainData.remoteControlStatus.remoteControlEnabled.value
-	if (device.currentValue("remoteControlEnabled") != remoteControlEnabled) {
-		sendEvent(name: "remoteControlEnabled", value: remoteControlEnabled)
-		logData << [remoteControlEnabled: remoteControlEnabled]
-	}
-	
-	def completionTime = mainData.washerOperatingState.completionTime.value
-	if (completionTime != null) {
-		def timeRemaining = calcTimeRemaining(completionTime)
-		if (device.currentValue("timeRemaining") != timeRemaining) {
-			sendEvent(name: "completionTime", value: completionTime)
-			sendEvent(name: "timeRemaining", value: timeRemaining)
-			logData << [completionTime: completionTime, timeRemaining: timeRemaining]
+def devParse(resp, data) {
+	if (resp.status != 200) {
+		logWarn("devParse: [error: InvalidResponse, respStatus: ${resp.status}]")
+	} else {
+		try {
+			def respData = new JsonSlurper().parseText(resp.data)
+			log.trace "deviceStatus: ${respData}"
+		} catch (err) {
+			logWarn("devParse: [noDataError: ${err}]")
 		}
 	}
-
-	def waterTemperature = mainData["custom.washerWaterTemperature"].washerWaterTemperature.value
-	if (device.currentValue("waterTemperature") != waterTemperature) {
-		sendEvent(name: "waterTemperature", value: waterTemperature)
-		logData << [waterTemperature: waterTemperature]
-	}
-
-	def soilLevel = mainData["custom.washerSoilLevel"].washerSoilLevel.value
-	if (device.currentValue("soilLevel") != soilLevel) {
-		sendEvent(name: "soilLevel", value: soilLevel)
-		logData << [soilLevel: soilLevel]
-	}
-
-	def spinLevel = mainData["custom.washerSpinLevel"].washerSpinLevel.value
-	if (device.currentValue("spinLevel") != spinLevel) {
-		sendEvent(name: "spinLevel", value: spinLevel)
-		logData << [spinLevel: spinLevel]
-	}
-	
-	if (logData != [:]) {
-		logInfo("statusParse: ${logData}")
-	}
-	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====
-
 
 
 
@@ -482,48 +434,3 @@ def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, lin
 } // library marker davegut.ST-Common, line 146
 
 // ~~~~~ end include (642) davegut.ST-Common ~~~~~
-
-// ~~~~~ start include (674) davegut.Samsung-Washer-Sim ~~~~~
-library ( // library marker davegut.Samsung-Washer-Sim, line 1
-	name: "Samsung-Washer-Sim", // library marker davegut.Samsung-Washer-Sim, line 2
-	namespace: "davegut", // library marker davegut.Samsung-Washer-Sim, line 3
-	author: "Dave Gutheinz", // library marker davegut.Samsung-Washer-Sim, line 4
-	description: "Simulator - Samsung Washer", // library marker davegut.Samsung-Washer-Sim, line 5
-	category: "utilities", // library marker davegut.Samsung-Washer-Sim, line 6
-	documentationLink: "" // library marker davegut.Samsung-Washer-Sim, line 7
-) // library marker davegut.Samsung-Washer-Sim, line 8
-
-def testData() { // library marker davegut.Samsung-Washer-Sim, line 10
-	def waterTemp = "hot" // library marker davegut.Samsung-Washer-Sim, line 11
-	def completionTime = "2022-05-27T17:56:26Z" // library marker davegut.Samsung-Washer-Sim, line 12
-	def machineState = "running" // library marker davegut.Samsung-Washer-Sim, line 13
-	def jobState = "spin" // library marker davegut.Samsung-Washer-Sim, line 14
-	def onOff = "off" // library marker davegut.Samsung-Washer-Sim, line 15
-	def kidsLock = "locked" // library marker davegut.Samsung-Washer-Sim, line 16
-	def soilLevel = "low" // library marker davegut.Samsung-Washer-Sim, line 17
-	def remoteControlEnabled = "false" // library marker davegut.Samsung-Washer-Sim, line 18
-	def spinLevel = "high" // library marker davegut.Samsung-Washer-Sim, line 19
-
-	return  [components:[ // library marker davegut.Samsung-Washer-Sim, line 21
-		main:[ // library marker davegut.Samsung-Washer-Sim, line 22
-			"custom.washerWaterTemperature":[washerWaterTemperature:[value:waterTemp]],  // library marker davegut.Samsung-Washer-Sim, line 23
-			washerOperatingState:[ // library marker davegut.Samsung-Washer-Sim, line 24
-				completionTime:[value:completionTime],  // library marker davegut.Samsung-Washer-Sim, line 25
-				machineState:[value:machineState],  // library marker davegut.Samsung-Washer-Sim, line 26
-				washerJobState:[value:jobState]],  // library marker davegut.Samsung-Washer-Sim, line 27
-			switch:[switch:[value:onOff]],  // library marker davegut.Samsung-Washer-Sim, line 28
-			"samsungce.kidsLock":[lockState:[value:kidsLock]],  // library marker davegut.Samsung-Washer-Sim, line 29
-			"custom.washerSoilLevel":[washerSoilLevel:[value:soilLevel]],  // library marker davegut.Samsung-Washer-Sim, line 30
-			remoteControlStatus:[remoteControlEnabled:[value:remoteControlEnabled]],  // library marker davegut.Samsung-Washer-Sim, line 31
-			"custom.washerSpinLevel":[washerSpinLevel:[value:spinLevel]] // library marker davegut.Samsung-Washer-Sim, line 32
-		]]] // library marker davegut.Samsung-Washer-Sim, line 33
-} // library marker davegut.Samsung-Washer-Sim, line 34
-
-def testResp(cmdData) { // library marker davegut.Samsung-Washer-Sim, line 36
-	return [ // library marker davegut.Samsung-Washer-Sim, line 37
-		cmdData: cmdData, // library marker davegut.Samsung-Washer-Sim, line 38
-		status: [status: "OK", // library marker davegut.Samsung-Washer-Sim, line 39
-				 results:[[id: "e9585885-3848-4fea-b0db-ece30ff1701e", status: "ACCEPTED"]]]] // library marker davegut.Samsung-Washer-Sim, line 40
-} // library marker davegut.Samsung-Washer-Sim, line 41
-
-// ~~~~~ end include (674) davegut.Samsung-Washer-Sim ~~~~~
