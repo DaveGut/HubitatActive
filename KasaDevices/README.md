@@ -26,8 +26,8 @@ Color Bulb:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/Kasa
 
 Color Temperature Bulb:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy
 
-Mono/White Bulb:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/DeviceDrivers/WhiteBulb.groovy
+Mono/White Bulb:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/WhiteBulb.groovy
 
-Light Strip:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/DeviceDrivers/LightStrip.groovy		
+Light Strip: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/LightStrip.groovy	
 
 
