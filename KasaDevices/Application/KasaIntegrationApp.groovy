@@ -179,6 +179,10 @@ def startPage() {
 				title: "<b>Remove Kasa Devices</b>",
 				description: "Select to remove selected Kasa Device from Hubitat."
 			paragraph " "
+			input "utilities", "bool",
+				title: "<b>Kasa Integration Utilities</b>",
+				submitOnChange: true,
+				defaultalue: false
 			if (utilities == true) {
 				href "listDevicesByIp",
 					title: "<b>Test Device LAN Status and List Devices by IP Address</b>",
