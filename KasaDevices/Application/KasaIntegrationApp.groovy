@@ -1117,8 +1117,9 @@ def configureChildren() {
 	def manifestData = getManifestData()
 	def children = getChildDevices()
 	children.each {
-		logInfo("${it}: ${it.childConfigure(manifestData)}")
+		it.updated()
 		pauseExecution(1000)
+		logInfo("${it}: ${it.childConfigure(manifestData)}")
 	}
 }	//	6.6.0
 
