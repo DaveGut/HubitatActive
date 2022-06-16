@@ -1,16 +1,12 @@
-/*	Kasa Local Integration
-		Copyright Dave Gutheinz
-License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
-6.5.1	Hot fix for loop in EM Month Stat Processing due to month = 1
-		Minor Changes:	added help text, notification of update available, Ping Test, Camera discovery
-						device testing
-		Major Change:	Use new Hubitat multi-IP communications for device communications where applicable.
-		Function Changes: addDevices split to LAN, CLOUD and new Manual.
-		New Function: Configure (configures app and new devices), 
-		Link to change details:
-	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Change_Descriptions.pdf
+/*	Kasa Integration Application
+	Copyright Dave Gutheinz
+License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
+===== Link to list of changes =====
+	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes.pdf
+===== Link to Documentation =====
+	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def appVersion() { return "6.5.4" }
+def appVersion() { return "6.6.0" }
 import groovy.json.JsonSlurper
 //	===== Default comms timeout during execution.
 def commsTO() { return 5 }
@@ -128,7 +124,7 @@ def startPage() {
 	}
 
 	return dynamicPage(name:"startPage",
-					   title:"<b>Kasa Local Hubitat Integration, Version ${appVersion()}</b>" +
+					   title:"<b>Kasa Hubitat Integration, Version ${appVersion()}</b>" +
 					   		 "\n(Instructions available using <b>?</b> at upper right corner.)",
 					   uninstall: true,
 					   install: true) {
@@ -165,22 +161,24 @@ def startPage() {
 			href "lanAddDevicesPage",
 				title: "<b>Scan LAN for Kasa devices and add</b>",
 				description: "Primary Method to discover and add devices."
-			href "manAddDevicesPage",
-				title: "<b>Manually enter data then add Kasa devices</b>",
-				description: "For use if devices are missed by Scan LAN."
-			href "cloudAddDevicesPage",
-				title: "<b>Get Kasa devices from the Kasa Cloud and add</b>",
-				description: "For use with devices that can't be controlled on LAN."
+			input "altInstall", "bool",
+				   title: "<b>Problems with Install?  Try Manual or Cloud Installation.</b>",
+				   submitOnChange: true,
+				   defaultalue: false
+			if (altInstall) {
+				href "manAddDevicesPage",
+					title: "<b>Manually enter data then add Kasa devices</b>",
+					description: "For use if devices are missed by Scan LAN."
+				href "cloudAddDevicesPage",
+					title: "<b>Get Kasa devices from the Kasa Cloud and add</b>",
+					description: "For use with devices that can't be controlled on LAN."
+				}
 
 			paragraph " "
 			href "removeDevicesPage",
 				title: "<b>Remove Kasa Devices</b>",
 				description: "Select to remove selected Kasa Device from Hubitat."
 			paragraph " "
-			input "utilities", "bool",
-				   title: "<b>Application Utilities</b>",
-				   submitOnChange: true,
-				   defaultalue: false
 			if (utilities == true) {
 				href "listDevicesByIp",
 					title: "<b>Test Device LAN Status and List Devices by IP Address</b>",
@@ -223,8 +221,11 @@ def cloudAddDevicesPage() {
 		def note = "Instructions: \n\ta.\tIf not already done, select 'Kasa " +
 			"Login and Token Update. \n\tb.\tVerify the token is not null. " +
 			"\n\tc.\tSelect 'Add Devices to the Device Array'."
-        section("Enter Device IP and Port: ") {
+		def twoFactor = "<b>Cloud Integration won't work if two-factor authentication " +
+			"is enabled in the Kasa phone app.</b>"
+		section("Enter Device IP and Port: ") {
 			paragraph note
+			paragaph twoFactor				
 			href "kasaAuthenticationPage",
 				title: "<b>Kasa Login and Token Update</b>",
 				description: "Select to enter credentials and get token"
@@ -1116,10 +1117,10 @@ def configureChildren() {
 	def manifestData = getManifestData()
 	def children = getChildDevices()
 	children.each {
-		it.childConfigure(manifestData)
+		logInfo("${it}: ${it.childConfigure(manifestData)}")
 		pauseExecution(1000)
 	}
-}
+}	//	6.6.0
 
 def getManifestData() {
 	logDebug("getManifestData: updateManifest = ${state.updateManifest}")

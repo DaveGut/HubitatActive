@@ -8,9 +8,9 @@ License Information:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 		Function Changes: addDevices split to LAN, CLOUD and new Manual.
 		New Function: Configure (configures app and new devices), 
 		Link to change details:
-			https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes-6_5_3.pdf
+	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Change_Descriptions.pdf
 ===================================================================================================*/
-def appVersion() { return "6.5.3" }
+def appVersion() { return "6.5.4" }
 import groovy.json.JsonSlurper
 //	===== Default comms timeout during execution.
 def commsTO() { return 5 }
