@@ -229,7 +229,7 @@ def cloudAddDevicesPage() {
 			"is enabled in the Kasa phone app.</b>"
 		section("Enter Device IP and Port: ") {
 			paragraph note
-			paragaph twoFactor				
+			paragraph twoFactor				
 			href "kasaAuthenticationPage",
 				title: "<b>Kasa Login and Token Update</b>",
 				description: "Select to enter credentials and get token"
