@@ -1,12 +1,10 @@
 # Hubitat Samsung TV Remote
 This driver provide integration of the Samsung TV Remote Control functions with the Hubitat.  Additionally, it provides an option to connect to the SmartThings Cloud for addition functions and information not otherwise available. 
 
-##Release Notes
-
-
+### Release Notes
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Docs/ReleaseNotes.pdf
 
-###Driver location:
+### Driver location
 https://github.com/DaveGut/HubitatActive/edit/master/SamsungTvRemote/SamsungTVRemote.groovy
 
 ###Installation:  
