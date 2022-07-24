@@ -1,12 +1,12 @@
 {
   "packageName": "Samsung TV Remote",
   "author": "David Gutheinz",
-  "version": "1.3.8",
+  "version": "2.0.1",
   "minimumHEVersion": "2.2.3",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/README.md",
   "communityLink": "https://community.hubitat.com/t/samsung-hubitat-tv-integration/55120",
-  "dateReleased": "2020-12-28",
-  "releaseNotes" : "YOU MUST RUN SAVE PREFERENCES.  Notes link: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/ReleaseNotes.txt",
+  "dateReleased": "2021-05-07",
+  "releaseNotes" : "Quick Fix for error in method artMode.  Run Save Preferences after updating.  Cleanup to non-Beta version, reduced Hubitat utilization, improved polling.",
   "drivers": [
     {
       "id": "af921623-3d72-4e86-8f00-cd5879c13c19",
