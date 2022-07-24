@@ -13,7 +13,7 @@ https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Docs/Instal
 ### Update from previous version using HPM:
 After completing update via HPM, do a SAVE PREFERENCES.  Otherwise there will be a spew of log errors.
 
-# Manual Update:
+### Manual Update:
 - Replace existing code with new code and Save
 - After completing update, do a SAVE PREFERENCES.  Otherwise there will be a spew of log errors.
 
