@@ -6,7 +6,7 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def driverVer() { return "6.6.0" }
+def driverVer() { return "6.6.1" }
 def type() { return "Dimming Switch" }
 
 metadata {
@@ -303,7 +303,7 @@ def getDimmerConfiguration() {
 
 
 
-// ~~~~~ start include (705) davegut.kasaCommon ~~~~~
+// ~~~~~ start include (961) davegut.kasaCommon ~~~~~
 library ( // library marker davegut.kasaCommon, line 1
 	name: "kasaCommon", // library marker davegut.kasaCommon, line 2
 	namespace: "davegut", // library marker davegut.kasaCommon, line 3
@@ -315,8 +315,8 @@ library ( // library marker davegut.kasaCommon, line 1
 
 //	====== Common Install / Update Elements ===== // library marker davegut.kasaCommon, line 10
 String helpLogo() { // library marker davegut.kasaCommon, line 11
-	return """<a href="https://github.com/DaveGut/HubitatActive/blob/648a78b28b1cc02d48097e960c282702000fe6b6/KasaDevices/Documentation.pdf">""" + // library marker davegut.kasaCommon, line 12
-		"""<div style="position: absolute; top: 10px; right: 10px; height: 80px; font-size: 15px;">Kasa Help</div></a>""" // library marker davegut.kasaCommon, line 13
+	return """<a href="https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/README.md">""" + // library marker davegut.kasaCommon, line 12
+		"""<div style="position: absolute; top: 10px; right: 10px; height: 80px; font-size: 20px;">Kasa Help</div></a>""" // library marker davegut.kasaCommon, line 13
 } // library marker davegut.kasaCommon, line 14
 
 def installCommon() { // library marker davegut.kasaCommon, line 16
@@ -582,9 +582,9 @@ def setDeviceAlias(newAlias) { // library marker davegut.kasaCommon, line 270
 	} // library marker davegut.kasaCommon, line 276
 } // library marker davegut.kasaCommon, line 277
 
-// ~~~~~ end include (705) davegut.kasaCommon ~~~~~
+// ~~~~~ end include (961) davegut.kasaCommon ~~~~~
 
-// ~~~~~ start include (706) davegut.kasaCommunications ~~~~~
+// ~~~~~ start include (962) davegut.kasaCommunications ~~~~~
 library ( // library marker davegut.kasaCommunications, line 1
 	name: "kasaCommunications", // library marker davegut.kasaCommunications, line 2
 	namespace: "davegut", // library marker davegut.kasaCommunications, line 3
@@ -872,9 +872,9 @@ private inputXorTcp(resp) { // library marker davegut.kasaCommunications, line 2
 	return cmdResponse // library marker davegut.kasaCommunications, line 285
 } // library marker davegut.kasaCommunications, line 286
 
-// ~~~~~ end include (706) davegut.kasaCommunications ~~~~~
+// ~~~~~ end include (962) davegut.kasaCommunications ~~~~~
 
-// ~~~~~ start include (611) davegut.Logging ~~~~~
+// ~~~~~ start include (865) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
 	name: "Logging", // library marker davegut.Logging, line 2
 	namespace: "davegut", // library marker davegut.Logging, line 3
@@ -926,9 +926,9 @@ def logDebug(msg) { // library marker davegut.Logging, line 44
 
 def logWarn(msg) { log.warn "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" } // library marker davegut.Logging, line 50
 
-// ~~~~~ end include (611) davegut.Logging ~~~~~
+// ~~~~~ end include (865) davegut.Logging ~~~~~
 
-// ~~~~~ start include (709) davegut.kasaPlugs ~~~~~
+// ~~~~~ start include (965) davegut.kasaPlugs ~~~~~
 library ( // library marker davegut.kasaPlugs, line 1
 	name: "kasaPlugs", // library marker davegut.kasaPlugs, line 2
 	namespace: "davegut", // library marker davegut.kasaPlugs, line 3
@@ -992,4 +992,4 @@ def setLedOff(onOff) { // library marker davegut.kasaPlugs, line 57
 
 
 
-// ~~~~~ end include (709) davegut.kasaPlugs ~~~~~
+// ~~~~~ end include (965) davegut.kasaPlugs ~~~~~
