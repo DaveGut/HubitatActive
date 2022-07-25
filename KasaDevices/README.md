@@ -3,8 +3,12 @@ Combined LAN and Cloud Integration with user choice of cloud usage at the applic
 
 ## Instructions:
 Installation Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Install.pdf
+(See file links below for manual links)
 
 Update Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Update.pdf
+(See file links below for manual links)
+
+Change Log:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/ChangeLog.pdf
 
 Application Description:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/App.pdf
 
