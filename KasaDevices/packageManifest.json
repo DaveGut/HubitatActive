@@ -3,7 +3,7 @@
   "author": "David Gutheinz",
   "version": "6.6.1",
   "minimumHEVersion": "2.3.1",
-  "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
+  "documentationLink": "https://github.com/DaveGut/HubitatActive/tree/master/KasaDevices#readme",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "dateReleased": "2022-07-25","releaseNotes": "Fixed limit-rate-exceeded issue from Kasa Cloud.  See: https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes.pdf","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/LICENSE",
   "apps": [
