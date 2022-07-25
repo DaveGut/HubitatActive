@@ -2,17 +2,17 @@
 Combined LAN and Cloud Integration with user choice of cloud usage at the application level and the individual device level.  Accounts for on-going TP-Link firmware updates that cause the LAN integration to fail.
 
 ## Instructions:
-Installation Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/install.pdf
+Installation Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Install.pdf
 
-Update Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/update.pdf
+Update Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Update.pdf
 
-Application Description:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/appDesc.pdf
+Application Description:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/App.pdf
 
-Device Capabilities:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/cmdsAttrs.pdf
+Device Capabilities:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/DeviceCaps.pdf
 
-Device Preferences:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/prefs.pdf
+Device Preferences:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/DevicePrefs.pdf
 
-Troubleshooting Guide:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/trouble.pdf
+Troubleshooting Guide:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Troubleshoot.pdf
 
 ## Driver and Application Links
 
