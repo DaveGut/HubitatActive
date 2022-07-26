@@ -27,7 +27,7 @@ NOTE: User can add other buttons by adding lines to Method push.
 Example setPictureMode("Dynamic"): addline: case 44: setPictureMode("Dynamic"); break
 (This has been added to base code).
 ===========================================================================================*/
-def driverVer() { return "3.0" }
+def driverVer() { return "3.0.1" }
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
@@ -100,6 +100,12 @@ metadata {
 		command "appRunHulu"
 		//	===== Button Interface =====
 		capability "PushableButton"
+		//	for media player tile
+		command "setLevel", ["NUMBER"]
+		attribute "level", "NUMBER"
+		attribute "trackDescription", "string"
+		command "nextTrack"
+		command "previousTrack"
 	}
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip", defaultValue: "")
@@ -426,10 +432,22 @@ def showMessage(d,d1,d2,d3) { logDebug("showMessage: not implemented") }
 
 //	===== WS TV WS Commands =====
 //	audio control
-def mute() { sendKey("MUTE") }
-def unmute() { sendKey("MUTE") }
-def volumeUp() { sendKey("VOLUP") }
-def volumeDown() { sendKey("VOLDOWN") }
+def mute() {
+	sendKey("MUTE")
+	runIn(5, stRefresh)
+}
+def unmute() {
+	sendKey("MUTE")
+	runIn(5, stRefresh)
+}
+def volumeUp() { 
+	sendKey("VOLUP") 
+	runIn(5, stRefresh)
+}
+def volumeDown() { 
+	sendKey("VOLDOWN")
+	runIn(5, stRefresh)
+}
 
 //	track control (works with TV Apps)
 def play() { sendKey("PLAY") }
@@ -478,10 +496,12 @@ def channelUp() {
 	sendKey("CHUP") 
 	runIn(5, stRefresh)
 }
+def nextTrack() { channelUp() }
 def channelDown() { 
 	sendKey("CHDOWN") 
 	runIn(5, stRefresh)
 }
+def previousTrack() { channelDown() }
 def previousChannel() { 
 	sendKey("PRECH") 
 	runIn(5, stRefresh)
@@ -692,6 +712,7 @@ def parse(resp) {
 }
 
 //	===== SmartThings Commands =====
+def setLevel(level) { setVolume(level) }
 def setVolume(volume) {
 	def cmdData = [
 		component: "main",
@@ -880,11 +901,11 @@ def distResp(resp, data) {
 
 def statusParse(mainData) {
 	def stData = [:]
-	
 	def volume = mainData.audioVolume.volume.value.toInteger()
 	if (device.currentValue("volume").toInteger() != volume) {
 		sendEvent(name: "volume", value: volume)
-		stData << [volume: volume]
+		sendEvent(name: "level", value: volume)
+		stData << [volume: volume, level: volume]
 	}
 	
 	def inputSource = mainData.mediaInputSource.inputSource.value
@@ -901,6 +922,9 @@ def statusParse(mainData) {
 		sendEvent(name: "tvChannel", value: tvChannel)	
 		sendEvent(name: "tvChannelName", value: tvChannelName)			
 		stData << [tvChannel: tvChannel, tvChannelName: tvChannelName]
+		def trackDescription = "${tvChannel}: ${tvChannelName}"
+		sendEvent(name: "trackDescription", value: trackDescription)
+		stData << [trackDescription: trackDescription]
 	}
 	
 	def pictureMode = mainData["custom.picturemode"].pictureMode.value
@@ -913,6 +937,12 @@ def statusParse(mainData) {
 	if (device.currentValue("soundMode") != soundMode) {
 		sendEvent(name: "soundMode",value: soundMode)
 		stData << [soundMode: soundMode]
+	}
+	
+	def mute = mainData.audioMute.mute.value
+	if (device.currentValue("mute") != mute) {
+		sendEvent(name: "mute",value: mute)
+		stData << [soundMode: mute]
 	}
 	
 	if (stData != [:]) {
