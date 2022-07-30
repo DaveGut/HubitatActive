@@ -38,6 +38,10 @@ metadata {
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/SamsungTVRemote.groovy"
 			   ){
 		capability "SamsungTV"			//	cmds: on/off, volume, mute. attrs: switch, volume, mute
+		command "showMessage", [[name: "NOT IMPLEMENTED"]]
+		command "setVolume", ["SmartThings Function"]	//	SmartThings
+		command "setPictureMode", ["SmartThings Function"]	//	SmartThings
+		command "setSoundMode", ["SmartThings Function"]	//	SmartThings
 		capability "Switch"
 		//	===== UPnP Augmentation =====
 		command "pause"				//	Only work on TV Players
@@ -64,28 +68,26 @@ metadata {
 		//	Source Commands
 		command "source"				//	Pops up source window
 		command "hdmi"					//	Direct progression through available sources
-		command "setInputSource", [[	//	Requires SmartThings integration
-			name: "Input Source",
-			constraints: ["digitalTv", "HDMI1", "HDMI2", "HDMI3", "HDMI4", "COMPONENT"],
-			type: "ENUM"]]
-		attribute "inputSource", "string"		//	Requires SmartThings integration
-		attribute "inputSources", "string"		//	Requires SmartThings integration
+		command "setInputSource", ["SmartThings Function"]	//	SmartThings
+		attribute "inputSource", "string"					//	SmartThings
+		attribute "inputSources", "string"					//	SmartThings
 		//	TV Channel
 		command "channelList"
 		command "channelUp"
 		command "channelDown"
 		command "previousChannel"
-		command "setTvChannel", ["string"]		//	Requires SmartThings integration
-		attribute "tvChannel", "string"			//	Requires SmartThings integration
-		attribute "tvChannelName", "string"		//	Requires SmartThings integration
+		command "nextChannel"
+		command "setTvChannel", ["SmartThings Function"]	//	SmartThings
+		attribute "tvChannel", "string"						//	SmartThings
+		attribute "tvChannelName", "string"					//	SmartThings
 		//	Playing Navigation Commands
 		command "exit"
 		command "Return"
 		command "fastBack"
 		command "fastForward"
 		
-		command "toggleSoundMode"
-		command "togglePictureMode"
+		command "toggleSoundMode", [[name: "SmartThings Function"]]	//	SmartThings
+		command "togglePictureMode", [[name: "SmartThings Function"]]	//	SmartThings
 		
 		//	Application Access/Control
 		command "appOpenByName", ["string"]
@@ -101,11 +103,11 @@ metadata {
 		//	===== Button Interface =====
 		capability "PushableButton"
 		//	for media player tile
-		command "setLevel", ["NUMBER"]
+		command "setLevel", ["SmartThings Function"]	//	SmartThings
 		attribute "level", "NUMBER"
 		attribute "trackDescription", "string"
-		command "nextTrack"
-		command "previousTrack"
+		command "nextTrack", [[name: "Sets Channel Up"]]
+		command "previousTrack", [[name: "Sets Channel Down"]]
 	}
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip", defaultValue: "")
@@ -428,7 +430,7 @@ def off() {
 }
 
 //	===== Unimplemented Commands from Capabilities =====
-def showMessage(d,d1,d2,d3) { logDebug("showMessage: not implemented") }
+def showMessage() { logWarn("showMessage: not implemented") }
 
 //	===== WS TV WS Commands =====
 //	audio control
@@ -718,7 +720,7 @@ def setVolume(volume) {
 		component: "main",
 		capability: "audioVolume",
 		command: "setVolume",
-		arguments: [volume]]
+		arguments: [volume.toInteger()]]
 	deviceCommand(cmdData)
 }
 
@@ -803,16 +805,16 @@ def deviceCommand(cmdData) {
 		if (respData.status == "FAILED") {
 			logWarn("deviceCommand: ${cmdResp}")
 		} else {
-			logInfo("deviceCommand: ${cmdResp}")
-		}
-		if (cmdData.capability != "refresh") {
-			refresh()
-		} else {
-			def sendData = [
-				path: "/devices/${stDeviceId.trim()}/status",
-				parse: "distResp"
-				]
-			asyncGet(sendData, "statusParse")
+			logDebug("deviceCommand: ${cmdResp}")
+			if (cmdData.capability != "refresh") {
+				refresh()
+			} else {
+				def sendData = [
+					path: "/devices/${stDeviceId.trim()}/status",
+					parse: "distResp"
+					]
+				asyncGet(sendData, "statusParse")
+			}
 		}
 	}
 }
