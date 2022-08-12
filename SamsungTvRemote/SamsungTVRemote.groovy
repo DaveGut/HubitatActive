@@ -28,7 +28,7 @@ Example setPictureMode("Dynamic"): addline: case 44: setPictureMode("Dynamic"); 
 (This has been added to base code).
 3.0.2 - TEMP Change.  Cause a STATE.ALERT for frame TV/ Art Mode keys not working.
 ===========================================================================================*/
-def driverVer() { return "3.0.1" }
+def driverVer() { return "3.0.2" }
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
