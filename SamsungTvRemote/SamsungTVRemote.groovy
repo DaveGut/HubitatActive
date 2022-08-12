@@ -26,6 +26,7 @@ g.	Reworked method updated() to incorporate UPNP and SmartThings Changes.
 NOTE: User can add other buttons by adding lines to Method push.  
 Example setPictureMode("Dynamic"): addline: case 44: setPictureMode("Dynamic"); break
 (This has been added to base code).
+3.0.2 - TEMP Change.  Cause a STATE.ALERT for frame TV/ Art Mode keys not working.
 ===========================================================================================*/
 def driverVer() { return "3.0.1" }
 import groovy.json.JsonOutput
@@ -209,6 +210,11 @@ def updated() {
 		logWarn("updated: ${updStatus}")
 	} else {
 		logInfo("updated: ${updStatus}")
+	}
+	if (getDataValue("modelYear").toInteger() >= 2022) {
+		state.___2022_Model_Note___ = "Frame TV and Art Mode keys and functions in this driver may not work due to changes in the Samsung Tizen OS."
+	} else {
+		state.remove("___2022_Model_Note___")
 	}
 	if (connectST) {
 		connectToSt()
@@ -511,6 +517,9 @@ def previousChannel() {
 
 //	ArtMode / Ambient Mode
 def artMode() {
+	if (getDataValue("modelYear").toInteger() >= 2022) {
+		logWarn("artMode: Art Mode may not work on 2022 and later model years")
+	}
 	if (getDataValue("frameTv") == "false") {
 		logInfo("artMode: Command not executed. Not a frameTv.")
 		return
@@ -542,6 +551,9 @@ def artModeCmd(data) {
 	sendMessage("frameArt", cmdData)	//	send command, connect is automatic.
 }
 def ambientMode() {
+	if (getDataValue("modelYear").toInteger() >= 2022) {
+		logWarn("artMode: Ambient Mode may not work on 2022 and later model years")
+	}
 	logDebug("ambientMode: frameTv = ${getDataValue("frameTv")}")
 	if (getDataValue("frameTv") == "true") { return }
 	sendKey("AMBIENT")
