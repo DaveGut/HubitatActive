@@ -497,14 +497,14 @@ def startGetToken() {
 def getToken() {
 	logInfo("getToken ${userName}")
 	def message = ""
-	def hub = location.hubs[0]
+	def termId = java.util.UUID.randomUUID()
 	def cmdBody = [
 		method: "login",
 		params: [
 			appType: "Kasa_Android",
 			cloudUserName: "${userName}",
 			cloudPassword: "${userPassword}",
-			terminalUUID: "${hub.id}"]]
+			terminalUUID: "${termId}"]]
 	cmdData = [uri: "https://wap.tplinkcloud.com",
 			   cmdBody: cmdBody]
 	def respData = sendKasaCmd(cmdData)
