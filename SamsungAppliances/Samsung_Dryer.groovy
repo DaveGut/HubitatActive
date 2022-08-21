@@ -17,8 +17,9 @@ b.	Save the update to the driver.
 c.	Open a logging window and the device's edit page
 d.	Run a Save Preferences noting no ERRORS on the log page
 e.	If errors, contact developer.
+B0.2	Quick fix for kidsLock not available.
 ===========================================================================================*/
-def driverVer() { return "B0.1" }
+def driverVer() { return "B0.2" }
 
 metadata {
 	definition (name: "Samsung Dryer",
@@ -114,11 +115,13 @@ def statusParse(mainData) {
 		logData << [switch: onOff]
 	}
 	
-	def kidsLock = mainData["samsungce.kidsLock"].lockState.value
-	if (device.currentValue("kidsLock") != kidsLock) {
-		sendEvent(name: "kidsLock", value: kidsLock)
-		logData << [kidsLock: kidsLock]
-	}
+	try {
+		def kidsLock = mainData["samsungce.kidsLock"].lockState.value
+		if (device.currentValue("kidsLock") != kidsLock) {
+			sendEvent(name: "kidsLock", value: kidsLock)
+			logData << [kidsLock: kidsLock]
+		}
+	} catch (e) { }
 
 	def machineState = mainData.dryerOperatingState.machineState.value
 	if (device.currentValue("machineState") != machineState) {
