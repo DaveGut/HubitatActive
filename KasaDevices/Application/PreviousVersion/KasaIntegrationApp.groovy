@@ -6,7 +6,7 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def appVersion() { return "6.6.1" }
+def appVersion() { return "6.6.0" }
 import groovy.json.JsonSlurper
 //	===== Default comms timeout during execution.
 def commsTO() { return 5 }
@@ -61,6 +61,7 @@ def updated() {
 	app?.removeSetting("devPort")
 	app?.removeSetting("installHelp")
 	app?.removeSetting("missingDevHelp")
+	failedDeviceHelp
 	if (userName && userName != "") {
 		schedule("0 30 2 ? * MON,WED,SAT", schedGetToken)
 	}
@@ -82,7 +83,7 @@ def initInstance() {
 	if (!debugLog) { app.updateSetting("debugLog", false) }
 	if (!state.devices) { state.devices = [:] }
 	if (!lanSegment) {
-		def hub = location.hub
+		def hub = location.hubs[0]
 		def hubIpArray = hub.localIP.split('\\.')
 		def segments = [hubIpArray[0],hubIpArray[1],hubIpArray[2]].join(".")
 		app?.updateSetting("lanSegment", [type:"string", value: segments])
@@ -496,15 +497,16 @@ def startGetToken() {
 
 def getToken() {
 	logInfo("getToken ${userName}")
+	app?.removeSetting("kasaToken")
 	def message = ""
-	def termId = java.util.UUID.randomUUID()
+	def hub = location.hubs[0]
 	def cmdBody = [
 		method: "login",
 		params: [
 			appType: "Kasa_Android",
 			cloudUserName: "${userName}",
 			cloudPassword: "${userPassword}",
-			terminalUUID: "${termId}"]]
+			terminalUUID: "${hub.id}"]]
 	cmdData = [uri: "https://wap.tplinkcloud.com",
 			   cmdBody: cmdBody]
 	def respData = sendKasaCmd(cmdData)
@@ -514,7 +516,6 @@ def getToken() {
 	} else {
 		message = "Token not updated.  See WARN message in Log."
 		logWarn("getToken: <b>Token not updated.</b> Return = ${respData}\n\r")
-		runIn(600, startGetToken)
 	}
 	return message
 }
@@ -537,7 +538,7 @@ def findDevices() {
             for(int i = start; i < finish; i++) {
 				deviceIPs.add("${pollSegment}.${i.toString()}")
 			}
-			sendLanCmd(deviceIPs.join(','), port, """{"system":{"get_sysinfo":{}}}""", "getLanData", 15)
+			sendLanCmd(deviceIPs.join(','), port, """{"system":{"get_sysinfo":{}}}""", "getLanData")
 		}
 	}
 	def delay = 50 * (finish - start) + 1000*commsTO()
@@ -610,6 +611,9 @@ def getLanData(response) {
 		}
 	}
 }
+
+
+
 
 def cloudGetDevices() {
 	logInfo("cloudGetDevices ${kasaToken}")
