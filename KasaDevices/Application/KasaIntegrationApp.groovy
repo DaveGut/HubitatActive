@@ -6,7 +6,7 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def appVersion() { return "6.7.0" }
+def appVersion() { return "6.7.1" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -1050,6 +1050,7 @@ def updateConfigurations() {
 	def msg = ""
 	if (configureEnabled) {
 		app?.updateSetting("configureEnabled", [type:"bool", value: false])
+		app.updateLabel("Kasa Integration")
 		configureChildren()
 		runIn(600, configureEnable)
 		msg += "Updating App and device configurations"
