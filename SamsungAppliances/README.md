@@ -32,8 +32,11 @@ File Location:  https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppl
 1.  Status: Beta
 2.  Special Condition: Requires ALL CHILD DRIVERS to load properly
 3.  File Locations:
+
 	a)	Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy
+	
 	b)	Cavity: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy
+	
 	c)	TempProbe: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_probe.groovy
 
 ### Samsung Refrigerator
