@@ -13,7 +13,7 @@
       "name": "Samsung Appliances",
       "category": "Integrations",
       "tags": ["Appliances"],
-      "location": "https://github.com/DaveGut/HubitatActive/edit/master/SamsungAppliances/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/packageManifest.json",
       "description": "Samsung Appliance Drivers for SmartThings-connected appliances."
     },
    {
