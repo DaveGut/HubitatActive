@@ -16,54 +16,37 @@ File Location:  https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppl
 
 ## Device Driver Information
 ### Samsung Dishwasher
-Status: Beta
-
-File Locaton: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dishwasher.groovy
+1.  Status: Beta
+2.  File Locaton: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dishwasher.groovy
 
 ### Samsung Dryer
-Status: Beta
-
-File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dryer.groovy
-
-Future: Adding the upper dryer compartment in a future release.
+1.  Status: Beta
+2.  File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dryer.groovy
+3.  Future: Adding the upper dryer compartment in a future release.
 
 ### Samsung HVAC
-Status: Release 1.0
-
-File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_HVAC.groovy
+1.  Status: Release 1.0
+2.  File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_HVAC.groovy
 
 ### Samsung Oven
-Status: Beta
+1.  Status: Beta
+2.  Special Condition: Requires ALL CHILD DRIVERS to load properly
+3.  File Locations:
+	Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy
+	Cavity: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy
+	TempProbe: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_probe.groovy
 
-Special Condition: Requires ALL CHILD DRIVERS to load properly
-
-File Locations:
-
-Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy
-
-Cavity: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy
-
-TempProbe: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_probe.groovy
-
-## Samsung Refrigerator
-Status: Beta
-
-Special Condition: Requires ALL CHILD DRIVERS to load properly
-
-File Locations:
-
-Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig.groovy
-
-Cavity: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cavity.groovy
-
-cvRoom: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cvRoom.groovy
-
-Icemaker: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_icemaker.groovy
+### Samsung Refrigerator
+1.	Status: Beta
+2.	Special Condition: Requires ALL CHILD DRIVERS to load properly
+3.	File Locations:
+	Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig.groovy
+	Cavity: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cavity.groovy
+	cvRoom: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cvRoom.groovy
+	Icemaker: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_icemaker.groovy
 
 ### Samsung Washer
-Status: Beta
-
-File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy
-
-Future: Adding the upper dryer compartment in a future release.
+1.	Status: Beta
+2.	File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy
+3.	Future: Adding the upper dryer compartment in a future release.
 
