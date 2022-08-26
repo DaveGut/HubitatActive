@@ -9,7 +9,14 @@
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
       "description": "Kasa Plug, Switch, and Bulb Integration supporting both cloud and LAN integration."
     },
-    {
+     {
+      "name": "Samsung Appliances",
+      "category": "Integrations",
+      "tags": ["Appliances"],
+      "location": "https://github.com/DaveGut/HubitatActive/edit/master/SamsungAppliances/packageManifest.json",
+      "description": "Samsung Appliance Drivers for SmartThings-connected appliances."
+    },
+   {
       "name": "DEPRICATED Cloud xKasa Devices Integration",
       "category": "Integrations",
       "tags": [],
