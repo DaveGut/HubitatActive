@@ -1,49 +1,45 @@
-/*	Samsung Refrigerator using SmartThings Interface
+/*	Samsung Dishwasher using SmartThings Interface
 		Copyright Dave Gutheinz
 License Information:
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== Description
-This driver is for SmartThings-installed Samsung Refrigerators for import of control
+This driver is for SmartThings-installed Samsung Washers for import of control
 and status of defined functions into Hubitat Environment.
 =====	Library Use
 This driver uses libraries for the functions common to SmartThings devices. 
 Library code is at the bottom of the distributed single-file driver.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
-=====	Version B0.5
-Updated to differentiate between a standard wifi and a DONGLE-Based Wifi
-DONGLE based system has very limted functionality within the components.
+=====	Version B0.1
+
 ==============================================================================*/
-def driverVer() { return "B0.5" }
+def driverVer() { return "B0.1" }
 
 metadata {
-	definition (name: "Samsung Refrig",
+	definition (name: "Samsung Dishwasher",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
 			   ){
 		capability "Refresh"
-		capability "Contact Sensor"
-		capability "Temperature Measurement"
-		capability "Thermostat Cooling Setpoint"
-		capability "Filter Status"
-		command "setRapidCooling", [[
-			name: "Rapid Cooling",
-			constraints: ["on", "off"],
+		capability "Switch"
+		command "toggleOnOff"
+		attribute "kidsLock", "string"
+		command "setDishwasherMode", [[
+			name: "Dishwasher Mode",
+			constraints: ["auto", "normal", "heavy", "delicate", "express", "rinseOnly", "selfClean"],
 			type: "ENUM"]]
-		attribute "rapidCooling", "string"
-		command "setRapidFreezing", [[
-			name: "Rapid Freezing",
-			constraints: ["on", "off"],
-			type: "ENUM"]]
-		attribute "rapidFreezing", "string"
-		command "defrost", [[
-			name: "Defrost",
-			constraints: ["on", "off"],
-			type: "ENUM"]]
-		attribute "defrost", "string"
+		command "toggleDishwasherMode"
+		attribute "dishwasherMode", "string"
+		attribute "supportedDishwasherModes", "string"
+		attribute "operatingState", "string"
+		attribute "timeRemaining", "string"
+		attribute "currentJob", "string"
+		
+//		command "setTimeRemaining", ["string"]
+//		command "setKidsLock", ["string"]
+//		command "setJobState", ["string"]
 	}
-	
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
 		if (stApiKey) {
@@ -51,7 +47,7 @@ metadata {
 		}
 		if (stDeviceId) {
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
-				   options: ["1", "5", "10", "30"], defaultValue: "5")
+				   options: ["1", "5", "10", "30"], defaultValue: "10")
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 		}
@@ -66,37 +62,48 @@ def updated() {
 		logWarn("updated: ${commonStatus}")
 	} else {
 		logInfo("updated: ${commonStatus}")
-		deviceSetup()
 	}
+	deviceSetup()
 }
 
-def setCoolingSetpoint(setpoint) {
+def on() { setSwitch("on") }
+def off() { setSwitch("off") }
+def toggleOnOff() {
+	def onOff = "on"
+	if (device.currentValue("switch") == "on") {
+		onOff = "off"
+	}
+	setSwitch(onOff)
+}
+def setSwitch(onOff) {
 	def cmdData = [
-		component: getDataValue("component"),
-		capability: "thermostatCoolingSetpoint",
-		command: "setCoolingSetpoint",
-		arguments: [setpoint]]
+		component: "main",
+		capability: "switch",
+		command: onOff,
+		arguments: []]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setCoolingSetpoint: [cmd: ${setpoint}, ${cmdStatus}]")
+	logInfo("setSwitch: [cmd: ${onOff}, ${cmdStatus}]")
 }
 
-def setRapidCooling(onOff) {
-	setRefrigeration("setRapidCooling", onOff)
+def toggleDishwasherMode() {
+	if (state.supportedDishwasherModes) {
+		def modes = state.supportedDishwasherModes
+		def totalModes = modes.size()
+		def currentMode = device.currentValue("dishwasherMode")
+		def modeIndex = modes.indexOf(currentMode)
+		def newModeIndex = modeIndex + 1
+		if (newModeIndex == totalModes) { newModeIndex = 0 }
+		setDishwasherMode(modes[newModeIndex])
+	} else { logWarn("toggleInputSource: NOT SUPPORTED") }
 }
-def setRapidFreezing(onOff) {
-	setRefrigeration("setRapidFreezing", onOff)
-}
-def defrost(onOff) {
-	setRefrigeration("setDefrost", onOff)
-}
-def setRefrigeration(command, onOff) {
+def setDishwasherMode(dishwasherMode) {
 	def cmdData = [
-		component: getDataValue("component"),
-		capability: "refrigeration",
-		command: command,
-		arguments: [onOff]]
+		component: "main",
+		capability: "samsungce.dishwasherWashingCourse",
+		command: "setWashingCourse",
+		arguments: [dishwasherMode]]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setRefrigeration: [cmd ${command}, onOff: ${onOff}, status: ${cmdStatus}]")
+	logInfo("setDishwasherMode: [cmd: ${dishwasherMode}, ${cmdStatus}]")
 }
 
 def distResp(resp, data) {
@@ -104,15 +111,10 @@ def distResp(resp, data) {
 	if (resp.status == 200) {
 		try {
 			def respData = new JsonSlurper().parseText(resp.data)
-			if (data.reason == "deviceSetup") {
-				deviceSetupParse(respData)
-			} else {
-				def children = getChildDevices()
-				children.each {
-						it.statusParse(respData)
-				}
-				statusParse(respData)
-			}
+//			if (data.reason == "deviceSetup") {
+//				deviceSetupParse(respData.components.main)
+//			}
+			statusParse(respData.components.main)
 		} catch (err) {
 			respLog << [status: "ERROR",
 						errorMsg: err,
@@ -128,129 +130,68 @@ def distResp(resp, data) {
 	}
 }
 
-def deviceSetupParse(respData) {
-	def respLog = []
-	if (!getDataValue("dongle")) {
-		def dongle = "false"
-		def mnmo = respData.components.main.ocf.mnmo
-		if (mnmo != null && mnmo.value.contains("DONGLE")) {
-			dongle = "true"
-		}
-		updateDataValue("dongle", dongle)
-		respLog << [dongle: dongle]
-	}
-	//	Install Children
-	def compData = respData.components
-	compData.each {
-		if (it.key != "main") {
-			def childDni = dni + "-${it.key}"
-			def isChild = getChildDevice(childDni)
-			if (!isChild) {
-				def disabledComponents = []
-				if (disabledComponents == null) {
-					disabledComponents = compData.main["custom.disabledComponents"].disabledComponents.value
-				}
-				if(!disabledComponents.contains(it.key)) {
-					respLog << [component: it.key, status: "Installing"]
-					addChild(it.key, childDni)
-				}
-			}
-		} else {
-			updateDataValue("component", "main")
-		}
-	}
-			
-	if (respLog != []) {
-		logInfo("deviceSetupParse: ${respLog}")
-	}
-}
-def addChild(component, childDni) {
-	def type
-	switch(component) {
-		case "freezer":
-		case "cooler":
-		case "onedoor":
-			type = "Samsung Refrig cavity"
-			break
-		case "icemaker":
-		case "icemaker-02":
-			type = "Samsung Refrig icemaker"
-			break
-		case "cvroom":
-			type = "Samsung Refrig cvroom"
-			break
-		default:
-			logWarn("addChild: [component: ${component}, error: not on components list.")
-	}
-	try {
-		addChildDevice("davegut", "${type}", "${childDni}", [
-			"name": type, "label": component, component: component])
-		logInfo("addChild: [status: ADDED, label: ${component}, type: ${type}]")
-	} catch (error) {
-		logWarn("addChild: [status: FAILED, type: ${type}, dni: ${childDni}, component: ${component}, error: ${error}]")
-	}
-}
-
-def statusParse(respData) {
-	def parseData
-	try {
-		parseData = respData.components.main
-	} catch (error) {
-		logWarn("statusParse: [respData: ${respData}, error: ${error}]")
-		return
-	}
+def deviceSetupParse(parseData) {
 	def logData = [:]
-	def contact = parseData.contactSensor.contact.value
-	if (device.currentValue("contact") != contact) {
-		sendEvent(name: "contact", value: contact)
-		logData << [contact: contact]
-	}
-
-	def tempUnit = parseData.thermostatCoolingSetpoint.coolingSetpoint.unit
-	def coolingSetpoint = parseData.thermostatCoolingSetpoint.coolingSetpoint.value
-	if (device.currentValue("coolingSetpoint") != coolingSetpoint) {
-		sendEvent(name: "coolingSetpoint", value: coolingSetpoint, unit: tempUnit)
-		logData << [coolingSetpoint: coolingSetpoint, unit: tempUnit]
-	}
-
-	if (getDataValue("dongle") == "false") {
-		def temperature = parseData.temperatureMeasurement.temperature.value
-		if (device.currentValue("temperature") != temperature) {
-			sendEvent(name: "temperature", value: temperature, unit: tempUnit)
-			logData << [temperature: temperature]
-		}
-	}
 	
-	def defrost = parseData.refrigeration.defrost.value
-	if (device.currentValue("defrost") != defrost) {
-		sendEvent(name: "defrost", value: defrost)
-		logData << [defrost: defrost]
-	}
-
-	def rapidCooling = parseData.refrigeration.rapidCooling.value
-	if (device.currentValue("rapidCooling") != rapidCooling) {
-		sendEvent(name: "rapidCooling", value: rapidCooling)
-		logData << [rapidCooling: rapidCooling]
-	}
-
-	def rapidFreezing = parseData.refrigeration.rapidFreezing.value
-	if (device.currentValue("rapidFreezing") != rapidFreezing) {
-		sendEvent(name: "rapidFreezing", value: rapidFreezing)
-		logData << [rapidFreezing: rapidFreezing]
-	}
-
-	def filterStatus = parseData["custom.waterFilter"].waterFilterStatus.value
-	if (device.currentValue("filterStatus") != filterStatus) {
-		sendEvent(name: "filterStatus", value: filterStatus)
-		logData << [filterStatus: filterStatus]
-	}
+	def supportedDishwasherModes = parseData["samsungce.dishwasherWashingCourse"].supportedCourses.value
+	sendEvent(name: "supportedDishwasherModes", value: supportedDishwasherModes)
+	state.supportedDishwasherModes = supportedDishwasherModes
+	logData << [supportedDishwasherModes: supportedDishwasherModes]
 
 	if (logData != [:]) {
-		logInfo("getDeviceStatus: ${logData}")
+		logInfo("deviceSetupParse: ${logData}")
 	}
+}
 
-	runIn(1, listAttributes, [data: true])
-//	runIn(1, listAttributes)
+def statusParse(mainData) {
+	def logData = [:]
+
+	def onOff = mainData.switch.switch.value
+	if (device.currentValue("switch") != onOff) {
+		if (onOff == "off") {
+			setPollInterval(state.pollInterval)
+		} else {
+			runEvery1Minute(poll)
+		}
+		sendEvent(name: "switch", value: onOff)
+		logData << [switch: onOff]
+	}
+	
+	def kidsLock = mainData["samsungce.kidsLock"].lockState.value
+	if (device.currentValue("kidsLock") != kidsLock) {
+		sendEvent(name: "kidsLock", value: kidsLock)
+		logData << [kidsLock: kidsLock]
+	}
+	
+	def dishwasherMode = mainData["samsungce.dishwasherWashingCourse"].washingCourse.value
+	if (device.currentValue("dishwasherMode") != dishwasherMode) {
+		sendEvent(name: "dishwasherMode", value: dishwasherMode)
+		logData << [dishwasherMode: dishwasherMode]
+	}
+	
+	def operatingState = mainData["samsungce.dishwasherOperation"].operatingState.value
+	if (device.currentValue("operatingState") != operatingState) {
+		sendEvent(name: "operatingState", value: operatingState)
+		logData << [operatingState: operatingState]
+	}
+	
+	def timeRemaining = mainData["samsungce.dishwasherOperation"].remainingTimeStr.value
+	if (device.currentValue("timeRemaining") != timeRemaining) {
+		sendEvent(name: "timeRemaining", value: timeRemaining)
+		logData << [timeRemaining: timeRemaining]
+	}
+	
+	def currentJob = mainData["samsungce.dishwasherJobState"].dishwasherJobState.value
+	if (device.currentValue("currentJob") != currentJob) {
+		sendEvent(name: "currentJob", value: currentJob)
+		logData << [currentJob: currentJob]
+	}
+	
+	if (logData != [:]) {
+		logInfo("statusParse: ${logData}")
+	}
+	runIn(2, listAttributes, [data: true])
+//	runIn(2, listAttributes)
 }
 
 //	===== Library Integration =====
@@ -258,8 +199,7 @@ def statusParse(respData) {
 
 
 def simulate() { return false }
-//#include davegut.Samsung-Refrig-Sim
-//#include davegut.Samsung-Refrig-Sim-DONGLE
+//#include davegut.Samsung-Dishwasher-Sim
 
 // ~~~~~ start include (993) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
@@ -510,69 +450,64 @@ def poll() { // library marker davegut.ST-Common, line 79
 def deviceSetup() { // library marker davegut.ST-Common, line 100
 	if (simulate() == true) { // library marker davegut.ST-Common, line 101
 		def children = getChildDevices() // library marker davegut.ST-Common, line 102
-//		if (children) { // library marker davegut.ST-Common, line 103
-//			children.each { // library marker davegut.ST-Common, line 104
-//				it.deviceSetupParse(testData()) // library marker davegut.ST-Common, line 105
-//			} // library marker davegut.ST-Common, line 106
-//		} // library marker davegut.ST-Common, line 107
-		deviceSetupParse(testData()) // library marker davegut.ST-Common, line 108
-	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 109
-		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 110
-		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 111
-	} else { // library marker davegut.ST-Common, line 112
-		def sendData = [ // library marker davegut.ST-Common, line 113
-			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 114
-			parse: "distResp" // library marker davegut.ST-Common, line 115
-			] // library marker davegut.ST-Common, line 116
-		asyncGet(sendData, "deviceSetup") // library marker davegut.ST-Common, line 117
-	} // library marker davegut.ST-Common, line 118
-} // library marker davegut.ST-Common, line 119
+		deviceSetupParse(testData()) // library marker davegut.ST-Common, line 103
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 104
+		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 105
+		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 106
+	} else { // library marker davegut.ST-Common, line 107
+		def sendData = [ // library marker davegut.ST-Common, line 108
+			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 109
+			parse: "distResp" // library marker davegut.ST-Common, line 110
+			] // library marker davegut.ST-Common, line 111
+		asyncGet(sendData, "deviceSetup") // library marker davegut.ST-Common, line 112
+	} // library marker davegut.ST-Common, line 113
+} // library marker davegut.ST-Common, line 114
 
-def getDeviceList() { // library marker davegut.ST-Common, line 121
-	def sendData = [ // library marker davegut.ST-Common, line 122
-		path: "/devices", // library marker davegut.ST-Common, line 123
-		parse: "getDeviceListParse" // library marker davegut.ST-Common, line 124
-		] // library marker davegut.ST-Common, line 125
-	asyncGet(sendData) // library marker davegut.ST-Common, line 126
-} // library marker davegut.ST-Common, line 127
+def getDeviceList() { // library marker davegut.ST-Common, line 116
+	def sendData = [ // library marker davegut.ST-Common, line 117
+		path: "/devices", // library marker davegut.ST-Common, line 118
+		parse: "getDeviceListParse" // library marker davegut.ST-Common, line 119
+		] // library marker davegut.ST-Common, line 120
+	asyncGet(sendData) // library marker davegut.ST-Common, line 121
+} // library marker davegut.ST-Common, line 122
 
-def getDeviceListParse(resp, data) { // library marker davegut.ST-Common, line 129
-	def respData // library marker davegut.ST-Common, line 130
-	if (resp.status != 200) { // library marker davegut.ST-Common, line 131
-		respData = [status: "ERROR", // library marker davegut.ST-Common, line 132
-					httpCode: resp.status, // library marker davegut.ST-Common, line 133
-					errorMsg: resp.errorMessage] // library marker davegut.ST-Common, line 134
-	} else { // library marker davegut.ST-Common, line 135
-		try { // library marker davegut.ST-Common, line 136
-			respData = new JsonSlurper().parseText(resp.data) // library marker davegut.ST-Common, line 137
-		} catch (err) { // library marker davegut.ST-Common, line 138
-			respData = [status: "ERROR", // library marker davegut.ST-Common, line 139
-						errorMsg: err, // library marker davegut.ST-Common, line 140
-						respData: resp.data] // library marker davegut.ST-Common, line 141
-		} // library marker davegut.ST-Common, line 142
-	} // library marker davegut.ST-Common, line 143
-	if (respData.status == "ERROR") { // library marker davegut.ST-Common, line 144
-		logWarn("getDeviceListParse: ${respData}") // library marker davegut.ST-Common, line 145
-	} else { // library marker davegut.ST-Common, line 146
-		log.info "" // library marker davegut.ST-Common, line 147
-		respData.items.each { // library marker davegut.ST-Common, line 148
-			log.trace "${it.label}:   ${it.deviceId}" // library marker davegut.ST-Common, line 149
-		} // library marker davegut.ST-Common, line 150
-		log.trace "<b>Copy your device's deviceId value and enter into the device Preferences.</b>" // library marker davegut.ST-Common, line 151
-	} // library marker davegut.ST-Common, line 152
-} // library marker davegut.ST-Common, line 153
+def getDeviceListParse(resp, data) { // library marker davegut.ST-Common, line 124
+	def respData // library marker davegut.ST-Common, line 125
+	if (resp.status != 200) { // library marker davegut.ST-Common, line 126
+		respData = [status: "ERROR", // library marker davegut.ST-Common, line 127
+					httpCode: resp.status, // library marker davegut.ST-Common, line 128
+					errorMsg: resp.errorMessage] // library marker davegut.ST-Common, line 129
+	} else { // library marker davegut.ST-Common, line 130
+		try { // library marker davegut.ST-Common, line 131
+			respData = new JsonSlurper().parseText(resp.data) // library marker davegut.ST-Common, line 132
+		} catch (err) { // library marker davegut.ST-Common, line 133
+			respData = [status: "ERROR", // library marker davegut.ST-Common, line 134
+						errorMsg: err, // library marker davegut.ST-Common, line 135
+						respData: resp.data] // library marker davegut.ST-Common, line 136
+		} // library marker davegut.ST-Common, line 137
+	} // library marker davegut.ST-Common, line 138
+	if (respData.status == "ERROR") { // library marker davegut.ST-Common, line 139
+		logWarn("getDeviceListParse: ${respData}") // library marker davegut.ST-Common, line 140
+	} else { // library marker davegut.ST-Common, line 141
+		log.info "" // library marker davegut.ST-Common, line 142
+		respData.items.each { // library marker davegut.ST-Common, line 143
+			log.trace "${it.label}:   ${it.deviceId}" // library marker davegut.ST-Common, line 144
+		} // library marker davegut.ST-Common, line 145
+		log.trace "<b>Copy your device's deviceId value and enter into the device Preferences.</b>" // library marker davegut.ST-Common, line 146
+	} // library marker davegut.ST-Common, line 147
+} // library marker davegut.ST-Common, line 148
 
-def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, line 155
-	Integer currTime = now() // library marker davegut.ST-Common, line 156
-	Integer compTime // library marker davegut.ST-Common, line 157
-	try { // library marker davegut.ST-Common, line 158
-		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 159
-	} catch (e) { // library marker davegut.ST-Common, line 160
-		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 161
-	} // library marker davegut.ST-Common, line 162
-	Integer timeRemaining = ((compTime-currTime) /1000).toInteger() // library marker davegut.ST-Common, line 163
-	if (timeRemaining < 0) { timeRemaining = 0 } // library marker davegut.ST-Common, line 164
-	return timeRemaining // library marker davegut.ST-Common, line 165
-} // library marker davegut.ST-Common, line 166
+def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, line 150
+	Integer currTime = now() // library marker davegut.ST-Common, line 151
+	Integer compTime // library marker davegut.ST-Common, line 152
+	try { // library marker davegut.ST-Common, line 153
+		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 154
+	} catch (e) { // library marker davegut.ST-Common, line 155
+		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 156
+	} // library marker davegut.ST-Common, line 157
+	Integer timeRemaining = ((compTime-currTime) /1000).toInteger() // library marker davegut.ST-Common, line 158
+	if (timeRemaining < 0) { timeRemaining = 0 } // library marker davegut.ST-Common, line 159
+	return timeRemaining // library marker davegut.ST-Common, line 160
+} // library marker davegut.ST-Common, line 161
 
 // ~~~~~ end include (1000) davegut.ST-Common ~~~~~
