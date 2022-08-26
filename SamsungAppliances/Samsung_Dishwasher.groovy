@@ -19,7 +19,7 @@ metadata {
 	definition (name: "Samsung Dishwasher",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dishwasher.groovy"
 			   ){
 		capability "Refresh"
 		capability "Switch"
