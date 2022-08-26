@@ -2,8 +2,8 @@
 Drivers for Samsung Appliances that have aready installed in the SmartThings Environment
 
 ## Installation Requirements:
-a.  SmartThings Account with Appliance working through SmartThings
-b.  Hubitat Environment device
+1.  SmartThings Account with Appliance working through SmartThings
+2.  Hubitat Environment device
 
 ## Driver Installation Instructions
 You can install the driver using three methods:
