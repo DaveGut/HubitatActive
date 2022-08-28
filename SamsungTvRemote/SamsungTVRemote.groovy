@@ -15,20 +15,20 @@ and limitations under the  License.
 	Hubitat user Cal for technical, test, and emotional support.
 	GitHub user Toxblh for exlempary code for numerous commands
 	Hubitat users who supported validation of 2016 - 2020 models.
-===== 2022 Version 3.0 ====================================================================
-a.	Updated SmartThings Communications and logging to use my existing library code.
-b.	Enabled setSoundMode() and setPictureMode() from capablity SamsungTV.
-c.	Added command toggleSoundMode.  This will use Button command push(42).
-d.	Added command togglePictureMode.  This will use Button command push(43).
-e.	Converted setVolume() from UPNP to SmartThings command.
-f.	Removed UPNP communications.
-g.	Reworked method updated() to incorporate UPNP and SmartThings Changes.
-NOTE: User can add other buttons by adding lines to Method push.  
-Example setPictureMode("Dynamic"): addline: case 44: setPictureMode("Dynamic"); break
-(This has been added to base code).
-3.0.2 - TEMP Change.  Cause a STATE.ALERT for frame TV/ Art Mode keys not working.
+===== 2022 Version 3.1 ====================================================================
+Preferences
+a.	Added preference wolMethod to allow user to select on method between three WOL formats
+	or using the SmartThing ON command.  ST ON will only work is ST is enabled.
+b.	Removed Refresh Interval as no longer necessary (superceded by poll).
+Methods:
+a.	onPoll: Modified as follows:
+	1.	If ST enabled, will use the ST poll command.
+	2.	If ST not enabled, modifies previous method to update switch attribute for
+		off detection to require three detections prior to setting switch attribute.
+Known Issue:	for newer TV's, Samsung has removed the remote Key to control artMode.
+				Expect art mode functions to be intermittent until I find a true fix.
 ===========================================================================================*/
-def driverVer() { return "3.0.2" }
+def driverVer() { return "3.1" }
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
@@ -48,7 +48,6 @@ metadata {
 		command "pause"				//	Only work on TV Players
 		command "play"					//	Only work on TV Players
 		command "stop"					//	Only work on TV Players
-		capability "Refresh"
 		//	===== Remote Control Interface =====
 		command "sendKey", ["string"]	//	Send entered key. eg: HDMI
 		command "artMode"				//	Toggles artModeStatus
@@ -87,6 +86,7 @@ metadata {
 		command "fastBack"
 		command "fastForward"
 		
+		command "toggleInputSource", [[name: "SmartThings Function"]]	//	SmartThings
 		command "toggleSoundMode", [[name: "SmartThings Function"]]	//	SmartThings
 		command "togglePictureMode", [[name: "SmartThings Function"]]	//	SmartThings
 		
@@ -105,6 +105,7 @@ metadata {
 		capability "PushableButton"
 		//	for media player tile
 		command "setLevel", ["SmartThings Function"]	//	SmartThings
+		attribute "transportStatus", "string"
 		attribute "level", "NUMBER"
 		attribute "trackDescription", "string"
 		command "nextTrack", [[name: "Sets Channel Up"]]
@@ -115,22 +116,26 @@ metadata {
 		if (deviceIp) {
 			input ("pollInterval","enum", title: "Power Polling Interval (seconds)",
 				   options: ["5", "10", "15", "20", "30", "60"], defaultValue: "60")
-			input ("refreshInterval", "enum", title: "Device Refresh Interval (minutes)", 
-				   options: ["1", "5", "10", "15", "30"], defaultValue: "15")
 			input ("tvPwrOnMode", "enum", title: "TV Startup Display", 
 				   options: ["ART_MODE", "Ambient", "none"], defaultValue: "none")
 			input ("debugLog", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
 			input ("infoLog", "bool", 
 				   title: "Enable information logging " + helpLogo(),
 				   defaultValue: true)
-			input ("altWolMac", "bool", title: "Use alternate WOL MAC", defaultValue: false)
 			input ("connectST", "bool", title: "Connect to SmartThings for added functions", defaultValue: false)
 		}
 		if (connectST) {
-			input ("stApiKey", "string", title: "SmartThings API Key - See HELP", defaultValue: "")
+			input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
 			if (stApiKey) {
 				input ("stDeviceId", "string", title: "SmartThings Device ID", defaultValue: "")
 			}
+			input ("wolMethod", "enum", title: "Wol (ON) Method", 
+				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
+							 "3": "Use Alternate Wol MAC", "4": "Use Smart Things"], defaultValue: "2")
+		} else {
+			input ("wolMethod", "enum", title: "Wol (ON) Method", 
+				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
+							 "3": "Use Alternate Wol MAC"], defaultValue: "2")
 		}
 	}
 }
@@ -154,98 +159,36 @@ def updated() {
 		logWarn("\n\n\t\t<b>Enter the deviceIp and Save Preferences</b>\n\n")
 		updStatus << [status: "ERROR", data: "Device IP not set."]
 	} else {
-		def onOff = checkOn()
-		updStatus << [switch: onOff]
-		if (onOff.switch == "off") {
-			updStatus << [status: "ERROR", data: "TV not on or incorrect IP Address."]
+		updStatus << [getDeviceData: getDeviceData()]
+		if (!getDataValue("driverVersion") || getDataValue("driverVersion") != driverVer()) {
+			updateDataValue("driverVersion", driverVer())
+			updStatus << [driverVer: driverVer()]
+		}
+
+		if (debugLog) { runIn(1800, debugLogOff) }
+		updStatus << [debugLog: debugLog, infoLog: infoLog]
+		if (pollInterval == "60" || pollInterval == "off" || pollInterval == null) {
+			runEvery1Minute(onPoll)
 		} else {
-			if (!getDataValue("deviceMac")) {
-				def devData = getDeviceData()
-				if (devData.status == "ERROR") {
-					updStatus << [status: "ERROR", getDeviceData: devData]
-				} else {
-					updStatus << [status: "OK", getDeviceData: devData]
-				}
-			}
-			if(getDataValue("frameTv") == "false") {
-				sendEvent(name: "artModeStatus", value: "notFrameTV")
-				updStatus << [artModeStatus: "notFrameTV"]
-			}
+			schedule("0/${pollInterval} * * * * ?",  onPoll)
 		}
-	}
-	//	Check if update if so, update data due to version change
-	if (!getDataValue("driverVersion") || 
-		getDataValue("driverVersion") != driverVer()) {
-		updateDataValue("driverVersion", driverVer())
-		updStatus << [driverVer: driverVer()]
-		sendEvent(name: "volume", value: volume)
-		//	2.x to 3.0 data updates
-		state.remove("driverError")
-		state.remove("WARNING")
-		if (pollInterval == "off") {
-			device.updateSetting("pollInterval", [type:"enum", value: "60"])
-//		} else if (pollInterval == "5") {
-//			device.updateSetting("pollInterval", [type:"enum", value: "10"])
+		updStatus << [pollInterval: pollInterval]
+
+		if (getDataValue("frameTv") == "true" && getDataValue("modelYear").toInteger() >= 2022) {
+			state.___2022_Model_Note___ = "artMode keys and functions may not work on this device. Changes in Tizen OS."
+			updStatus << [artMode: "May not work"]
+		} else {
+			state.remove("___2022_Model_Note___")
 		}
+		updStatus << [stUpdate: stUpdate()]
 	}
-	if (debugLog) { runIn(1800, debugLogOff) }
-	updStatus << [debugLog: debugLog, infoLog: infoLog]
-	if (pollInterval == "60" || pollInterval == "off" || pollInterval == null) {
-		runEvery1Minute(onPoll)
-	} else {
-		schedule("0/${pollInterval} * * * * ?",  onPoll)
-	}
-	updStatus << [pollInterval: pollInterval]
-	switch(refreshInterval) {
-		case "1" : runEvery1Minute(refresh); break
-		case "5" : runEvery5Minutes(refresh); break
-		case "10" : runEvery10Minutes("refresh"); break
-		case "15" : runEvery15Minutes(refresh); break
-		case "30" : runEvery30Minutes(refresh); break
-		default:
-			runEvery5Minutes(refresh); break
-	}
-	updStatus << [refreshInterval: refreshInterval]
-	if (updStatus.status == "ERROR") {
+
+	//	if (updStatus.status == "ERROR") {
+	if (updStatus.toString().contains("ERROR")) {
 		logWarn("updated: ${updStatus}")
 	} else {
 		logInfo("updated: ${updStatus}")
 	}
-	if (getDataValue("modelYear").toInteger() >= 2022) {
-		state.___2022_Model_Note___ = "Frame TV and Art Mode keys and functions in this driver may not work due to changes in the Samsung Tizen OS."
-	} else {
-		state.remove("___2022_Model_Note___")
-	}
-	if (connectST) {
-		connectToSt()
-	} else {
-		refresh()
-	}
-}
-
-def checkOn() {
-	def respData = [:]
-	def onOff = "off"
-	try{
-		httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
-			if (resp.status == 200) { onOff = "on" }
-		}
-	} catch (e) {}
-	if (onOff == "on" && device.currentValue("switch") != "on") {
-		sendEvent(name: "switch", value: "on")
-		respData << [switch: "on"]
-		if(tvPwrOnMode == "ART_MODE" && getDataValue("frameTv") == "true") {
-			artMode("on") }
-		else if(tvPwrOnMode == "Ambient") {
-			ambientMode()
-		} 
-		connect("remote")
-	}
-	else if (onOff == "off" && device.currentValue("switch") != "off") {
-		sendEvent(name: "switch", value: "off")
-		respData << [switch: "off"]
-	}
-	return respData
 }
 
 def getDeviceData() {
@@ -259,24 +202,24 @@ def getDeviceData() {
 				updateDataValue("deviceMac", wifiMac)
 				def alternateWolMac = wifiMac.replaceAll(":", "").toUpperCase()
 				updateDataValue("alternateWolMac", alternateWolMac)
-				def newDni = getMACFromIP(deviceIp)
-				if (device.deviceNetworkId != newDni) {
-					device.setDeviceNetworkId(newDni)
-				}
+				device.setDeviceNetworkId(alternateWolMac)
+				
 				def modelYear = "20" + resp.data.device.model[0..1]
 				updateDataValue("modelYear", modelYear)
 				def frameTv = "false"
 				if (resp.data.device.FrameTVSupport) {
 					frameTv = resp.data.device.FrameTVSupport
+					sendEvent(name: "artModeStatus", value: "notFrameTV")
+					respData << [artModeStatus: "notFrameTV"]
 				}
 				updateDataValue("frameTv", frameTv)
 				if (resp.data.device.TokenAuthSupport) {
 					tokenSupport = resp.data.device.TokenAuthSupport
+					updateDataValue("tokenSupport", tokenSupport)
 				}
 				def uuid = resp.data.device.duid.substring(5)
 				updateDataValue("uuid", uuid)
-				updateDataValue("tokenSupport", tokenSupport)
-				respData << [status: "OK", dni: newDni, modelYear: modelYear,
+				respData << [status: "OK", dni: alternateWolMac, modelYear: modelYear,
 							 frameTv: frameTv, tokenSupport: tokenSupport]
 			}
 		} catch (error) {
@@ -286,143 +229,105 @@ def getDeviceData() {
 	return respData
 }
 
-def connectToSt() {
-	if (!stApiKey || stApiKey == "") {
+def stUpdate() {
+	def stData = [:]
+	if (!connectST) {
+		stData << [status: "Preference connectST not true"]
+	} else if (!stApiKey || stApiKey == "") {
 		logWarn("\n\n\t\t<b>Enter the ST API Key and Save Preferences</b>\n\n")
+		stData << [status: "ERROR", date: "no stApiKey"]
 	} else if (!stDeviceId || stDeviceId == "") {
 		getDeviceList()
 		logWarn("\n\n\t\t<b>Enter the deviceId from the Log List and Save Preferences</b>\n\n")
+		stData << [status: "ERROR", date: "no stDeviceId"]
 	} else {
-		sendEvent(name: "volume", value: 0)
-
-		runIn(1, deviceSetup)
-		logInfo("connectToSt: [status: OK, data: running deviceSetup]")
-	}
-}
-
-def getDeviceList() {
-	def sendData = [
-		path: "/devices",
-		parse: "getDeviceListParse"
-		]
-	asyncGet(sendData)
-}
-def getDeviceListParse(resp, data) {
-	def respData
-	if (resp.status != 200) {
-		respData = [status: "ERROR",
-					httpCode: resp.status,
-					errorMsg: resp.errorMessage]
-	} else {
-		try {
-			respData = new JsonSlurper().parseText(resp.data)
-		} catch (err) {
-			respData = [status: "ERROR",
-						errorMsg: err,
-						respData: resp.data]
+		runEvery1Minute(stRefresh)
+		if (device.currentValue("volume") == null) {
+			sendEvent(name: "volume", value: 0)
 		}
+		runIn(5, stRefresh)
+		stData << [stRefreshInterval: "1 minute"]
 	}
-	if (respData.status == "ERROR") {
-		logWarn("getDeviceListParse: ${respData}")
-	} else {
-		def devList = "\n\n<b>Copy your device's deviceId from the list below"
-		devList += "\n\t\talias: \t\t\tdeviceId</b>"
-		respData.items.each {
-			devList += "\n\t\t${it.label}:\t${it.deviceId}"
-		}
-		devList += "\n\n"
-		logInfo devList
-	}
-}
-
-def deviceSetup() {
-	if (!stDeviceId || stDeviceId.trim() == "") {
-		logWarn("deviceSetup: ST Device ID not set.")
-	} else {
-		def sendData = [
-			path: "/devices/${stDeviceId.trim()}/status",
-			parse: "distResp"
-			]
-		asyncGet(sendData, "deviceSetup")
-	}
-}
-def deviceSetupParse(mainData) {
-	def setupData = [:]
-	
-	def supportedInputs =  mainData.mediaInputSource.supportedInputSources.value
-	state.supportedInputs = supportedInputs
-	setupData << [supportedInputs: supportedInputs]
-
-	def pictureModes = mainData["custom.picturemode"].supportedPictureModes.value
-	state.pictureModes = pictureModes
-	setupData << [pictureModes: pictureModes]
-	
-	def soundModes =  mainData["custom.soundmode"].supportedSoundModes.value
-	state.soundModes = soundModes
-	setupData << [soundModes: soundModes]
-
-	logInfo("deviceSetupParse: ${setupData}")
-	refresh()
-}
-
-//	===== Polling/Refresh Capability =====
-def onPoll() {
-	def sendCmdParams = [
-		uri: "http://${deviceIp}:9197",
-		timeout: 5]
-	asynchttpGet("onParse", sendCmdParams, [reason: "none"])
-}
-def onParse(resp, data) {
-	if (resp.status == 400) {
-		if (device.currentValue("switch") != "on") {
-			sendEvent(name: "switch", value: "on")
-			logInfo("onParse: [switch: on]")
-			if(tvPwrOnMode == "ART_MODE" && getDataValue("frameTv") == "true") {
-				artMode("on") }
-			else if(tvPwrOnMode == "Ambient") {
-				ambientMode()
-			} 
-			connect("remote")
-		}
-	} else {
-		if (device.currentValue("switch") != "off") {
-			sendEvent(name: "switch", value: "off")
-			logInfo("onParse: [switch: off]")
-		}
-	}
-}
-
-def refresh() {
-	if (device.currentValue("switch") == "off") {
-		logDebug("refresh: TV is off.  Refresh not run.")
-	} else {
-		getArtModeStatus()
-		stRefresh()
-	}
+	return stData
 }
 
 def stRefresh() {
-	if (connectST) {
-		def cmdData = [
-			component: "main",
-			capability: "refresh",
-			command: "refresh",
-			arguments: []]
-		deviceCommand(cmdData)
+	if (connectST && device.currentValue("switch") == "on") {
+		refresh()
 	}
 }
 
-//	===== On/Off =====
-def on() {
-	def wolMac = device.deviceNetworkId
-	if (altWolMac) {
-		wolMac = getDataValue("alternateWolMac")
+
+//	===== Polling/Refresh Capability =====
+def onPoll() {
+	if (connectST) {
+		poll()
+	} else {
+		def sendCmdParams = [
+			uri: "http://${deviceIp}:8001/api/v2/",
+			timeout: 5]
+		asynchttpGet("onParse", sendCmdParams, [reason: "none"])
 	}
-	logDebug("on: wolMac = ${wolMac}")
-	def wol = new hubitat.device.HubAction ("wake on lan ${wolMac}",
-											hubitat.device.Protocol.LAN,
-											null)
-	sendHubCommand(wol)
+}
+
+def onParse(resp, data) {
+	if (resp.status != 408) {
+		state.offCount = 0
+		if (device.currentValue("switch") != "on") {
+			sendEvent(name: "switch", value: "on")
+			logInfo("onParse: [switch: on]")S
+			setPowerOnMode()
+		}
+	} else {
+		if (state.offCount > 2) {
+			if (device.currentValue("switch") != "off") {
+				sendEvent(name: "switch", value: "off")
+				logInfo("onPoll: [switch: off]")
+			}
+		} else {
+			state.offCount += 1
+			runIn(1, onPoll)
+		}
+	}
+}
+
+def setPowerOnMode() {
+	if(tvPwrOnMode == "ART_MODE" && getDataValue("frameTv") == "true") {
+		artMode("on")
+	} else if (tvPwrOnMode == "Ambient") {
+		ambientMode()
+	}
+	connect("remote")
+}		
+
+def on() {
+	logDebug("on: [dni: ${device.deviceNetworkId}, wolMethod: ${wolMethod}]")
+	def wol
+	if (wolMethod == "2") {
+		def wolMac = getDataValue("alternateWolMac")
+		def cmd = "FFFFFFFFFFFF$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac"
+		wol = new hubitat.device.HubAction(cmd,
+											   hubitat.device.Protocol.LAN,
+											   [type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
+												destinationAddress: "255.255.255.255:7",
+												encoding: hubitat.device.HubAction.Encoding.HEX_STRING])
+		sendHubCommand(wol)
+	} else if (wolMethod == "3") {
+		wol = new hubitat.device.HubAction("wake on lan ${getDataValue("alternateWolMac")}",
+											   hubitat.device.Protocol.LAN,
+											   null)
+		sendHubCommand(wol)
+	} else if (wolMethod == "4") {
+		setSwitch("on")
+	} else {
+		wol = new hubitat.device.HubAction("wake on lan ${device.deviceNetworkId}",
+											   hubitat.device.Protocol.LAN,
+											   null)
+		sendHubCommand(wol)
+	}
+	if (pollInterval.toInteger() > 10) {
+		runIn(5, onPoll)
+	}
 }
 
 def off() {
@@ -433,13 +338,17 @@ def off() {
 		pauseExecution(3000)
 		sendKey("POWER", "Release")
 	}
+	sendEvent(name: "switch", value: "off")
 }
+
+
 
 //	===== Unimplemented Commands from Capabilities =====
 def showMessage() { logWarn("showMessage: not implemented") }
 
-//	===== WS TV WS Commands =====
-//	audio control
+
+
+//	===== LAN Websocket Interface =====
 def mute() {
 	sendKey("MUTE")
 	runIn(5, stRefresh)
@@ -457,7 +366,6 @@ def volumeDown() {
 	runIn(5, stRefresh)
 }
 
-//	track control (works with TV Apps)
 def play() { sendKey("PLAY") }
 def pause() { sendKey("PAUSE") }
 def stop() { sendKey("STOP") }
@@ -474,7 +382,6 @@ def fastForward() {
 	sendKey("RIGHT", "Release")
 }
 
-//	Cursor and Entry Control
 def arrowLeft() { sendKey("LEFT") }
 def arrowRight() { sendKey("RIGHT") }
 def arrowUp() { sendKey("UP") }
@@ -482,13 +389,11 @@ def arrowDown() { sendKey("DOWN") }
 def enter() { sendKey("ENTER") }
 def numericKeyPad() { sendKey("MORE") }
 
-//	Menu Access
 def home() { sendKey("HOME") }
 def menu() { sendKey("MENU") }
 def guide() { sendKey("GUIDE") }
 def info() { sendKey("INFO") }
 
-//	Source Commands
 def source() { 
 	sendKey("SOURCE")
 	runIn(5, stRefresh)
@@ -498,7 +403,6 @@ def hdmi() {
 	runIn(5, stRefresh)
 }
 
-//	TV Channel
 def channelList() { sendKey("CH_LIST") }
 def channelUp() { 
 	sendKey("CHUP") 
@@ -515,7 +419,6 @@ def previousChannel() {
 	runIn(5, stRefresh)
 }
 
-//	ArtMode / Ambient Mode
 def artMode() {
 	if (getDataValue("modelYear").toInteger() >= 2022) {
 		logWarn("artMode: Art Mode may not work on 2022 and later model years")
@@ -559,72 +462,6 @@ def ambientMode() {
 	sendKey("AMBIENT")
 }
 
-//	Application Control
-def appOpenByName(appName) {
-	def url = "http://${deviceIp}:8080/ws/apps/${appName}"
-	try {
-		httpPost(url, "") { resp ->
-			logDebug("appOpenByName: [name: ${appName}, status: ${resp.status}, data: ${resp.data}]")
-		}
-	} catch (e) {
-		logWarn("appOpenByName: [name: ${appName}, status: FAILED, data: ${e}]")
-	}
-}
-def appCloseNamedApp() {
-	def appId = state.currentAppId
-	logDebug("appClose: appId = ${appId}")
-	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
-	try { httpDelete([uri: uri]) { resp -> }
-	} catch (e) {}
-	state.currentAppId = null
-}
-def appInstallByCode(appId) {
-	logDebug("appInstall: appId = ${appId}")
-	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
-	try {
-		httpPut(uri, "") { resp ->
-			if (resp.data == true) {
-				logDebug("appOpen: Success.")
-			}
-		}
-	} catch (e) {
-		logWarn("appInstall: appId = ${appId}, FAILED: ${e}")
-		return
-	}
-}
-def appOpenByCode(appId) {
-	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
-	try {
-		httpPost(uri, body) { resp ->
-			logDebug("appOpenByCode: [code: ${appId}, status: ${resp.status}, data: ${resp.data}]")
-		}
-		runIn(5, appGetData, [data: appId]) 
-	} catch (e) {
-		logWarn("appOpenByCode: [code: ${appId}, status: FAILED, data: ${e}]")
-	}
-}
-def appGetData(appId) {
-	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
-	try {
-		httpGet(uri) { resp -> 
-			state.currentAppId = resp.data.id
-			logDebug("appGetData: [appId: ${resp.data.id}]")
-		}
-	} catch (e) {
-		state.latestAppData = [id: appId]
-		logWarn("appGetData: [appId: ${appId}, status: FAILED, data: ${e}]")
-	}
-}
-
-//	Hardcoded Applications
-def appRunBrowser() { appOpenByCode("org.tizen.browser") }
-def appRunYouTube() { appOpenByName("YouTube") }
-def appRunNetflix() { appOpenByName("Netflix") }
-def appRunPrimeVideo() { appOpenByName("AmazonInstantVideo") }
-def appRunYouTubeTV() { appOpenByName("YouTubeTV") }
-def appRunHulu() { appOpenByCode("3201601007625") }
-
-//	common KEY WS interface
 def sendKey(key, cmd = "Click") {
 	key = "KEY_${key.toUpperCase()}"
 	def data = [method:"ms.remote.control",
@@ -634,7 +471,6 @@ def sendKey(key, cmd = "Click") {
 	sendMessage("remote", JsonOutput.toJson(data) )
 }
 
-//	===== TV WebSocket Communications =====
 def connect(funct) {
 	logDebug("connect: function = ${funct}")
 	def url
@@ -725,7 +561,49 @@ def parse(resp) {
 	logDebug(logMsg)
 }
 
-//	===== SmartThings Commands =====
+
+
+//	===== LAN HTTP Implementation =====
+def appRunBrowser() { appOpenByCode("org.tizen.browser") }
+def appRunYouTube() { appOpenByName("YouTube") }
+def appRunNetflix() { appOpenByName("Netflix") }
+def appRunPrimeVideo() { appOpenByName("AmazonInstantVideo") }
+def appRunYouTubeTV() { appOpenByName("YouTubeTV") }
+def appRunHulu() { appOpenByCode("3201601007625") }
+def appOpenByName(appName) {
+	def url = "http://${deviceIp}:8080/ws/apps/${appName}"
+	try {
+		httpPost(url, "") { resp ->
+			logDebug("appOpenByName: [name: ${appName}, status: ${resp.status}, data: ${resp.data}]")
+		}
+	} catch (e) {
+		logWarn("appOpenByName: [name: ${appName}, status: FAILED, data: ${e}]")
+	}
+}
+def appOpenByCode(appId) {
+	def uri = "http://${deviceIp}:8001/api/v2/applications/${appId}"
+	try {
+		httpPost(uri, body) { resp ->
+			logDebug("appOpenByCode: [code: ${appId}, status: ${resp.status}, data: ${resp.data}]")
+		}
+		runIn(5, appGetData, [data: appId]) 
+	} catch (e) {
+		logWarn("appOpenByCode: [code: ${appId}, status: FAILED, data: ${e}]")
+	}
+}
+
+
+
+//	===== CLOUD SmartThings Implementation =====
+def setSwitch(onOff) {
+	def cmdData = [
+		component: "main",
+		capability: "switch",
+		command: onOff,
+		arguments: []]
+	deviceCommand(cmdData)
+}
+
 def setLevel(level) { setVolume(level) }
 def setVolume(volume) {
 	def cmdData = [
@@ -733,15 +611,6 @@ def setVolume(volume) {
 		capability: "audioVolume",
 		command: "setVolume",
 		arguments: [volume.toInteger()]]
-	deviceCommand(cmdData)
-}
-
-def setPictureMode(pictureMode) {
-	def cmdData = [
-		component: "main",
-		capability: "custom.picturemode",
-		command: "setPictureMode",
-		arguments: [pictureMode]]
 	deviceCommand(cmdData)
 }
 
@@ -756,18 +625,16 @@ def togglePictureMode() {
 	def newPictureMode = pictureModes[newModeNo]
 	setPictureMode(newPictureMode)
 }
-
-def setSoundMode(soundMode) { 
+def setPictureMode(pictureMode) {
 	def cmdData = [
 		component: "main",
-		capability: "custom.soundmode",
-		command: "setSoundMode",
-		arguments: [soundMode]]
+		capability: "custom.picturemode",
+		command: "setPictureMode",
+		arguments: [pictureMode]]
 	deviceCommand(cmdData)
 }
 
 def toggleSoundMode() {
-	//	requires state.soundModes
 	def soundModes = state.soundModes
 	def totalModes = soundModes.size()
 	def currentMode = device.currentValue("soundMode")
@@ -777,7 +644,25 @@ def toggleSoundMode() {
 	def soundMode = soundModes[newModeNo]
 	setSoundMode(soundMode)
 }
+def setSoundMode(soundMode) { 
+	def cmdData = [
+		component: "main",
+		capability: "custom.soundmode",
+		command: "setSoundMode",
+		arguments: [soundMode]]
+	deviceCommand(cmdData)
+}
 
+def toggleInputSource() {
+	def inputSources = state.supportedInputs
+	def totalSources = inputSources.size()
+	def currentSource = device.currentValue("mediaInputSource")
+	def sourceNo = inputSources.indexOf(currentSource)
+	def newSourceNo = sourceNo + 1
+	if (newSourceNo == totalSources) { newSourceNo = 0 }
+	def inputSource = inputSources[newSourceNo]
+	setInputSource(inputSource)
+}
 def setInputSource(inputSource) {
 	def cmdData = [
 		component: "main",
@@ -796,98 +681,6 @@ def setTvChannel(newChannel) {
 	deviceCommand(cmdData)
 }
 
-//	===== SmartThings Communicaions / Parse =====
-def deviceCommand(cmdData) {
-	def cmdResp = [cmdData: cmdData]
-	def respData
-	if (connectST) {
-		if (!stDeviceId || stDeviceId.trim() == "") {
-			respData = [status: "FAILED", data: "no stDeviceId"]
-		} else {
-			def sendData = [
-				path: "/devices/${stDeviceId.trim()}/commands",
-				cmdData: cmdData
-			]
-			respData = syncPost(sendData)
-			if(respData.status == "OK") {
-				respData << [status: "OK"]
-			}
-		}
-		cmdResp << [respData: respData]
-		if (respData.status == "FAILED") {
-			logWarn("deviceCommand: ${cmdResp}")
-		} else {
-			logDebug("deviceCommand: ${cmdResp}")
-			if (cmdData.capability != "refresh") {
-				refresh()
-			} else {
-				def sendData = [
-					path: "/devices/${stDeviceId.trim()}/status",
-					parse: "distResp"
-					]
-				asyncGet(sendData, "statusParse")
-			}
-		}
-	}
-}
-
-private asyncGet(sendData, passData = "none") {
-	if (!stApiKey || stApiKey.trim() == "") {
-		logWarn("asyncGet: [status: ERROR, errorMsg: no stApiKey]")
-	} else {
-		logDebug("asyncGet: ${sendData}, ${passData}")
-		def sendCmdParams = [
-			uri: "https://api.smartthings.com/v1",
-			path: sendData.path,
-			headers: ['Authorization': 'Bearer ' + stApiKey.trim()]]
-		try {
-			asynchttpGet(sendData.parse, sendCmdParams, [reason: passData])
-		} catch (error) {
-			logWarn("asyncGet: [status: error, statusReason: ${error}]")
-		}
-	}
-}
-
-private syncPost(sendData){
-	def respData = [:]
-	if (!stApiKey || stApiKey.trim() == "") {
-		respData << [status: "ERROR", errorMsg: "no stApiKey"]
-		logWarn("syncPost: [status: ERROR, errorMsg: no stApiKey]")
-	} else {
-		logDebug("syncPost: ${sendData}")
-
-		def cmdBody = [commands: [sendData.cmdData]]
-		def sendCmdParams = [
-			uri: "https://api.smartthings.com/v1",
-			path: sendData.path,
-			headers: ['Authorization': 'Bearer ' + stApiKey.trim()],
-			body : new groovy.json.JsonBuilder(cmdBody).toString()
-		]
-		try {
-			httpPost(sendCmdParams) {resp ->
-				if (resp.status == 200 && resp.data != null) {
-					respData << [status: "OK", results: resp.data.results]
-				} else {
-					respData << [status: "FAILED", errorMsg: "httpCode: ${resp.status}"]
-					def warnData = [status:"ERROR",
-									cmdData: sendData.cmdData,
-									httpCode: resp.status,
-									errorMsg: resp.errorMessage]
-					logWarn("syncPost: ${warnData}")
-				}
-			}
-		} catch (error) {
-			respData << [status: "FAILED", errorMsg: "non-HTTP Error"]
-			def warnData = [status: "ERROR",
-							cmdData: sendData.cmdData,
-							httpCode: "No Response",
-							errorMsg: error]
-			logWarn("syncPost: ${warnData}")
-		}
-	}
-	return respData
-}
-
 def distResp(resp, data) {
 	def respLog = [:]
 	if (resp.status == 200) {
@@ -895,9 +688,8 @@ def distResp(resp, data) {
 			def respData = new JsonSlurper().parseText(resp.data)
 			if (data.reason == "deviceSetup") {
 				deviceSetupParse(respData.components.main)
-			} else {
-				statusParse(respData.components.main)
 			}
+			statusParse(respData.components.main)
 		} catch (err) {
 			respLog << [status: "ERROR",
 						errorMsg: err,
@@ -913,82 +705,99 @@ def distResp(resp, data) {
 	}
 }
 
+def deviceSetupParse(mainData) {
+	def setupData = [:]
+	def supportedInputs =  mainData.mediaInputSource.supportedInputSources.value
+	sendEvent(name: "supportedInputs", value: supportedInputs)	
+	state.supportedInputs = supportedInputs
+	setupData << [supportedInputs: supportedInputs]
+	
+	def pictureModes = mainData["custom.picturemode"].supportedPictureModes.value
+	sendEvent(name: "pictureModes",value: pictureModes)
+	state.pictureModes = pictureModes
+	setupData << [pictureModes: pictureModes]
+	
+	def soundModes =  mainData["custom.soundmode"].supportedSoundModes.value
+	sendEvent(name: "soundModes",value: soundModes)
+	state.soundModes = soundModes
+	setupData << [soundModes: soundModes]
+	
+	logInfo("deviceSetupParse: ${setupData}")
+}
+
 def statusParse(mainData) {
 	def stData = [:]
-	def volume = mainData.audioVolume.volume.value.toInteger()
-	if (device.currentValue("volume").toInteger() != volume) {
-		sendEvent(name: "volume", value: volume)
-		sendEvent(name: "level", value: volume)
-		stData << [volume: volume, level: volume]
+	
+	def onOff = mainData.switch.switch.value
+	if (device.currentValue("switch") != onOff) {
+		sendEvent(name: "switch", value: onOff)
+		stData << [switch: onOff]
+		setPowerOnMode()
 	}
 	
-	def inputSource = mainData.mediaInputSource.inputSource.value
-	if (device.currentValue("inputSource") != inputSource) {
-		sendEvent(name: "inputSource", value: inputSource)		
-		stData << [inputSource: inputSource]
-	}
+	if (onOff == "on") {
+		def volume = mainData.audioVolume.volume.value.toInteger()
+		if (device.currentValue("volume").toInteger() != volume) {
+			sendEvent(name: "volume", value: volume)
+			stData << [volume: volume]
+		}
 	
-	def tvChannel = mainData.tvChannel.tvChannel.value
-	def tvChannelName = mainData.tvChannel.tvChannelName.value
-	if (tvChannel == "") { tvChannel = " " }
-	if (tvChannelName == "") { tvChannelName = " " }
-	if (device.currentValue("tvChannel") != tvChannel) {
-		sendEvent(name: "tvChannel", value: tvChannel)	
-		sendEvent(name: "tvChannelName", value: tvChannelName)			
-		stData << [tvChannel: tvChannel, tvChannelName: tvChannelName]
-		def trackDescription = "${tvChannel}: ${tvChannelName}"
-		sendEvent(name: "trackDescription", value: trackDescription)
-		stData << [trackDescription: trackDescription]
-	}
+		def mute = mainData.audioMute.mute.value
+		if (device.currentValue("mute") != mute) {
+			sendEvent(name: "mute", value: mute)
+			stData << [mute: mute]
+		}
 	
-	def pictureMode = mainData["custom.picturemode"].pictureMode.value
-	if (device.currentValue("pictureMode") != pictureMode) {
-		sendEvent(name: "pictureMode",value: pictureMode)
-		stData << [pictureMode: pictureMode]
-	}
+		def inputSource = mainData.mediaInputSource.inputSource.value
+		if (device.currentValue("inputSource") != inputSource) {
+			sendEvent(name: "inputSource", value: inputSource)		
+			stData << [inputSource: inputSource]
+		}
+		
+		def tvChannel = mainData.tvChannel.tvChannel.value
+		if (tvChannel == "") { tvChannel = " " }
+		def tvChannelName = mainData.tvChannel.tvChannelName.value
+		if (tvChannelName == "") { tvChannelName = " " }
+		if (device.currentValue("tvChannel") != tvChannel) {
+			sendEvent(name: "tvChannel", value: tvChannel)
+			sendEvent(name: "tvChannelName", value: tvChannelName)
+			stData << [tvChannel: tvChannel, tvChannelName: tvChannelName]
+		}
+		
+		def trackDesc = inputSource
+		if (tvChannelName != " ") { trackDesc = tvChannelName }
+		if (device.currentValue("trackDescription") != trackDesc) {
+			sendEvent(name: "trackDescription", value:trackDesc)
+			stData << [trackDescription: trackDesc]
+		}
 	
-	def soundMode = mainData["custom.soundmode"].soundMode.value
-	if (device.currentValue("soundMode") != soundMode) {
-		sendEvent(name: "soundMode",value: soundMode)
-		stData << [soundMode: soundMode]
-	}
+		def pictureMode = mainData["custom.picturemode"].pictureMode.value
+		if (device.currentValue("pictureMode") != pictureMode) {
+			sendEvent(name: "pictureMode",value: pictureMode)
+			stData << [pictureMode: pictureMode]
+		}
 	
-	def mute = mainData.audioMute.mute.value
-	if (device.currentValue("mute") != mute) {
-		sendEvent(name: "mute",value: mute)
-		stData << [soundMode: mute]
+		def soundMode = mainData["custom.soundmode"].soundMode.value
+		if (device.currentValue("soundMode") != soundMode) {
+			sendEvent(name: "soundMode",value: soundMode)
+			stData << [soundMode: soundMode]
+		}
+	
+		def transportStatus = mainData.mediaPlayback.playbackStatus.value
+		if (transportStatus == null || transportStatus == "") {
+			transportStatus = "stopped"
+		}
+		if (device.currentValue("transportStatus") != transportStatus) {
+			sendEvent(name: "transportStatus", value: transportStatus)
+			stData << [transportStatus: transportStatus]
+		}
 	}
 	
 	if (stData != [:]) {
 		logInfo("statusParse: ${stData}")
-	}			   
-}
-
-def setEvent(evtName, newValue) {
-	if (device.currentValue(evtName) != newValue) {
-		sendEvent(name: evtName, value: newValue)
 	}
 }
 
-//	===== Logging=====
-def logTrace(msg){
-	log.trace "${device.displayName} ${getDataValue("driverVersion")}: ${msg}"
-}
-def logInfo(msg) { 
-	if (infoLog == true) {
-		log.info "${device.displayName} ${getDataValue("driverVersion")}: ${msg}"
-	}
-}
-def debugLogOff() {
-	device.updateSetting("debugLog", [type:"bool", value: false])
-	logInfo("Debug logging is false.")
-}
-def logDebug(msg) {
-	if (debugLog == true) {
-		log.debug "${device.displayName} ${getDataValue("driverVersion")}: ${msg}"
-	}
-}
-def logWarn(msg) { log.warn "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" }
 
 //	===== Button Interface (facilitates dashboard integration) =====
 def push(pushed) {
@@ -1043,3 +852,326 @@ def push(pushed) {
 			break
 	}
 }
+
+
+
+
+
+def simulate() { return false }
+			 
+				 
+// ~~~~~ start include (1072) davegut.Logging ~~~~~
+library ( // library marker davegut.Logging, line 1
+	name: "Logging", // library marker davegut.Logging, line 2
+	namespace: "davegut", // library marker davegut.Logging, line 3
+	author: "Dave Gutheinz", // library marker davegut.Logging, line 4
+	description: "Common Logging Methods", // library marker davegut.Logging, line 5
+	category: "utilities", // library marker davegut.Logging, line 6
+	documentationLink: "" // library marker davegut.Logging, line 7
+) // library marker davegut.Logging, line 8
+
+//	Logging during development // library marker davegut.Logging, line 10
+def listAttributes(trace = false) { // library marker davegut.Logging, line 11
+	def attrs = device.getSupportedAttributes() // library marker davegut.Logging, line 12
+	def attrList = [:] // library marker davegut.Logging, line 13
+	attrs.each { // library marker davegut.Logging, line 14
+		def val = device.currentValue("${it}") // library marker davegut.Logging, line 15
+		attrList << ["${it}": val] // library marker davegut.Logging, line 16
+	} // library marker davegut.Logging, line 17
+	if (trace == true) { // library marker davegut.Logging, line 18
+		logTrace("Attributes: ${attrList}") // library marker davegut.Logging, line 19
+	} else { // library marker davegut.Logging, line 20
+		logDebug("Attributes: ${attrList}") // library marker davegut.Logging, line 21
+	} // library marker davegut.Logging, line 22
+} // library marker davegut.Logging, line 23
+
+def logTrace(msg){ // library marker davegut.Logging, line 25
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
+} // library marker davegut.Logging, line 27
+
+def logInfo(msg) {  // library marker davegut.Logging, line 29
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
+
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
+
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
+
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
+
+// ~~~~~ end include (1072) davegut.Logging ~~~~~
+
+// ~~~~~ start include (1091) davegut.ST-Communications ~~~~~
+library ( // library marker davegut.ST-Communications, line 1
+	name: "ST-Communications", // library marker davegut.ST-Communications, line 2
+	namespace: "davegut", // library marker davegut.ST-Communications, line 3
+	author: "Dave Gutheinz", // library marker davegut.ST-Communications, line 4
+	description: "ST Communications Methods", // library marker davegut.ST-Communications, line 5
+	category: "utilities", // library marker davegut.ST-Communications, line 6
+	documentationLink: "" // library marker davegut.ST-Communications, line 7
+) // library marker davegut.ST-Communications, line 8
+import groovy.json.JsonSlurper // library marker davegut.ST-Communications, line 9
+
+private asyncGet(sendData, passData = "none") { // library marker davegut.ST-Communications, line 11
+	if (!stApiKey || stApiKey.trim() == "") { // library marker davegut.ST-Communications, line 12
+		logWarn("asyncGet: [status: ERROR, errorMsg: no stApiKey]") // library marker davegut.ST-Communications, line 13
+	} else { // library marker davegut.ST-Communications, line 14
+		logDebug("asyncGet: ${sendData}, ${passData}") // library marker davegut.ST-Communications, line 15
+		def sendCmdParams = [ // library marker davegut.ST-Communications, line 16
+			uri: "https://api.smartthings.com/v1", // library marker davegut.ST-Communications, line 17
+			path: sendData.path, // library marker davegut.ST-Communications, line 18
+			headers: ['Authorization': 'Bearer ' + stApiKey.trim()]] // library marker davegut.ST-Communications, line 19
+		try { // library marker davegut.ST-Communications, line 20
+			asynchttpGet(sendData.parse, sendCmdParams, [reason: passData]) // library marker davegut.ST-Communications, line 21
+		} catch (error) { // library marker davegut.ST-Communications, line 22
+			logWarn("asyncGet: [status: FAILED, errorMsg: ${error}]") // library marker davegut.ST-Communications, line 23
+		} // library marker davegut.ST-Communications, line 24
+	} // library marker davegut.ST-Communications, line 25
+} // library marker davegut.ST-Communications, line 26
+
+private syncGet(path){ // library marker davegut.ST-Communications, line 28
+	def respData = [:] // library marker davegut.ST-Communications, line 29
+	if (!stApiKey || stApiKey.trim() == "") { // library marker davegut.ST-Communications, line 30
+		respData << [status: "FAILED", // library marker davegut.ST-Communications, line 31
+					 errorMsg: "No stApiKey"] // library marker davegut.ST-Communications, line 32
+	} else { // library marker davegut.ST-Communications, line 33
+		logDebug("syncGet: ${sendData}") // library marker davegut.ST-Communications, line 34
+		def sendCmdParams = [ // library marker davegut.ST-Communications, line 35
+			uri: "https://api.smartthings.com/v1", // library marker davegut.ST-Communications, line 36
+			path: path, // library marker davegut.ST-Communications, line 37
+			headers: ['Authorization': 'Bearer ' + stApiKey.trim()] // library marker davegut.ST-Communications, line 38
+		] // library marker davegut.ST-Communications, line 39
+		try { // library marker davegut.ST-Communications, line 40
+			httpGet(sendCmdParams) {resp -> // library marker davegut.ST-Communications, line 41
+				if (resp.status == 200 && resp.data != null) { // library marker davegut.ST-Communications, line 42
+					respData << [status: "OK", results: resp.data] // library marker davegut.ST-Communications, line 43
+				} else { // library marker davegut.ST-Communications, line 44
+					respData << [status: "FAILED", // library marker davegut.ST-Communications, line 45
+								 httpCode: resp.status, // library marker davegut.ST-Communications, line 46
+								 errorMsg: resp.errorMessage] // library marker davegut.ST-Communications, line 47
+				} // library marker davegut.ST-Communications, line 48
+			} // library marker davegut.ST-Communications, line 49
+		} catch (error) { // library marker davegut.ST-Communications, line 50
+			respData << [status: "FAILED", // library marker davegut.ST-Communications, line 51
+						 httpCode: "Timeout", // library marker davegut.ST-Communications, line 52
+						 errorMsg: error] // library marker davegut.ST-Communications, line 53
+		} // library marker davegut.ST-Communications, line 54
+	} // library marker davegut.ST-Communications, line 55
+	return respData // library marker davegut.ST-Communications, line 56
+} // library marker davegut.ST-Communications, line 57
+
+private syncPost(sendData){ // library marker davegut.ST-Communications, line 59
+	def respData = [:] // library marker davegut.ST-Communications, line 60
+	if (!stApiKey || stApiKey.trim() == "") { // library marker davegut.ST-Communications, line 61
+		respData << [status: "FAILED", // library marker davegut.ST-Communications, line 62
+					 errorMsg: "No stApiKey"] // library marker davegut.ST-Communications, line 63
+	} else { // library marker davegut.ST-Communications, line 64
+		logDebug("syncPost: ${sendData}") // library marker davegut.ST-Communications, line 65
+
+		def cmdBody = [commands: [sendData.cmdData]] // library marker davegut.ST-Communications, line 67
+		def sendCmdParams = [ // library marker davegut.ST-Communications, line 68
+			uri: "https://api.smartthings.com/v1", // library marker davegut.ST-Communications, line 69
+			path: sendData.path, // library marker davegut.ST-Communications, line 70
+			headers: ['Authorization': 'Bearer ' + stApiKey.trim()], // library marker davegut.ST-Communications, line 71
+			body : new groovy.json.JsonBuilder(cmdBody).toString() // library marker davegut.ST-Communications, line 72
+		] // library marker davegut.ST-Communications, line 73
+		try { // library marker davegut.ST-Communications, line 74
+			httpPost(sendCmdParams) {resp -> // library marker davegut.ST-Communications, line 75
+				if (resp.status == 200 && resp.data != null) { // library marker davegut.ST-Communications, line 76
+					respData << [status: "OK", results: resp.data.results] // library marker davegut.ST-Communications, line 77
+				} else { // library marker davegut.ST-Communications, line 78
+					respData << [status: "FAILED", // library marker davegut.ST-Communications, line 79
+								 httpCode: resp.status, // library marker davegut.ST-Communications, line 80
+								 errorMsg: resp.errorMessage] // library marker davegut.ST-Communications, line 81
+				} // library marker davegut.ST-Communications, line 82
+			} // library marker davegut.ST-Communications, line 83
+		} catch (error) { // library marker davegut.ST-Communications, line 84
+			respData << [status: "FAILED", // library marker davegut.ST-Communications, line 85
+						 httpCode: "Timeout", // library marker davegut.ST-Communications, line 86
+						 errorMsg: error] // library marker davegut.ST-Communications, line 87
+		} // library marker davegut.ST-Communications, line 88
+	} // library marker davegut.ST-Communications, line 89
+	return respData // library marker davegut.ST-Communications, line 90
+} // library marker davegut.ST-Communications, line 91
+
+// ~~~~~ end include (1091) davegut.ST-Communications ~~~~~
+
+// ~~~~~ start include (1090) davegut.ST-Common ~~~~~
+library ( // library marker davegut.ST-Common, line 1
+	name: "ST-Common", // library marker davegut.ST-Common, line 2
+	namespace: "davegut", // library marker davegut.ST-Common, line 3
+	author: "Dave Gutheinz", // library marker davegut.ST-Common, line 4
+	description: "ST Wash/Dryer Common Methods", // library marker davegut.ST-Common, line 5
+	category: "utilities", // library marker davegut.ST-Common, line 6
+	documentationLink: "" // library marker davegut.ST-Common, line 7
+) // library marker davegut.ST-Common, line 8
+
+def commonUpdate() { // library marker davegut.ST-Common, line 10
+	if (!stApiKey || stApiKey == "") { // library marker davegut.ST-Common, line 11
+		return [status: "FAILED", reason: "No stApiKey"] // library marker davegut.ST-Common, line 12
+	} // library marker davegut.ST-Common, line 13
+	if (!stDeviceId || stDeviceId == "") { // library marker davegut.ST-Common, line 14
+		getDeviceList() // library marker davegut.ST-Common, line 15
+		return [status: "FAILED", reason: "No stDeviceId"] // library marker davegut.ST-Common, line 16
+	} // library marker davegut.ST-Common, line 17
+
+	unschedule() // library marker davegut.ST-Common, line 19
+	def updateData = [:] // library marker davegut.ST-Common, line 20
+	updateData << [status: "OK"] // library marker davegut.ST-Common, line 21
+	if (debugLog) { runIn(1800, debugLogOff) } // library marker davegut.ST-Common, line 22
+	updateData << [stDeviceId: stDeviceId] // library marker davegut.ST-Common, line 23
+	updateData << [debugLog: debugLog, infoLog: infoLog] // library marker davegut.ST-Common, line 24
+	if (!getDataValue("driverVersion") ||  // library marker davegut.ST-Common, line 25
+		getDataValue("driverVersion") != driverVer()) { // library marker davegut.ST-Common, line 26
+		updateDataValue("driverVersion", driverVer()) // library marker davegut.ST-Common, line 27
+		updateData << [driverVer: driverVer()] // library marker davegut.ST-Common, line 28
+	} // library marker davegut.ST-Common, line 29
+	setPollInterval(pollInterval) // library marker davegut.ST-Common, line 30
+	updateData << [pollInterval: pollInterval] // library marker davegut.ST-Common, line 31
+
+	runIn(5, refresh) // library marker davegut.ST-Common, line 33
+	return updateData // library marker davegut.ST-Common, line 34
+} // library marker davegut.ST-Common, line 35
+
+def setPollInterval(pollInterval) { // library marker davegut.ST-Common, line 37
+	logDebug("setPollInterval: ${pollInterval}") // library marker davegut.ST-Common, line 38
+	state.pollInterval = pollInterval // library marker davegut.ST-Common, line 39
+	switch(pollInterval) { // library marker davegut.ST-Common, line 40
+		case "1" : runEvery1Minute(poll); break // library marker davegut.ST-Common, line 41
+		case "5" : runEvery5Minutes(poll); break // library marker davegut.ST-Common, line 42
+		case "10" : runEvery10Minutes(poll); break // library marker davegut.ST-Common, line 43
+		case "30" : runEvery30Minutes(poll); break // library marker davegut.ST-Common, line 44
+		default: runEvery10Minutes(poll) // library marker davegut.ST-Common, line 45
+	} // library marker davegut.ST-Common, line 46
+} // library marker davegut.ST-Common, line 47
+
+def deviceCommand(cmdData) { // library marker davegut.ST-Common, line 49
+	def respData = [:] // library marker davegut.ST-Common, line 50
+	if (simulate() == true) { // library marker davegut.ST-Common, line 51
+		respData = testResp(cmdData) // library marker davegut.ST-Common, line 52
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 53
+		respData << [status: "FAILED", data: "no stDeviceId"] // library marker davegut.ST-Common, line 54
+	} else { // library marker davegut.ST-Common, line 55
+		def sendData = [ // library marker davegut.ST-Common, line 56
+			path: "/devices/${stDeviceId.trim()}/commands", // library marker davegut.ST-Common, line 57
+			cmdData: cmdData // library marker davegut.ST-Common, line 58
+		] // library marker davegut.ST-Common, line 59
+		respData = syncPost(sendData) // library marker davegut.ST-Common, line 60
+	} // library marker davegut.ST-Common, line 61
+	if (cmdData.capability && cmdData.capability != "refresh") { // library marker davegut.ST-Common, line 62
+		refresh() // library marker davegut.ST-Common, line 63
+	} else { // library marker davegut.ST-Common, line 64
+		poll() // library marker davegut.ST-Common, line 65
+	} // library marker davegut.ST-Common, line 66
+	return respData // library marker davegut.ST-Common, line 67
+} // library marker davegut.ST-Common, line 68
+
+def refresh() { // library marker davegut.ST-Common, line 70
+	if (stApiKey!= null) { // library marker davegut.ST-Common, line 71
+		def cmdData = [ // library marker davegut.ST-Common, line 72
+			component: "main", // library marker davegut.ST-Common, line 73
+			capability: "refresh", // library marker davegut.ST-Common, line 74
+			command: "refresh", // library marker davegut.ST-Common, line 75
+			arguments: []] // library marker davegut.ST-Common, line 76
+		deviceCommand(cmdData) // library marker davegut.ST-Common, line 77
+	} // library marker davegut.ST-Common, line 78
+} // library marker davegut.ST-Common, line 79
+
+def poll() { // library marker davegut.ST-Common, line 81
+	if (simulate() == true) { // library marker davegut.ST-Common, line 82
+		def children = getChildDevices() // library marker davegut.ST-Common, line 83
+		if (children) { // library marker davegut.ST-Common, line 84
+			children.each { // library marker davegut.ST-Common, line 85
+				it.statusParse(testData()) // library marker davegut.ST-Common, line 86
+			} // library marker davegut.ST-Common, line 87
+		} // library marker davegut.ST-Common, line 88
+		statusParse(testData()) // library marker davegut.ST-Common, line 89
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 90
+		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 91
+		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 92
+	} else { // library marker davegut.ST-Common, line 93
+		def sendData = [ // library marker davegut.ST-Common, line 94
+			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 95
+			parse: "distResp" // library marker davegut.ST-Common, line 96
+			] // library marker davegut.ST-Common, line 97
+		asyncGet(sendData, "statusParse") // library marker davegut.ST-Common, line 98
+	} // library marker davegut.ST-Common, line 99
+} // library marker davegut.ST-Common, line 100
+
+def deviceSetup() { // library marker davegut.ST-Common, line 102
+	if (simulate() == true) { // library marker davegut.ST-Common, line 103
+		def children = getChildDevices() // library marker davegut.ST-Common, line 104
+		deviceSetupParse(testData()) // library marker davegut.ST-Common, line 105
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 106
+		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 107
+		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 108
+	} else { // library marker davegut.ST-Common, line 109
+		def sendData = [ // library marker davegut.ST-Common, line 110
+			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 111
+			parse: "distResp" // library marker davegut.ST-Common, line 112
+			] // library marker davegut.ST-Common, line 113
+		asyncGet(sendData, "deviceSetup") // library marker davegut.ST-Common, line 114
+	} // library marker davegut.ST-Common, line 115
+} // library marker davegut.ST-Common, line 116
+
+def getDeviceList() { // library marker davegut.ST-Common, line 118
+	def sendData = [ // library marker davegut.ST-Common, line 119
+		path: "/devices", // library marker davegut.ST-Common, line 120
+		parse: "getDeviceListParse" // library marker davegut.ST-Common, line 121
+		] // library marker davegut.ST-Common, line 122
+	asyncGet(sendData) // library marker davegut.ST-Common, line 123
+} // library marker davegut.ST-Common, line 124
+
+def getDeviceListParse(resp, data) { // library marker davegut.ST-Common, line 126
+	def respData // library marker davegut.ST-Common, line 127
+	if (resp.status != 200) { // library marker davegut.ST-Common, line 128
+		respData = [status: "ERROR", // library marker davegut.ST-Common, line 129
+					httpCode: resp.status, // library marker davegut.ST-Common, line 130
+					errorMsg: resp.errorMessage] // library marker davegut.ST-Common, line 131
+	} else { // library marker davegut.ST-Common, line 132
+		try { // library marker davegut.ST-Common, line 133
+			respData = new JsonSlurper().parseText(resp.data) // library marker davegut.ST-Common, line 134
+		} catch (err) { // library marker davegut.ST-Common, line 135
+			respData = [status: "ERROR", // library marker davegut.ST-Common, line 136
+						errorMsg: err, // library marker davegut.ST-Common, line 137
+						respData: resp.data] // library marker davegut.ST-Common, line 138
+		} // library marker davegut.ST-Common, line 139
+	} // library marker davegut.ST-Common, line 140
+	if (respData.status == "ERROR") { // library marker davegut.ST-Common, line 141
+		logWarn("getDeviceListParse: ${respData}") // library marker davegut.ST-Common, line 142
+	} else { // library marker davegut.ST-Common, line 143
+		log.info "" // library marker davegut.ST-Common, line 144
+		respData.items.each { // library marker davegut.ST-Common, line 145
+			log.trace "${it.label}:   ${it.deviceId}" // library marker davegut.ST-Common, line 146
+		} // library marker davegut.ST-Common, line 147
+		log.trace "<b>Copy your device's deviceId value and enter into the device Preferences.</b>" // library marker davegut.ST-Common, line 148
+	} // library marker davegut.ST-Common, line 149
+} // library marker davegut.ST-Common, line 150
+
+def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, line 152
+	Integer currTime = now() // library marker davegut.ST-Common, line 153
+	Integer compTime // library marker davegut.ST-Common, line 154
+	try { // library marker davegut.ST-Common, line 155
+		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 156
+	} catch (e) { // library marker davegut.ST-Common, line 157
+		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 158
+	} // library marker davegut.ST-Common, line 159
+	Integer timeRemaining = ((compTime-currTime) /1000).toInteger() // library marker davegut.ST-Common, line 160
+	if (timeRemaining < 0) { timeRemaining = 0 } // library marker davegut.ST-Common, line 161
+	return timeRemaining // library marker davegut.ST-Common, line 162
+} // library marker davegut.ST-Common, line 163
+
+// ~~~~~ end include (1090) davegut.ST-Common ~~~~~
