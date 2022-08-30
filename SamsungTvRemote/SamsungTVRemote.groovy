@@ -267,7 +267,7 @@ def onPoll() {
 }
 
 def onParse(resp, data) {
-	if (resp.status != 408) {
+	if (resp.status == 200) {
 		state.offCount = 0
 		if (device.currentValue("switch") != "on") {
 			sendEvent(name: "switch", value: "on")
