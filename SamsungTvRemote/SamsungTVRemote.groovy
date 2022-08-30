@@ -271,7 +271,7 @@ def onParse(resp, data) {
 		state.offCount = 0
 		if (device.currentValue("switch") != "on") {
 			sendEvent(name: "switch", value: "on")
-			logInfo("onParse: [switch: on]")S
+			logInfo("onParse: [switch: on]")
 			setPowerOnMode()
 		}
 	} else {
