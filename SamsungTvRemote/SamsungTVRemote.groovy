@@ -28,7 +28,7 @@ a.	onPoll: Modified as follows:
 Known Issue:	for newer TV's, Samsung has removed the remote Key to control artMode.
 				Expect art mode functions to be intermittent until I find a true fix.
 ===========================================================================================*/
-def driverVer() { return "3.1" }
+def driverVer() { return "3.1.1" }
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
@@ -260,14 +260,10 @@ def stRefresh() {
 
 //	===== Polling/Refresh Capability =====
 def onPoll() {
-	if (connectST) {
-		poll()
-	} else {
 		def sendCmdParams = [
 			uri: "http://${deviceIp}:8001/api/v2/",
 			timeout: 5]
 		asynchttpGet("onParse", sendCmdParams, [reason: "none"])
-	}
 }
 
 def onParse(resp, data) {
