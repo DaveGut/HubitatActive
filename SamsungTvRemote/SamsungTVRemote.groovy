@@ -173,8 +173,8 @@ def updated() {
 		state.offCount = 0
 		if (debugLog) { runIn(1800, debugLogOff) }
 		updStatus << [debugLog: debugLog, infoLog: infoLog]
-		def interval = pollInterval
-		if (interval == "60" || interval == "off" || interval == null) {
+		def interval = setPollInterval()
+/*		if (interval == "60" || interval == "off" || interval == null) {
 			runEvery1Minute(onPoll)
 		} else {
 			if (connectST && stPowerPoll && interval == "5") {
@@ -182,7 +182,8 @@ def updated() {
 				device.updateSetting("pollInterval", [type:"enum", value: "10"])
 			}		
 			schedule("0/${interval} * * * * ?",  onPoll)
-		}
+		}*/
+		
 		updStatus << [pollInterval: interval]
 		if (getDataValue("frameTv") == "true" && getDataValue("modelYear").toInteger() >= 2022) {
 			state.___2022_Model_Note___ = "artMode keys and functions may not work on this device. Changes in Tizen OS."
@@ -198,6 +199,20 @@ def updated() {
 	} else {
 		logInfo("updated: ${updStatus}")
 	}
+}
+
+def setPollInterval() {
+	def interval = pollInterval
+	if (interval == "60" || interval == "off" || interval == null) {
+		runEvery1Minute(onPoll)
+	} else {
+		if (connectST && stPowerPoll && interval == "5") {
+			interval = "10"
+			device.updateSetting("pollInterval", [type:"enum", value: "10"])
+		}		
+		schedule("0/${interval} * * * * ?",  onPoll)
+	}
+	return interval
 }
 
 def getDeviceData() {
@@ -356,9 +371,10 @@ def on() {
 											   null)
 		sendHubCommand(wol)
 	}
-	if (pollInterval.toInteger() > 10) {
-		runIn(5, onPoll)
-	}
+	unschedule(onPoll)
+	runIn(15, setPollInterval)
+	sendEvent(name: "switch", value: "on")
+	logInfo("on: [switch: on]")
 }
 
 def off() {
@@ -369,7 +385,10 @@ def off() {
 		pauseExecution(3000)
 		sendKey("POWER", "Release")
 	}
+	unschedule(onPoll)
+	runIn(60, setPollInterval)
 	sendEvent(name: "switch", value: "off")
+	logInfo("off: [switch: on]")
 }
 
 
