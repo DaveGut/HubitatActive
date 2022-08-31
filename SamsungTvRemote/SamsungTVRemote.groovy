@@ -388,7 +388,7 @@ def off() {
 	unschedule(onPoll)
 	runIn(60, setPollInterval)
 	sendEvent(name: "switch", value: "off")
-	logInfo("off: [switch: on]")
+	logInfo("off: [switch: off]")
 }
 
 
