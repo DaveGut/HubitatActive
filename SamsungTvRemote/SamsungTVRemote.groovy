@@ -114,8 +114,6 @@ metadata {
 	preferences {
 		input ("deviceIp", "text", title: "Samsung TV Ip", defaultValue: "")
 		if (deviceIp) {
-			input ("pollInterval","enum", title: "Power Polling Interval (seconds)",
-				   options: ["5", "10", "15", "20", "30", "60"], defaultValue: "60")
 			input ("tvPwrOnMode", "enum", title: "TV Startup Display", 
 				   options: ["ART_MODE", "Ambient", "none"], defaultValue: "none")
 			input ("debugLog", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
@@ -132,10 +130,18 @@ metadata {
 			input ("wolMethod", "enum", title: "Wol (ON) Method", 
 				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
 							 "3": "Use Alternate Wol MAC", "4": "Use Smart Things"], defaultValue: "2")
+			input ("stPowerPoll", "bool", title: "Use SmartThings for Power Polling", defaultValue: false)
 		} else {
 			input ("wolMethod", "enum", title: "Wol (ON) Method", 
 				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
 							 "3": "Use Alternate Wol MAC"], defaultValue: "2")
+		}
+		if (connectST && stPowerPoll) {
+			input ("pollInterval","enum", title: "Power Polling Interval (seconds)",
+				   options: ["10", "15", "20", "30", "60"], defaultValue: "60")
+		} else {
+			input ("pollInterval","enum", title: "Power Polling Interval (seconds)",
+				   options: ["5", "10", "15", "20", "30", "60"], defaultValue: "60")
 		}
 	}
 }
@@ -164,16 +170,20 @@ def updated() {
 			updateDataValue("driverVersion", driverVer())
 			updStatus << [driverVer: driverVer()]
 		}
-
+		state.offCount = 0
 		if (debugLog) { runIn(1800, debugLogOff) }
 		updStatus << [debugLog: debugLog, infoLog: infoLog]
-		if (pollInterval == "60" || pollInterval == "off" || pollInterval == null) {
+		def interval = pollInterval
+		if (interval == "60" || interval == "off" || interval == null) {
 			runEvery1Minute(onPoll)
 		} else {
-			schedule("0/${pollInterval} * * * * ?",  onPoll)
+			if (connectST && stPowerPoll && interval == "5") {
+				interval = "10"
+				device.updateSetting("pollInterval", [type:"enum", value: "10"])
+			}		
+			schedule("0/${interval} * * * * ?",  onPoll)
 		}
-		updStatus << [pollInterval: pollInterval]
-
+		updStatus << [pollInterval: interval]
 		if (getDataValue("frameTv") == "true" && getDataValue("modelYear").toInteger() >= 2022) {
 			state.___2022_Model_Note___ = "artMode keys and functions may not work on this device. Changes in Tizen OS."
 			updStatus << [artMode: "May not work"]
@@ -183,7 +193,6 @@ def updated() {
 		updStatus << [stUpdate: stUpdate()]
 	}
 
-	//	if (updStatus.status == "ERROR") {
 	if (updStatus.toString().contains("ERROR")) {
 		logWarn("updated: ${updStatus}")
 	} else {
@@ -241,7 +250,9 @@ def stUpdate() {
 		logWarn("\n\n\t\t<b>Enter the deviceId from the Log List and Save Preferences</b>\n\n")
 		stData << [status: "ERROR", date: "no stDeviceId"]
 	} else {
-		runEvery1Minute(stRefresh)
+		if (!stPowerPoll) {
+			runEvery1Minute(stRefresh)
+		}
 		if (device.currentValue("volume") == null) {
 			sendEvent(name: "volume", value: 0)
 		}
@@ -259,11 +270,32 @@ def stRefresh() {
 
 
 //	===== Polling/Refresh Capability =====
-def onPoll() {
+def onPoll(forceLocal = false) {
+	if (!forceLocal && connectST && stPowerPoll) {
+		def sendData = [
+			path: "/devices/${stDeviceId.trim()}/status",
+			parse: "stOnParse"
+		]
+		asyncGet(sendData, "onOffPoll")
+	} else {
 		def sendCmdParams = [
 			uri: "http://${deviceIp}:8001/api/v2/",
-			timeout: 5]
+			timeout: 10]
 		asynchttpGet("onParse", sendCmdParams, [reason: "none"])
+	}
+}
+
+def stOnParse(resp, data) {
+	if (resp.status == 200) {
+		def respData = new JsonSlurper().parseText(resp.data)
+		statusParse(respData.components.main)
+	} else {
+		def respError = [status: "ERROR",
+						 httpCode: resp.status,
+						 errorMsg: resp.errorMessage]
+		logWarn("stOnParse: ${respError}. Running onPoll with forceLocal = true.")
+		onPoll(true)
+	}
 }
 
 def onParse(resp, data) {
@@ -274,15 +306,18 @@ def onParse(resp, data) {
 			logInfo("onParse: [switch: on]")
 			setPowerOnMode()
 		}
+		if (data == "onOffPoll") {
+			distResp(resp, data)
+		}
 	} else {
 		if (state.offCount > 2) {
 			if (device.currentValue("switch") != "off") {
 				sendEvent(name: "switch", value: "off")
-				logInfo("onPoll: [switch: off]")
+				logInfo("onParse: [switch: off]")
 			}
 		} else {
 			state.offCount += 1
-			runIn(1, onPoll)
+			runIn(1, onPoll, [data: true])
 		}
 	}
 }
@@ -339,10 +374,7 @@ def off() {
 
 
 
-//	===== Unimplemented Commands from Capabilities =====
 def showMessage() { logWarn("showMessage: not implemented") }
-
-
 
 //	===== LAN Websocket Interface =====
 def mute() {
@@ -728,7 +760,9 @@ def statusParse(mainData) {
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff)
 		stData << [switch: onOff]
-		setPowerOnMode()
+		if (onOff == "on") {
+			setPowerOnMode()
+		}
 	}
 	
 	if (onOff == "on") {
@@ -792,6 +826,7 @@ def statusParse(mainData) {
 	if (stData != [:]) {
 		logInfo("statusParse: ${stData}")
 	}
+//	listAttributes()
 }
 
 
@@ -827,11 +862,6 @@ def push(pushed) {
 		case 24: source(); break		//	Pops up home with cursor at source.  Use left/right/enter to select.
 		case 25: info(); break			//	Pops up upper display of currently playing channel
 		case 26: channelList(); break	//	Pops up short channel-list.
-		case 27: source0(); break		//	Direct to source TV
-		case 28: source1(); break		//	Direct to source 1 (one right of TV on menu)
-		case 29: source2(); break		//	Direct to source 1 (two right of TV on menu)
-		case 30: source3(); break		//	Direct to source 1 (three right of TV on menu)
-		case 31: source4(); break		//	Direct to source 1 (ofour right of TV on menu)
 		//	===== Other Commands =====
 		case 34: previousChannel(); break
 		case 35: hdmi(); break			//	Brings up next available source
@@ -849,13 +879,13 @@ def push(pushed) {
 	}
 }
 
-
-
-
-
 def simulate() { return false }
-			 
-				 
+
+
+
+
+
+
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
 	name: "Logging", // library marker davegut.Logging, line 2
@@ -886,27 +916,25 @@ def logTrace(msg){ // library marker davegut.Logging, line 25
 } // library marker davegut.Logging, line 27
 
 def logInfo(msg) {  // library marker davegut.Logging, line 29
-	if (infoLog == true) { // library marker davegut.Logging, line 30
-		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
-	} // library marker davegut.Logging, line 32
-} // library marker davegut.Logging, line 33
+	log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 30
+} // library marker davegut.Logging, line 31
 
-def debugLogOff() { // library marker davegut.Logging, line 35
-	if (debug == true) { // library marker davegut.Logging, line 36
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
-	} else if (debugLog == true) { // library marker davegut.Logging, line 38
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
-	} // library marker davegut.Logging, line 40
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
-} // library marker davegut.Logging, line 42
+def debugLogOff() { // library marker davegut.Logging, line 33
+	if (debug == true) { // library marker davegut.Logging, line 34
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 35
+	} else if (debugLog == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} // library marker davegut.Logging, line 38
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 39
+} // library marker davegut.Logging, line 40
 
-def logDebug(msg) { // library marker davegut.Logging, line 44
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
-		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
-	} // library marker davegut.Logging, line 47
-} // library marker davegut.Logging, line 48
+def logDebug(msg) { // library marker davegut.Logging, line 42
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 43
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 44
+	} // library marker davegut.Logging, line 45
+} // library marker davegut.Logging, line 46
 
-def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 48
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 
