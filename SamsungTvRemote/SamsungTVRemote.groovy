@@ -1,20 +1,7 @@
 /*	===== HUBITAT INTEGRATION VERSION =====================================================
 Hubitat - Samsung TV Remote Driver
 		Copyright 2022 Dave Gutheinz
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file
-except in compliance with the License. You may obtain a copy of the License at:
-		http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software distributed under the
-License is distributed on an  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-either express or implied. See the License for the specific language governing permissions
-and limitations under the  License.
-===== DISCLAIMERS =========================================================================
-	THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
-	TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
-===== APPRECIATION ========================================================================
-	Hubitat user Cal for technical, test, and emotional support.
-	GitHub user Toxblh for exlempary code for numerous commands
-	Hubitat users who supported validation of 2016 - 2020 models.
+License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== 2022 Version 3.1 ====================================================================
 Preferences
 a.	Added preference wolMethod to allow user to select on method between three WOL formats
@@ -28,9 +15,8 @@ a.	onPoll: Modified as follows:
 Known Issue:	for newer TV's, Samsung has removed the remote Key to control artMode.
 				Expect art mode functions to be intermittent until I find a true fix.
 ===========================================================================================*/
-def driverVer() { return "3.1.1" }
+def driverVer() { return "3.1.2" }
 import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
 
 metadata {
 	definition (name: "Samsung TV Remote",
@@ -120,6 +106,9 @@ metadata {
 			input ("infoLog", "bool", 
 				   title: "Enable information logging " + helpLogo(),
 				   defaultValue: true)
+			input ("wolMethod", "enum", title: "Wol (ON) Method", 
+				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
+							 "3": "Use Alternate Wol MAC"], defaultValue: "2")
 			input ("connectST", "bool", title: "Connect to SmartThings for added functions", defaultValue: false)
 		}
 		if (connectST) {
@@ -127,14 +116,7 @@ metadata {
 			if (stApiKey) {
 				input ("stDeviceId", "string", title: "SmartThings Device ID", defaultValue: "")
 			}
-			input ("wolMethod", "enum", title: "Wol (ON) Method", 
-				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
-							 "3": "Use Alternate Wol MAC", "4": "Use Smart Things"], defaultValue: "2")
 			input ("stPowerPoll", "bool", title: "Use SmartThings for Power Polling", defaultValue: false)
-		} else {
-			input ("wolMethod", "enum", title: "Wol (ON) Method", 
-				   options: ["1": "Hubitat Magic Packet", "2": "UDP Message", 
-							 "3": "Use Alternate Wol MAC"], defaultValue: "2")
 		}
 		if (connectST && stPowerPoll) {
 			input ("pollInterval","enum", title: "Power Polling Interval (seconds)",
@@ -170,27 +152,19 @@ def updated() {
 			updateDataValue("driverVersion", driverVer())
 			updStatus << [driverVer: driverVer()]
 		}
-		state.offCount = 0
 		if (debugLog) { runIn(1800, debugLogOff) }
 		updStatus << [debugLog: debugLog, infoLog: infoLog]
-		def interval = setPollInterval()
-/*		if (interval == "60" || interval == "off" || interval == null) {
-			runEvery1Minute(onPoll)
-		} else {
-			if (connectST && stPowerPoll && interval == "5") {
-				interval = "10"
-				device.updateSetting("pollInterval", [type:"enum", value: "10"])
-			}		
-			schedule("0/${interval} * * * * ?",  onPoll)
-		}*/
 		
-		updStatus << [pollInterval: interval]
 		if (getDataValue("frameTv") == "true" && getDataValue("modelYear").toInteger() >= 2022) {
 			state.___2022_Model_Note___ = "artMode keys and functions may not work on this device. Changes in Tizen OS."
 			updStatus << [artMode: "May not work"]
 		} else {
 			state.remove("___2022_Model_Note___")
 		}
+
+		state.offCount = 0
+		updStatus << [wolMethod: wolMethod]
+		updStatus << [pollInterval: setPollInterval()]
 		updStatus << [stUpdate: stUpdate()]
 	}
 
@@ -200,7 +174,6 @@ def updated() {
 		logInfo("updated: ${updStatus}")
 	}
 }
-
 def setPollInterval() {
 	def interval = pollInterval
 	if (interval == "60" || interval == "off" || interval == null) {
@@ -214,7 +187,6 @@ def setPollInterval() {
 	}
 	return interval
 }
-
 def getDeviceData() {
 	def respData = [:]
 	if (getDataValue("uuid")) {
@@ -227,7 +199,6 @@ def getDeviceData() {
 				def alternateWolMac = wifiMac.replaceAll(":", "").toUpperCase()
 				updateDataValue("alternateWolMac", alternateWolMac)
 				device.setDeviceNetworkId(alternateWolMac)
-				
 				def modelYear = "20" + resp.data.device.model[0..1]
 				updateDataValue("modelYear", modelYear)
 				def frameTv = "false"
@@ -252,11 +223,16 @@ def getDeviceData() {
 	}
 	return respData
 }
-
 def stUpdate() {
 	def stData = [:]
+	stData << [connectST: connectST]
 	if (!connectST) {
-		stData << [status: "Preference connectST not true"]
+		def stPoll = stPowerPoll
+		if (stPowerPoll) {
+			device.updateSetting("stPowerPoll", [type:"bool", value: false])
+			stPoll = false
+		}
+		stData << [stPowerPoll: stPoll]
 	} else if (!stApiKey || stApiKey == "") {
 		logWarn("\n\n\t\t<b>Enter the ST API Key and Save Preferences</b>\n\n")
 		stData << [status: "ERROR", date: "no stApiKey"]
@@ -265,18 +241,19 @@ def stUpdate() {
 		logWarn("\n\n\t\t<b>Enter the deviceId from the Log List and Save Preferences</b>\n\n")
 		stData << [status: "ERROR", date: "no stDeviceId"]
 	} else {
+		def stRefrInt = "use onPoll"
 		if (!stPowerPoll) {
+			stRefrInt = "1 minute"
 			runEvery1Minute(stRefresh)
 		}
 		if (device.currentValue("volume") == null) {
 			sendEvent(name: "volume", value: 0)
 		}
-		runIn(5, stRefresh)
-		stData << [stRefreshInterval: "1 minute"]
+		runIn(1, deviceSetup)
+		stData << [stPowerPoll: stPowerPoll, stRefreshInterval: stRefrInt]
 	}
 	return stData
 }
-
 def stRefresh() {
 	if (connectST && device.currentValue("switch") == "on") {
 		refresh()
@@ -299,7 +276,6 @@ def onPoll(forceLocal = false) {
 		asynchttpGet("onParse", sendCmdParams, [reason: "none"])
 	}
 }
-
 def stOnParse(resp, data) {
 	if (resp.status == 200) {
 		def respData = new JsonSlurper().parseText(resp.data)
@@ -312,7 +288,6 @@ def stOnParse(resp, data) {
 		onPoll(true)
 	}
 }
-
 def onParse(resp, data) {
 	if (resp.status == 200) {
 		state.offCount = 0
@@ -336,7 +311,6 @@ def onParse(resp, data) {
 		}
 	}
 }
-
 def setPowerOnMode() {
 	if(tvPwrOnMode == "ART_MODE" && getDataValue("frameTv") == "true") {
 		artMode("on")
@@ -345,6 +319,7 @@ def setPowerOnMode() {
 	}
 	connect("remote")
 }		
+
 
 def on() {
 	logDebug("on: [dni: ${device.deviceNetworkId}, wolMethod: ${wolMethod}]")
@@ -363,20 +338,15 @@ def on() {
 											   hubitat.device.Protocol.LAN,
 											   null)
 		sendHubCommand(wol)
-	} else if (wolMethod == "4") {
-		setSwitch("on")
 	} else {
 		wol = new hubitat.device.HubAction("wake on lan ${device.deviceNetworkId}",
 											   hubitat.device.Protocol.LAN,
 											   null)
 		sendHubCommand(wol)
 	}
-	unschedule(onPoll)
-	runIn(15, setPollInterval)
-	sendEvent(name: "switch", value: "on")
-	logInfo("on: [switch: on]")
+	runIn(5, setPowerOnMode)
+	if (stPowerPoll) { runIn(2, onPoll) }
 }
-
 def off() {
 	logDebug("off: frameTv = ${getDataValue("frameTV")}")
 	if (getDataValue("frameTv") == "false") { sendKey("POWER") }
@@ -385,12 +355,11 @@ def off() {
 		pauseExecution(3000)
 		sendKey("POWER", "Release")
 	}
-	unschedule(onPoll)
-	runIn(60, setPollInterval)
-	sendEvent(name: "switch", value: "off")
-	logInfo("off: [switch: off]")
+	if (stPowerPoll) { runIn(2, onPoll) }
 }
-
+def stRefreshSched() {
+	runEvery1Minute(stRefresh)
+}
 
 
 def showMessage() { logWarn("showMessage: not implemented") }
@@ -904,7 +873,6 @@ def simulate() { return false }
 
 
 
-
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
 	name: "Logging", // library marker davegut.Logging, line 2
@@ -935,25 +903,27 @@ def logTrace(msg){ // library marker davegut.Logging, line 25
 } // library marker davegut.Logging, line 27
 
 def logInfo(msg) {  // library marker davegut.Logging, line 29
-	log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 30
-} // library marker davegut.Logging, line 31
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
 
-def debugLogOff() { // library marker davegut.Logging, line 33
-	if (debug == true) { // library marker davegut.Logging, line 34
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 35
-	} else if (debugLog == true) { // library marker davegut.Logging, line 36
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 37
-	} // library marker davegut.Logging, line 38
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 39
-} // library marker davegut.Logging, line 40
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
 
-def logDebug(msg) { // library marker davegut.Logging, line 42
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 43
-		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 44
-	} // library marker davegut.Logging, line 45
-} // library marker davegut.Logging, line 46
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 48
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 
@@ -1115,7 +1085,7 @@ def deviceCommand(cmdData) { // library marker davegut.ST-Common, line 49
 		respData = syncPost(sendData) // library marker davegut.ST-Common, line 60
 	} // library marker davegut.ST-Common, line 61
 	if (cmdData.capability && cmdData.capability != "refresh") { // library marker davegut.ST-Common, line 62
-		refresh() // library marker davegut.ST-Common, line 63
+		runIn(2, refresh) // library marker davegut.ST-Common, line 63
 	} else { // library marker davegut.ST-Common, line 64
 		poll() // library marker davegut.ST-Common, line 65
 	} // library marker davegut.ST-Common, line 66
