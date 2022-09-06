@@ -190,8 +190,8 @@ def statusParse(mainData) {
 	if (logData != [:]) {
 		logInfo("statusParse: ${logData}")
 	}
-	runIn(2, listAttributes, [data: true])
-//	runIn(2, listAttributes)
+//	runIn(2, listAttributes, [data: true])
+	runIn(2, listAttributes)
 }
 
 //	===== Library Integration =====
