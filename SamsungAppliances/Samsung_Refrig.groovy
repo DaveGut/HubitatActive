@@ -10,15 +10,14 @@ This driver uses libraries for the functions common to SmartThings devices.
 Library code is at the bottom of the distributed single-file driver.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
-=====	Version B0.5
-Updated to differentiate between a standard wifi and a DONGLE-Based Wifi
-DONGLE based system has very limted functionality within the components.
-==============================================================================*/
-def driverVer() { return "B0.5" }
+===== Version 1.1 ==============================================================================*/
+//def driverVer() { return "1.1" }
+def driverVer() { return "T1.1" }
+def nameSpace() { return "davegut" }
 
 metadata {
 	definition (name: "Samsung Refrig",
-				namespace: "davegut",
+				namespace: nameSpace(),
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig.groovy"
 			   ){
@@ -42,6 +41,9 @@ metadata {
 			constraints: ["on", "off"],
 			type: "ENUM"]]
 		attribute "defrost", "string"
+		//	Sabbath Mode
+		command "toggleSabbathMode"
+		attribute "SabbathMode", "string"
 	}
 	
 	preferences {
@@ -51,7 +53,7 @@ metadata {
 		}
 		if (stDeviceId) {
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
-				   options: ["1", "5", "10", "30"], defaultValue: "5")
+				   options: ["10sec", "20sec", "30sec", "1", "5", "10", "30"], defaultValue: "10")
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 		}
@@ -97,6 +99,23 @@ def setRefrigeration(command, onOff) {
 		arguments: [onOff]]
 	def cmdStatus = deviceCommand(cmdData)
 	logInfo("setRefrigeration: [cmd ${command}, onOff: ${onOff}, status: ${cmdStatus}]")
+}
+
+def toggleSabbathMode() {
+	def currMode = device.currentValue("sabbathMode")
+	def newMode = "Off"
+	if (currMode == newMode) {
+		newMode = "On"
+	}
+	def arguments = [["x.com.samsung.da.sabbathMode":newMode]]
+
+	def cmdData = [
+		component: "main",
+		capability: "execute",
+		command: "execute",
+		arguments: arguments]
+	def cmdStatus = deviceCommand(cmdData)
+	logInfo("toggleSabbathMode: [cmd: ${setpoint}, ${cmdStatus}]")
 }
 
 def distResp(resp, data) {
@@ -199,58 +218,39 @@ def statusParse(respData) {
 		logWarn("statusParse: [respData: ${respData}, error: ${error}]")
 		return
 	}
-	def logData = [:]
+
 	def contact = parseData.contactSensor.contact.value
-	if (device.currentValue("contact") != contact) {
-		sendEvent(name: "contact", value: contact)
-		logData << [contact: contact]
-	}
+	sendEvent(name: "contact", value: contact)
 
 	def tempUnit = parseData.thermostatCoolingSetpoint.coolingSetpoint.unit
 	def coolingSetpoint = parseData.thermostatCoolingSetpoint.coolingSetpoint.value
-	if (device.currentValue("coolingSetpoint") != coolingSetpoint) {
-		sendEvent(name: "coolingSetpoint", value: coolingSetpoint, unit: tempUnit)
-		logData << [coolingSetpoint: coolingSetpoint, unit: tempUnit]
-	}
+	sendEvent(name: "coolingSetpoint", value: coolingSetpoint, unit: tempUnit)
 
 	if (getDataValue("dongle") == "false") {
 		def temperature = parseData.temperatureMeasurement.temperature.value
-		if (device.currentValue("temperature") != temperature) {
-			sendEvent(name: "temperature", value: temperature, unit: tempUnit)
-			logData << [temperature: temperature]
-		}
+		sendEvent(name: "temperature", value: temperature, unit: tempUnit)
+		
+		def SabbathMode = parseData.execute.data.value.payload["x.com.samsung.da.sabbathMode"]
+		sendEvent(name: "SabbathMode", value: SabbathMode)
 	}
-	
+
 	def defrost = parseData.refrigeration.defrost.value
-	if (device.currentValue("defrost") != defrost) {
-		sendEvent(name: "defrost", value: defrost)
-		logData << [defrost: defrost]
-	}
+	sendEvent(name: "defrost", value: defrost)
 
 	def rapidCooling = parseData.refrigeration.rapidCooling.value
-	if (device.currentValue("rapidCooling") != rapidCooling) {
-		sendEvent(name: "rapidCooling", value: rapidCooling)
-		logData << [rapidCooling: rapidCooling]
-	}
+	sendEvent(name: "rapidCooling", value: rapidCooling)
 
 	def rapidFreezing = parseData.refrigeration.rapidFreezing.value
-	if (device.currentValue("rapidFreezing") != rapidFreezing) {
-		sendEvent(name: "rapidFreezing", value: rapidFreezing)
-		logData << [rapidFreezing: rapidFreezing]
-	}
+	sendEvent(name: "rapidFreezing", value: rapidFreezing)
 
 	def filterStatus = parseData["custom.waterFilter"].waterFilterStatus.value
-	if (device.currentValue("filterStatus") != filterStatus) {
-		sendEvent(name: "filterStatus", value: filterStatus)
-		logData << [filterStatus: filterStatus]
-	}
+	sendEvent(name: "filterStatus", value: filterStatus)
 
-	if (logData != [:]) {
-		logInfo("getDeviceStatus: ${logData}")
+	if (simulate() == true) {
+		runIn(1, listAttributes, [data: true])
+	} else {
+		runIn(1, listAttributes)
 	}
-
-	runIn(1, listAttributes, [data: true])
-//	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====
@@ -261,7 +261,7 @@ def simulate() { return false }
 //#include davegut.Samsung-Refrig-Sim
 //#include davegut.Samsung-Refrig-Sim-DONGLE
 
-// ~~~~~ start include (993) davegut.Logging ~~~~~
+// ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
 	name: "Logging", // library marker davegut.Logging, line 2
 	namespace: "davegut", // library marker davegut.Logging, line 3
@@ -271,48 +271,51 @@ library ( // library marker davegut.Logging, line 1
 	documentationLink: "" // library marker davegut.Logging, line 7
 ) // library marker davegut.Logging, line 8
 
-def listAttributes(trace = false) { // library marker davegut.Logging, line 10
-	def attrs = device.getSupportedAttributes() // library marker davegut.Logging, line 11
-	def attrList = [:] // library marker davegut.Logging, line 12
-	attrs.each { // library marker davegut.Logging, line 13
-		def val = device.currentValue("${it}") // library marker davegut.Logging, line 14
-		attrList << ["${it}": val] // library marker davegut.Logging, line 15
-	} // library marker davegut.Logging, line 16
-	if (trace == true) { // library marker davegut.Logging, line 17
-		logTrace("Attributes: ${attrList}") // library marker davegut.Logging, line 18
-	} else { // library marker davegut.Logging, line 19
-		logDebug("Attributes: ${attrList}") // library marker davegut.Logging, line 20
-	} // library marker davegut.Logging, line 21
-} // library marker davegut.Logging, line 22
+//	Logging during development // library marker davegut.Logging, line 10
+def listAttributes(trace = false) { // library marker davegut.Logging, line 11
+	def attrs = device.getSupportedAttributes() // library marker davegut.Logging, line 12
+	def attrList = [:] // library marker davegut.Logging, line 13
+	attrs.each { // library marker davegut.Logging, line 14
+		def val = device.currentValue("${it}") // library marker davegut.Logging, line 15
+		attrList << ["${it}": val] // library marker davegut.Logging, line 16
+	} // library marker davegut.Logging, line 17
+	if (trace == true) { // library marker davegut.Logging, line 18
+		logTrace("Attributes: ${attrList}") // library marker davegut.Logging, line 19
+	} else { // library marker davegut.Logging, line 20
+		logDebug("Attributes: ${attrList}") // library marker davegut.Logging, line 21
+	} // library marker davegut.Logging, line 22
+} // library marker davegut.Logging, line 23
 
-def logTrace(msg){ // library marker davegut.Logging, line 24
-	log.trace "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 25
-} // library marker davegut.Logging, line 26
+def logTrace(msg){ // library marker davegut.Logging, line 25
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
+} // library marker davegut.Logging, line 27
 
-def logInfo(msg) {  // library marker davegut.Logging, line 28
-	log.info "${device.displayName} ${getDataValue("driverVersion")}: ${msg}"  // library marker davegut.Logging, line 29
-} // library marker davegut.Logging, line 30
+def logInfo(msg) {  // library marker davegut.Logging, line 29
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
 
-def debugLogOff() { // library marker davegut.Logging, line 32
-	if (debug == true) { // library marker davegut.Logging, line 33
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 34
-	} else if (debugLog == true) { // library marker davegut.Logging, line 35
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 36
-	} // library marker davegut.Logging, line 37
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 38
-} // library marker davegut.Logging, line 39
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
 
-def logDebug(msg) { // library marker davegut.Logging, line 41
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 42
-		log.debug "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 43
-	} // library marker davegut.Logging, line 44
-} // library marker davegut.Logging, line 45
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" } // library marker davegut.Logging, line 47
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
-// ~~~~~ end include (993) davegut.Logging ~~~~~
+// ~~~~~ end include (1072) davegut.Logging ~~~~~
 
-// ~~~~~ start include (1001) davegut.ST-Communications ~~~~~
+// ~~~~~ start include (1091) davegut.ST-Communications ~~~~~
 library ( // library marker davegut.ST-Communications, line 1
 	name: "ST-Communications", // library marker davegut.ST-Communications, line 2
 	namespace: "davegut", // library marker davegut.ST-Communications, line 3
@@ -405,9 +408,9 @@ private syncPost(sendData){ // library marker davegut.ST-Communications, line 59
 	return respData // library marker davegut.ST-Communications, line 90
 } // library marker davegut.ST-Communications, line 91
 
-// ~~~~~ end include (1001) davegut.ST-Communications ~~~~~
+// ~~~~~ end include (1091) davegut.ST-Communications ~~~~~
 
-// ~~~~~ start include (1000) davegut.ST-Common ~~~~~
+// ~~~~~ start include (1090) davegut.ST-Common ~~~~~
 library ( // library marker davegut.ST-Common, line 1
 	name: "ST-Common", // library marker davegut.ST-Common, line 2
 	namespace: "davegut", // library marker davegut.ST-Common, line 3
@@ -448,131 +451,137 @@ def setPollInterval(pollInterval) { // library marker davegut.ST-Common, line 37
 	logDebug("setPollInterval: ${pollInterval}") // library marker davegut.ST-Common, line 38
 	state.pollInterval = pollInterval // library marker davegut.ST-Common, line 39
 	switch(pollInterval) { // library marker davegut.ST-Common, line 40
-		case "1" : runEvery1Minute(poll); break // library marker davegut.ST-Common, line 41
-		case "5" : runEvery5Minutes(poll); break // library marker davegut.ST-Common, line 42
-		case "10" : runEvery10Minutes(poll); break // library marker davegut.ST-Common, line 43
-		case "30" : runEvery30Minutes(poll); break // library marker davegut.ST-Common, line 44
-		default: runEvery10Minutes(poll) // library marker davegut.ST-Common, line 45
-	} // library marker davegut.ST-Common, line 46
-} // library marker davegut.ST-Common, line 47
+		case "10sec":  // library marker davegut.ST-Common, line 41
+			schedule("*/10 * * * * ?", "poll")		 // library marker davegut.ST-Common, line 42
+			break // library marker davegut.ST-Common, line 43
+		case "20sec": // library marker davegut.ST-Common, line 44
+			schedule("*/20 * * * * ?", "poll")		 // library marker davegut.ST-Common, line 45
+			break // library marker davegut.ST-Common, line 46
+		case "30sec": // library marker davegut.ST-Common, line 47
+			schedule("*/30 * * * * ?", "poll")		 // library marker davegut.ST-Common, line 48
+			break // library marker davegut.ST-Common, line 49
+		case "1" : runEvery1Minute(poll); break // library marker davegut.ST-Common, line 50
+		case "5" : runEvery5Minutes(poll); break // library marker davegut.ST-Common, line 51
+		case "10" : runEvery10Minutes(poll); break // library marker davegut.ST-Common, line 52
+		case "30" : runEvery30Minutes(poll); break // library marker davegut.ST-Common, line 53
+		default: runEvery10Minutes(poll) // library marker davegut.ST-Common, line 54
+	} // library marker davegut.ST-Common, line 55
+} // library marker davegut.ST-Common, line 56
 
-def deviceCommand(cmdData) { // library marker davegut.ST-Common, line 49
-	def respData = [:] // library marker davegut.ST-Common, line 50
-	if (simulate() == true) { // library marker davegut.ST-Common, line 51
-		respData = testResp(cmdData) // library marker davegut.ST-Common, line 52
-	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 53
-		respData << "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 54
-	} else { // library marker davegut.ST-Common, line 55
-		def sendData = [ // library marker davegut.ST-Common, line 56
-			path: "/devices/${stDeviceId.trim()}/commands", // library marker davegut.ST-Common, line 57
-			cmdData: cmdData // library marker davegut.ST-Common, line 58
-		] // library marker davegut.ST-Common, line 59
-		respData = syncPost(sendData) // library marker davegut.ST-Common, line 60
-	} // library marker davegut.ST-Common, line 61
-	if (cmdData.capability && cmdData.capability != "refresh") { // library marker davegut.ST-Common, line 62
-		refresh() // library marker davegut.ST-Common, line 63
+def deviceCommand(cmdData) { // library marker davegut.ST-Common, line 58
+	def respData = [:] // library marker davegut.ST-Common, line 59
+	if (simulate() == true) { // library marker davegut.ST-Common, line 60
+		respData = testResp(cmdData) // library marker davegut.ST-Common, line 61
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 62
+		respData << [status: "FAILED", data: "no stDeviceId"] // library marker davegut.ST-Common, line 63
 	} else { // library marker davegut.ST-Common, line 64
-		poll() // library marker davegut.ST-Common, line 65
-	} // library marker davegut.ST-Common, line 66
-	return respData // library marker davegut.ST-Common, line 67
-} // library marker davegut.ST-Common, line 68
-
-def refresh() {  // library marker davegut.ST-Common, line 70
-	def cmdData = [ // library marker davegut.ST-Common, line 71
-		component: "main", // library marker davegut.ST-Common, line 72
-		capability: "refresh", // library marker davegut.ST-Common, line 73
-		command: "refresh", // library marker davegut.ST-Common, line 74
-		arguments: []] // library marker davegut.ST-Common, line 75
-	deviceCommand(cmdData) // library marker davegut.ST-Common, line 76
+		def sendData = [ // library marker davegut.ST-Common, line 65
+			path: "/devices/${stDeviceId.trim()}/commands", // library marker davegut.ST-Common, line 66
+			cmdData: cmdData // library marker davegut.ST-Common, line 67
+		] // library marker davegut.ST-Common, line 68
+		respData = syncPost(sendData) // library marker davegut.ST-Common, line 69
+	} // library marker davegut.ST-Common, line 70
+	if (cmdData.capability && cmdData.capability != "refresh") { // library marker davegut.ST-Common, line 71
+		refresh() // library marker davegut.ST-Common, line 72
+	} else { // library marker davegut.ST-Common, line 73
+		poll() // library marker davegut.ST-Common, line 74
+	} // library marker davegut.ST-Common, line 75
+	return respData // library marker davegut.ST-Common, line 76
 } // library marker davegut.ST-Common, line 77
 
-def poll() { // library marker davegut.ST-Common, line 79
-	if (simulate() == true) { // library marker davegut.ST-Common, line 80
-		def children = getChildDevices() // library marker davegut.ST-Common, line 81
-		if (children) { // library marker davegut.ST-Common, line 82
-			children.each { // library marker davegut.ST-Common, line 83
-				it.statusParse(testData()) // library marker davegut.ST-Common, line 84
-			} // library marker davegut.ST-Common, line 85
-		} // library marker davegut.ST-Common, line 86
-		statusParse(testData()) // library marker davegut.ST-Common, line 87
-	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 88
-		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 89
-		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 90
-	} else { // library marker davegut.ST-Common, line 91
-		def sendData = [ // library marker davegut.ST-Common, line 92
-			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 93
-			parse: "distResp" // library marker davegut.ST-Common, line 94
-			] // library marker davegut.ST-Common, line 95
-		asyncGet(sendData, "statusParse") // library marker davegut.ST-Common, line 96
-	} // library marker davegut.ST-Common, line 97
-} // library marker davegut.ST-Common, line 98
+def refresh() { // library marker davegut.ST-Common, line 79
+	if (stApiKey!= null) { // library marker davegut.ST-Common, line 80
+		def cmdData = [ // library marker davegut.ST-Common, line 81
+			component: "main", // library marker davegut.ST-Common, line 82
+			capability: "refresh", // library marker davegut.ST-Common, line 83
+			command: "refresh", // library marker davegut.ST-Common, line 84
+			arguments: []] // library marker davegut.ST-Common, line 85
+		deviceCommand(cmdData) // library marker davegut.ST-Common, line 86
+	} // library marker davegut.ST-Common, line 87
+} // library marker davegut.ST-Common, line 88
 
-def deviceSetup() { // library marker davegut.ST-Common, line 100
-	if (simulate() == true) { // library marker davegut.ST-Common, line 101
-		def children = getChildDevices() // library marker davegut.ST-Common, line 102
-//		if (children) { // library marker davegut.ST-Common, line 103
-//			children.each { // library marker davegut.ST-Common, line 104
-//				it.deviceSetupParse(testData()) // library marker davegut.ST-Common, line 105
-//			} // library marker davegut.ST-Common, line 106
-//		} // library marker davegut.ST-Common, line 107
-		deviceSetupParse(testData()) // library marker davegut.ST-Common, line 108
-	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 109
-		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 110
-		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 111
-	} else { // library marker davegut.ST-Common, line 112
-		def sendData = [ // library marker davegut.ST-Common, line 113
-			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 114
-			parse: "distResp" // library marker davegut.ST-Common, line 115
-			] // library marker davegut.ST-Common, line 116
-		asyncGet(sendData, "deviceSetup") // library marker davegut.ST-Common, line 117
-	} // library marker davegut.ST-Common, line 118
-} // library marker davegut.ST-Common, line 119
+def poll() { // library marker davegut.ST-Common, line 90
+	if (simulate() == true) { // library marker davegut.ST-Common, line 91
+		def children = getChildDevices() // library marker davegut.ST-Common, line 92
+		if (children) { // library marker davegut.ST-Common, line 93
+			children.each { // library marker davegut.ST-Common, line 94
+				it.statusParse(testData()) // library marker davegut.ST-Common, line 95
+			} // library marker davegut.ST-Common, line 96
+		} // library marker davegut.ST-Common, line 97
+		statusParse(testData()) // library marker davegut.ST-Common, line 98
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 99
+		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 100
+		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 101
+	} else { // library marker davegut.ST-Common, line 102
+		def sendData = [ // library marker davegut.ST-Common, line 103
+			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 104
+			parse: "distResp" // library marker davegut.ST-Common, line 105
+			] // library marker davegut.ST-Common, line 106
+		asyncGet(sendData, "statusParse") // library marker davegut.ST-Common, line 107
+	} // library marker davegut.ST-Common, line 108
+} // library marker davegut.ST-Common, line 109
 
-def getDeviceList() { // library marker davegut.ST-Common, line 121
-	def sendData = [ // library marker davegut.ST-Common, line 122
-		path: "/devices", // library marker davegut.ST-Common, line 123
-		parse: "getDeviceListParse" // library marker davegut.ST-Common, line 124
-		] // library marker davegut.ST-Common, line 125
-	asyncGet(sendData) // library marker davegut.ST-Common, line 126
-} // library marker davegut.ST-Common, line 127
+def deviceSetup() { // library marker davegut.ST-Common, line 111
+	if (simulate() == true) { // library marker davegut.ST-Common, line 112
+		def children = getChildDevices() // library marker davegut.ST-Common, line 113
+		deviceSetupParse(testData()) // library marker davegut.ST-Common, line 114
+	} else if (!stDeviceId || stDeviceId.trim() == "") { // library marker davegut.ST-Common, line 115
+		respData = "[status: FAILED, data: no stDeviceId]" // library marker davegut.ST-Common, line 116
+		logWarn("poll: [status: ERROR, errorMsg: no stDeviceId]") // library marker davegut.ST-Common, line 117
+	} else { // library marker davegut.ST-Common, line 118
+		def sendData = [ // library marker davegut.ST-Common, line 119
+			path: "/devices/${stDeviceId.trim()}/status", // library marker davegut.ST-Common, line 120
+			parse: "distResp" // library marker davegut.ST-Common, line 121
+			] // library marker davegut.ST-Common, line 122
+		asyncGet(sendData, "deviceSetup") // library marker davegut.ST-Common, line 123
+	} // library marker davegut.ST-Common, line 124
+} // library marker davegut.ST-Common, line 125
 
-def getDeviceListParse(resp, data) { // library marker davegut.ST-Common, line 129
-	def respData // library marker davegut.ST-Common, line 130
-	if (resp.status != 200) { // library marker davegut.ST-Common, line 131
-		respData = [status: "ERROR", // library marker davegut.ST-Common, line 132
-					httpCode: resp.status, // library marker davegut.ST-Common, line 133
-					errorMsg: resp.errorMessage] // library marker davegut.ST-Common, line 134
-	} else { // library marker davegut.ST-Common, line 135
-		try { // library marker davegut.ST-Common, line 136
-			respData = new JsonSlurper().parseText(resp.data) // library marker davegut.ST-Common, line 137
-		} catch (err) { // library marker davegut.ST-Common, line 138
-			respData = [status: "ERROR", // library marker davegut.ST-Common, line 139
-						errorMsg: err, // library marker davegut.ST-Common, line 140
-						respData: resp.data] // library marker davegut.ST-Common, line 141
-		} // library marker davegut.ST-Common, line 142
-	} // library marker davegut.ST-Common, line 143
-	if (respData.status == "ERROR") { // library marker davegut.ST-Common, line 144
-		logWarn("getDeviceListParse: ${respData}") // library marker davegut.ST-Common, line 145
-	} else { // library marker davegut.ST-Common, line 146
-		log.info "" // library marker davegut.ST-Common, line 147
-		respData.items.each { // library marker davegut.ST-Common, line 148
-			log.trace "${it.label}:   ${it.deviceId}" // library marker davegut.ST-Common, line 149
-		} // library marker davegut.ST-Common, line 150
-		log.trace "<b>Copy your device's deviceId value and enter into the device Preferences.</b>" // library marker davegut.ST-Common, line 151
-	} // library marker davegut.ST-Common, line 152
-} // library marker davegut.ST-Common, line 153
+def getDeviceList() { // library marker davegut.ST-Common, line 127
+	def sendData = [ // library marker davegut.ST-Common, line 128
+		path: "/devices", // library marker davegut.ST-Common, line 129
+		parse: "getDeviceListParse" // library marker davegut.ST-Common, line 130
+		] // library marker davegut.ST-Common, line 131
+	asyncGet(sendData) // library marker davegut.ST-Common, line 132
+} // library marker davegut.ST-Common, line 133
 
-def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, line 155
-	Integer currTime = now() // library marker davegut.ST-Common, line 156
-	Integer compTime // library marker davegut.ST-Common, line 157
-	try { // library marker davegut.ST-Common, line 158
-		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 159
-	} catch (e) { // library marker davegut.ST-Common, line 160
-		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 161
-	} // library marker davegut.ST-Common, line 162
-	Integer timeRemaining = ((compTime-currTime) /1000).toInteger() // library marker davegut.ST-Common, line 163
-	if (timeRemaining < 0) { timeRemaining = 0 } // library marker davegut.ST-Common, line 164
-	return timeRemaining // library marker davegut.ST-Common, line 165
-} // library marker davegut.ST-Common, line 166
+def getDeviceListParse(resp, data) { // library marker davegut.ST-Common, line 135
+	def respData // library marker davegut.ST-Common, line 136
+	if (resp.status != 200) { // library marker davegut.ST-Common, line 137
+		respData = [status: "ERROR", // library marker davegut.ST-Common, line 138
+					httpCode: resp.status, // library marker davegut.ST-Common, line 139
+					errorMsg: resp.errorMessage] // library marker davegut.ST-Common, line 140
+	} else { // library marker davegut.ST-Common, line 141
+		try { // library marker davegut.ST-Common, line 142
+			respData = new JsonSlurper().parseText(resp.data) // library marker davegut.ST-Common, line 143
+		} catch (err) { // library marker davegut.ST-Common, line 144
+			respData = [status: "ERROR", // library marker davegut.ST-Common, line 145
+						errorMsg: err, // library marker davegut.ST-Common, line 146
+						respData: resp.data] // library marker davegut.ST-Common, line 147
+		} // library marker davegut.ST-Common, line 148
+	} // library marker davegut.ST-Common, line 149
+	if (respData.status == "ERROR") { // library marker davegut.ST-Common, line 150
+		logWarn("getDeviceListParse: ${respData}") // library marker davegut.ST-Common, line 151
+	} else { // library marker davegut.ST-Common, line 152
+		log.info "" // library marker davegut.ST-Common, line 153
+		respData.items.each { // library marker davegut.ST-Common, line 154
+			log.trace "${it.label}:   ${it.deviceId}" // library marker davegut.ST-Common, line 155
+		} // library marker davegut.ST-Common, line 156
+		log.trace "<b>Copy your device's deviceId value and enter into the device Preferences.</b>" // library marker davegut.ST-Common, line 157
+	} // library marker davegut.ST-Common, line 158
+} // library marker davegut.ST-Common, line 159
 
-// ~~~~~ end include (1000) davegut.ST-Common ~~~~~
+def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, line 161
+	Integer currTime = now() // library marker davegut.ST-Common, line 162
+	Integer compTime // library marker davegut.ST-Common, line 163
+	try { // library marker davegut.ST-Common, line 164
+		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 165
+	} catch (e) { // library marker davegut.ST-Common, line 166
+		compTime = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", completionTime,TimeZone.getTimeZone('UTC')).getTime() // library marker davegut.ST-Common, line 167
+	} // library marker davegut.ST-Common, line 168
+	Integer timeRemaining = ((compTime-currTime) /1000).toInteger() // library marker davegut.ST-Common, line 169
+	if (timeRemaining < 0) { timeRemaining = 0 } // library marker davegut.ST-Common, line 170
+	return timeRemaining // library marker davegut.ST-Common, line 171
+} // library marker davegut.ST-Common, line 172
+
+// ~~~~~ end include (1090) davegut.ST-Common ~~~~~

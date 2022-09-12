@@ -4,12 +4,13 @@ License Information:
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== Description
 This is a child driver to Samsung Oven and will not work indepenently of same.
-==============================================================================*/
-def driverVer() { return "B0.5" }
+===== Version 1.1 ==============================================================================*/
+def driverVer() { return "1.1" }
+def nameSpace() { return "davegut" }
 
 metadata {
 	definition (name: "Samsung Refrig cvroom",
-				namespace: "davegut",
+				namespace: nameSpace(),
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cvroom.groovy"
 			   ){
@@ -59,46 +60,33 @@ def statusParse(respData) {
 	} catch (error) {
 		logWarn("statusParse: [respData: ${respData}, error: ${error}]")
 	}
-	def logData = [:]
+
 	def contact = parseData.contactSensor.contact.value
-	if (device.currentValue("contact") != contact) {
-		sendEvent(name: "contact", value: contact)
-		logData << [contact: contact]
-	}
+	sendEvent(name: "contact", value: contact)
 
 	def tempUnit = parseData.thermostatCoolingSetpoint.coolingSetpoint.unit
 	def coolingSetpoint = parseData.thermostatCoolingSetpoint.coolingSetpoint.value
-	if (device.currentValue("coolingSetpoint") != coolingSetpoint) {
-		sendEvent(name: "coolingSetpoint", value: coolingSetpoint, unit: tempUnit)
-		logData << [coolingSetpoint: coolingSetpoint, unit: tempUnit]
-	}
+	sendEvent(name: "coolingSetpoint", value: coolingSetpoint, unit: tempUnit)
 	
 	if (parent.getDataValue("dongle") == "false") {
 		def temperature = parseData.temperatureMeasurement.temperature.value
-		if (device.currentValue("temperature") != temperature) {
-			sendEvent(name: "temperature", value: temperature, unit: tempUnit)
-			logData << [temperature: temperature]
-		}
+		sendEvent(name: "temperature", value: temperature, unit: tempUnit)
 
 		def mode = parseData["custom.fridgeMode"].fridgeMode.value
-		if (device.currentValue("mode") != mode) {
-			sendEvent(name: "mode", value: mode)
-			logData << [mode: mode]
-		}
+		sendEvent(name: "mode", value: mode)
 	}
 	
-	if (logData != [:]) {
-		logInfo("getDeviceStatus: ${logData}")
+	if (parent.simulate() == true) {
+		runIn(1, listAttributes, [data: true])
+	} else {
+		runIn(1, listAttributes)
 	}
-
-	runIn(1, listAttributes, [data: true])
-//	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====
 
 
-// ~~~~~ start include (993) davegut.Logging ~~~~~
+// ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
 	name: "Logging", // library marker davegut.Logging, line 2
 	namespace: "davegut", // library marker davegut.Logging, line 3
@@ -108,43 +96,46 @@ library ( // library marker davegut.Logging, line 1
 	documentationLink: "" // library marker davegut.Logging, line 7
 ) // library marker davegut.Logging, line 8
 
-def listAttributes(trace = false) { // library marker davegut.Logging, line 10
-	def attrs = device.getSupportedAttributes() // library marker davegut.Logging, line 11
-	def attrList = [:] // library marker davegut.Logging, line 12
-	attrs.each { // library marker davegut.Logging, line 13
-		def val = device.currentValue("${it}") // library marker davegut.Logging, line 14
-		attrList << ["${it}": val] // library marker davegut.Logging, line 15
-	} // library marker davegut.Logging, line 16
-	if (trace == true) { // library marker davegut.Logging, line 17
-		logTrace("Attributes: ${attrList}") // library marker davegut.Logging, line 18
-	} else { // library marker davegut.Logging, line 19
-		logDebug("Attributes: ${attrList}") // library marker davegut.Logging, line 20
-	} // library marker davegut.Logging, line 21
-} // library marker davegut.Logging, line 22
+//	Logging during development // library marker davegut.Logging, line 10
+def listAttributes(trace = false) { // library marker davegut.Logging, line 11
+	def attrs = device.getSupportedAttributes() // library marker davegut.Logging, line 12
+	def attrList = [:] // library marker davegut.Logging, line 13
+	attrs.each { // library marker davegut.Logging, line 14
+		def val = device.currentValue("${it}") // library marker davegut.Logging, line 15
+		attrList << ["${it}": val] // library marker davegut.Logging, line 16
+	} // library marker davegut.Logging, line 17
+	if (trace == true) { // library marker davegut.Logging, line 18
+		logTrace("Attributes: ${attrList}") // library marker davegut.Logging, line 19
+	} else { // library marker davegut.Logging, line 20
+		logDebug("Attributes: ${attrList}") // library marker davegut.Logging, line 21
+	} // library marker davegut.Logging, line 22
+} // library marker davegut.Logging, line 23
 
-def logTrace(msg){ // library marker davegut.Logging, line 24
-	log.trace "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 25
-} // library marker davegut.Logging, line 26
+def logTrace(msg){ // library marker davegut.Logging, line 25
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
+} // library marker davegut.Logging, line 27
 
-def logInfo(msg) {  // library marker davegut.Logging, line 28
-	log.info "${device.displayName} ${getDataValue("driverVersion")}: ${msg}"  // library marker davegut.Logging, line 29
-} // library marker davegut.Logging, line 30
+def logInfo(msg) {  // library marker davegut.Logging, line 29
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
 
-def debugLogOff() { // library marker davegut.Logging, line 32
-	if (debug == true) { // library marker davegut.Logging, line 33
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 34
-	} else if (debugLog == true) { // library marker davegut.Logging, line 35
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 36
-	} // library marker davegut.Logging, line 37
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 38
-} // library marker davegut.Logging, line 39
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
 
-def logDebug(msg) { // library marker davegut.Logging, line 41
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 42
-		log.debug "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 43
-	} // library marker davegut.Logging, line 44
-} // library marker davegut.Logging, line 45
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" } // library marker davegut.Logging, line 47
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
-// ~~~~~ end include (993) davegut.Logging ~~~~~
+// ~~~~~ end include (1072) davegut.Logging ~~~~~
