@@ -16,20 +16,21 @@ You can install the driver using three methods:
 
 ## Device Driver Information
 ### Samsung Dishwasher
-* Status: Beta
+* Status: V1.1
 * File Locaton: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dishwasher.groovy
 
 ### Samsung Dryer
-* Status: Beta
+* Status: V1.1
+* Special Condition:  Must load Samsung_Dryer_Flex to add the upper compartment.
 * File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dryer.groovy
-* Future: Adding the upper dryer compartment in a future release.
+* File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dryer_flex.groovy
 
 ### Samsung HVAC
-* Status: Release 1.0
+* Status: V1.1
 * File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_HVAC.groovy
 
 ### Samsung Oven
-* Status: Beta
+* Status: V1.1
 * Special Condition: Requires ALL CHILD DRIVERS to load properly
 * File Locations:
 	* Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven.groovy
@@ -37,7 +38,7 @@ You can install the driver using three methods:
 	* TempProbe: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_probe.groovy
 
 ### Samsung Refrigerator
-* Status: Beta
+* Status: V1.1
 * Special Condition: Requires ALL CHILD DRIVERS to load properly
 * File Locations:
 	* Parent: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig.groovy
@@ -45,8 +46,13 @@ You can install the driver using three methods:
 	* Cvroom: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cvroom.groovy
 	* Icemaker: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_icemaker.groovy
 
-### Samsung Washer
-* Status: Beta
-* File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy
-* Future: Adding the upper dryer compartment in a future release.
+### Samsung Soundbar
+* Status: 1.1
+* Note: Works with soundbars that do not use the multi-room app.  For Soundbars that use the Multiroom app, use the Samsung Speaker Integration.
+* File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Soundbar.groovy
 
+### Samsung Washer
+* Status: V1.1
+* Special Condition:  Must load Samsung_Dryer_Flex to add the upper compartment.
+* File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy
+* File Location: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer_flex.groovy
