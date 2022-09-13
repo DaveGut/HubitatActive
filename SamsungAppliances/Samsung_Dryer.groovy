@@ -181,8 +181,8 @@ def statusParse(respData) {
 		sendEvent(name: "timeRemaining", value: timeRemaining)
 	}
 
-	runIn(1, listAttributes, [data: true])
-//	runIn(1, listAttributes)
+//	runIn(1, listAttributes, [data: true])
+	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====

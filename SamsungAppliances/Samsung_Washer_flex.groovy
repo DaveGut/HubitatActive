@@ -98,8 +98,8 @@ def statusParse(respData) {
 	def waterTemperature = parseData["custom.washerWaterTemperature"].washerWaterTemperature.value
 	sendEvent(name: "waterTemperature", value: waterTemperature)
 
-	runIn(1, listAttributes, [data: true])
-//	runIn(1, listAttributes)
+//	runIn(1, listAttributes, [data: true])
+	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====

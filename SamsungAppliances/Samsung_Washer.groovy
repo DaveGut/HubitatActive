@@ -197,8 +197,8 @@ def statusParse(respData) {
 	def spinLevel = parseData["custom.washerSpinLevel"].washerSpinLevel.value
 	sendEvent(name: "spinLevel", value: spinLevel)
 	
-	runIn(1, listAttributes, [data: true])
-//	runIn(1, listAttributes)
+//	runIn(1, listAttributes, [data: true])
+	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====
