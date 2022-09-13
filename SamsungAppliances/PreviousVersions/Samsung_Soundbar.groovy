@@ -1,48 +1,47 @@
-/*	Samsung HVAC using SmartThings Interface
+/*	Samsung Soundbar using SmartThings Interface
 		Copyright Dave Gutheinz
 License Information:
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== Description
-This driver is for SmartThings-installed Samsung HVAC for import of control
+This driver is for SmartThings-installed Samsung Soundbars for import of control
 and status of defined functions into Hubitat Environment.
 =====	Library Use
 This driver uses libraries for the functions common to SmartThings devices. 
 Library code is at the bottom of the distributed single-file driver.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
+=====	Version B0.2
+Second Beta Release of the driver set.  All functions tested and validated on 
+a Q900 as well as a MS-650.
+a.	Removed preferences simulate and infoLog.  added function simulate()
+b.	Changed validateResp to distResp and added processing for init (as req.)
+c.	Removed try statements from data parsing.
+d.	Automatically send refresh with any command (reducing timeline and number of comms).
+===== B0.3
+Updated to support newer soundbars with more commands
+B0.31.  Corrections to account for format differences between Soundbars.
 ==============================================================================*/
-def driverVer() { return "1.2" }
+def driverVer() { return "1.1" }
 
 metadata {
-	definition (name: "Samsung HVAC",
+	definition (name: "Samsung Soundbar",
 				namespace: "davegut",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_HVAC.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Soundbar.groovy"
 			   ){
+		capability "Switch"
+		command "toggleOnOff"
+		capability "MediaInputSource"
+		command "setInputSource", [[
+			name: "Soundbar Input",
+			constraints: ["digital", "HDMI1", "bluetooth", "HDMI2", "wifi"],
+			type: "ENUM"]]
+		command "toggleInputSource"
+		capability "MediaTransport"
+		capability "AudioVolume"
+		command "toggleMute"
 		capability "Refresh"
-		capability "Thermostat"
-		command "setThermostatMode", [[
-			name: "Thermostat Mode",
-			constraints: ["off", "auto", "cool", , "heat", "dry", "wind", "samsungAuto"],
-			type: "ENUM"]]
-		command "emergencyHeat", [[name: "NOT IMPLEMENTED"]]
-		command "samsungAuto"
-		command "wind"
-		command "dry"
-		command "setThermostatFanMode", [[
-			name: "Thermostat Fan Mode",
-			constraints: ["auto", "low", "medium", "high"],
-			type: "ENUM"]]
-		command "fanLow"
-		command "fanMedium"
-		command "fanHigh"
-		command "setSamsungAutoSetpoint", ["number"]
-		attribute "samsungAutoSetpoint", "number"
-		//	Set the light on the remote control.
-		command "togglePanelLight"
-		attribute "lightStatus", "string"
-		command "setLevel", ["number"]		//	To set samsungAutoSetpoint via slider
-		attribute "level", "number"			//	Reflects samsungAutoSetpoint
+		attribute "trackData", "JSON_OBJECT"
 	}
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
@@ -50,231 +49,145 @@ metadata {
 			input ("stDeviceId", "string", title: "SmartThings Device ID", defaultValue: "")
 		}
 		if (stDeviceId) {
-			input ("tempOffset", "number", title: "Min Heat/Cool temperature delta",
-					   defaultValue: 4)
+			input ("volIncrement", "number", title: "Volume Up/Down Increment", defaultValue: 1)
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
-				   options: ["1", "5", "10", "30"], defaultValue: "1")
-			input ("infoLog", "bool",  
-				   title: "Info logging", defaultValue: true)
+				   options: ["1", "5", "10", "30"], defaultValue: "5")
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 		}
 	}
 }
 
-def installed() { }
+//	========================================================
+//	===== Installation, setup and update ===================
+//	========================================================
+def installed() {
+	sendEvent(name: "switch", value: "on")
+	sendEvent(name: "volume", value: 0)
+	sendEvent(name: "mute", value: "unmuted")
+	sendEvent(name: "transportStatus", value: "stopped")
+	sendEvent(name: "mediaInputSource", value: "wifi")
+	runIn(1, updated)
+}
 
 def updated() {
 	def commonStatus = commonUpdate()
-	if (commonStatus.status == "FAILED") {
-		logWarn("updated: ${commonStatus}")
-	} else {
+	if (commonStatus.status == "OK") {
 		logInfo("updated: ${commonStatus}")
+	} else {
+		logWarn("updated: ${commonStatus}")
+	}
+	if (volIncrement == null || !volIncrement) {
+		device.updateSetting("volIncrement", [type:"number", value: 1])
 	}
 	deviceSetup()
 }
 
-def auto() { setThermostatMode("auto") }
-def cool() { setThermostatMode("cool") }
-def heat() { setThermostatMode("heat") }
-def wind() { setThermostatMode("wind") }
-def dry() { setThermostatMode("dry") }
-def samsungAuto() { setThermostatMode("samsungAuto") }
-def emergencyHeat() { logInfo("emergencyHeat: Not Available on this device") }
-def off() { setThermostatMode("off") }
-def setOff() {
+//	===== Switch =====
+def on() { setSwitch("on") }
+def off() { setSwitch("off") }
+def toggleOnOff() {
+	def onOff = "on"
+	if (device.currentValue("switch") == "on") {
+		onOff = "off"
+	}
+	setSwitch(onOff)
+}
+def setSwitch(onOff) {
 	def cmdData = [
 		component: "main",
 		capability: "switch",
-		command: "off",
+		command: onOff,
 		arguments: []]
 	def cmdStatus = deviceCommand(cmdData)
-	return cmdStatus
+	logInfo("setSwitch: [cmd: ${onOff}, ${cmdStatus}]")
 }
-def setThermostatMode(thermostatMode) {
-	def cmdStatus
-	def prevMode = device.currentValue("thermostatMode")
-	if (thermostatMode == "auto") {
-		state.autoMode = true
-		cmdStatus = [status: "OK", mode: "Auto Emulation"]
-		poll()
-	} else if (thermostatMode == "off") {
-		state.autoMode = false
-		cmdStatus = setOff()
-	} else {
-		state.autoMode = false
-		if (thermostatMode == "samsungAuto") {
-			thermostatMode = "auto"
+
+//	===== Media Input Source =====
+def toggleInputSource() {
+	if (state.supportedInputs) {
+		def inputSources = state.supportedInputs
+		def totalSources = inputSources.size()
+		def currentSource = device.currentValue("mediaInputSource")
+		def sourceNo = inputSources.indexOf(currentSource)
+		def newSourceNo = sourceNo + 1
+		if (newSourceNo == totalSources) { newSourceNo = 0 }
+		def inputSource = inputSources[newSourceNo]
+		setInputSource(inputSource)
+	} else { logWarn("toggleInputSource: NOT SUPPORTED") }
+}
+def setInputSource(inputSource) {
+	if (state.supportedInputs) {
+		def inputSources = state.supportedInputs
+		if (inputSources.contains(inputSource)) {
+		def cmdData = [
+			component: "main",
+			capability: "mediaInputSource",
+			command: "setInputSource",
+			arguments: [inputSource]]
+		def cmdStatus = deviceCommand(cmdData)
+		logInfo("setInputSource: [cmd: ${inputSource}, ${cmdStatus}]")
+		} else {
+			logWarn("setInputSource: Invalid input source")
 		}
-		cmdStatus = sendModeCommand(thermostatMode)
-	}
-	logInfo("setThermostatMode: [cmd: ${thermostatMode}, ${cmdStatus}]")
-}
-def sendModeCommand(thermostatMode) {
-	def cmdData = [
-		component: "main",
-		capability: "airConditionerMode",
-		command: "setAirConditionerMode",
-		arguments: [thermostatMode]]
-	cmdStatus = deviceCommand(cmdData)
-	return cmdStatus
+	} else { logWarn("setInputSource: NOT SUPPORTED") } 
 }
 
-def fanAuto() { setThermostatFanMode("auto") }
-def fanCirculate() { setThermostatFanMode("medium") }
-def fanOn() { setThermostatFanMode("medium") }
-def fanLow() { setThermostatFanMode("low") }
-def fanMedium() { setThermostatFanMode("medium") }
-def fanHigh() { setThermostatFanMode("high") }
-def setThermostatFanMode(fanMode) {
+//	===== Media Transport =====
+def play() { setMediaPlayback("play") }
+def pause() { setMediaPlayback("pause") }
+def stop() { setMediaPlayback("stop") }
+def setMediaPlayback(pbMode) {
 	def cmdData = [
 		component: "main",
-		capability: "airConditionerFanMode",
-		command: "setFanMode",
-		arguments: [fanMode]]
+		capability: "mediaPlayback",
+		command: pbMode,
+		arguments: []]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setThermostatFanMode: [cmd: ${fanMode}, ${cmdStatus}]")
+	logInfo("setMediaPlayback: [cmd: ${pbMode}, ${cmdStatus}]")
 }
 
-def setHeatingSetpoint(setpoint) {
-	if (setpoint < state.minSetpoint || setpoint > state.maxSetpoint) {
-		logWarn("setHeatingSetpoint: Setpoint out of range")
-		return
-	}
-	def logData = [:]
-	def offset = tempOffset
-	if (offset < 0) { offset = -offset }
-	if (state.tempUnit == "°F") {
-		setpoint = setpoint.toInteger()
-		offset = offset.toInteger()		
-	}
-
-	if (device.currentValue("heatingSetpoint") != setpoint) {
-		sendEvent(name: "heatingSetpoint", value: setpoint, unit: state.tempUnit)
-		logData << [heatingSetpoint: setpoint]
-	}
-
-	def minSetpoint = setpoint + offset
-	if (minSetpoint > device.currentValue("coolingSetpoint")) {
-		sendEvent(name: "coolingSetpoint", value: minSetpoint, unit: state.tempUnit)
-		logData << [coolingSetpoint: minSetpoint]
-	}
-	
-	runIn(1, updateOperation)
-	if (logData != [:]) {
-		logInfo("setHeatingSetpoint: ${logData}")
-	}
+//	===== Audio Volume =====
+def volumeUp() { 
+	def curVol = device.currentValue("volume")
+	def newVol = curVol + volIncrement.toInteger()
+	setVolume(newVol)
 }
-def setCoolingSetpoint(setpoint) {
-	if (setpoint < state.minSetpoint || setpoint > state.maxSetpoint) {
-		logWarn("setCoolingSetpoint: Setpoint out of range")
-		return
-	}
-	def logData = [:]
-	def offset = tempOffset
-	if (offset < 0) { offset = -offset }
-	if (state.tempUnit == "°F") {
-		setpoint = setpoint.toInteger()
-		offset = offset.toInteger()		
-	}
-
-	if (device.currentValue("coolingSetpoint") != setpoint) {
-		sendEvent(name: "coolingSetpoint", value: setpoint, unit: state.tempUnit)
-		logData << [coolingSetpoint: setpoint]
-	}
-
-	def maxSetpoint = setpoint - 4
-	if (maxSetpoint < device.currentValue("heatingSetpoint")) {
-		sendEvent(name: "heatingSetpoint", value: maxSetpoint, unit: state.tempUnit)
-		logData << [heatingSetpoint: maxSetpoint]
-	}
-	
-	runIn(1, updateOperation)
-	if (logData != [:]) {
-		logInfo("setCoolingSetpoint: ${logData}")
-	}
+def volumeDown() {
+	def curVol = device.currentValue("volume")
+	def newVol = curVol - volIncrement.toInteger()
+	setVolume(newVol)
 }
-def setSamsungAutoSetpoint(setpoint) {
-	if (setpoint < state.minSetpoint || setpoint > state.maxSetpoint) {
-		logWarn("setSamsungAutoSetpoint: Setpoint out of range")
-		return
-	}
-	if (state.tempUnit == "°F") {
-		setpoint = setpoint.toInteger()
-	}
-	def logData = [:]
-	if (device.currentValue("samsungAutoSetpoint") != setpoint) {
-		sendEvent(name: "samsungAutoSetpoint", value: setpoint, unit: state.tempUnit)
-		sendEvent(name: "level", value: setpoint)
-		logData << [samsungAutoSetpoint: setpoint]
-		if (samsungAuto && device.currentValue("thermostatMode") == "auto") {
-			setThermostatSetpoint(setpoint)
-		}
-	}
-	
-	runIn(1, updateOperation)
-	if (logData != [:]) {
-		logInfo("setSamsungAutoSetpoint: ${logData}")
-	}
-}
-def setLevel(level) { setSamsungAutoSetpoint(level) }
-def setThermostatSetpoint(setpoint) {
+def setVolume(volume) {
+	if (volume == null) { volume = device.currentValue("volume") }
+	else if (volume < 0) { volume = 0 }
+	else if (volume > 100) { volume = 100 }
 	def cmdData = [
 		component: "main",
-		capability: "thermostatCoolingSetpoint",
-		command: "setCoolingSetpoint",
-		arguments: [setpoint]]
+		capability: "audioVolume",
+		command: "setVolume",
+		arguments: [volume]]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setThermostatSetpoint: [cmd: ${setpoint}, ${cmdStatus}]")
+	logInfo("setVolume: [cmd: ${volume}, ${cmdStatus}]")
 }
 
-def togglePanelLight() {
-	def newOnOff = "on"
-	if (device.currentValue("lightStatus") == "on") {
-		newOnOff = "off"
+def mute() { setMute("muted") }
+def unmute() { setMute("unmuted") }
+def toggleMute() {
+	def muteValue = "muted"
+	if(device.currentValue("mute") == "muted") {
+		muteValue = "unmuted"
 	}
-	def lightCmd = "Light_Off"
-	if (newOnOff == "off") {
-		lightCmd = "Light_On"
-	}
-	def arguments = [
-		"mode/vs/0",
-		["x.com.samsung.da.options":[lightCmd]]
-		]
-
+	setMute(muteValue)
+}
+def setMute(muteValue) {
 	def cmdData = [
 		component: "main",
-		capability: "execute",
-		command: "execute",
-		arguments: arguments]
+		capability: "audioMute",
+		command: "setMute",
+		arguments: [muteValue]]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setThermostatSetpoint: [cmd: ${setpoint}, ${cmdStatus}]")
-}
-
-def stringPostHttp(cmdString) {
-	def respData = [:]
-	def sendCmdParams = [
-			uri: "https://api.smartthings.com/v1",
-			path: "/devices/${stDeviceId.trim()}/commands",
-			headers: ['Authorization': 'Bearer ' + stApiKey.trim()],
-			body : cmdString]
-	try {
-		httpPost(sendCmdParams) {resp ->
-			if (resp.status == 200 && resp.data != null) {
-				respData << [status: "OK", results: resp.data.results]
-				refresh()
-			} else {
-				respData << [status: "FAILED",
-							 httpCode: resp.status,
-							 errorMsg: resp.errorMessage]
-			}
-		}
-	} catch (error) {
-		respData << [status: "FAILED",
-					 httpCode: "Timeout",
-					 errorMsg: error]
-	}
-	return respData
+	logInfo("setMute: [cmd: ${muteValue}, ${cmdStatus}]")
 }
 
 def distResp(resp, data) {
@@ -297,176 +210,80 @@ def distResp(resp, data) {
 					errorMsg: resp.errorMessage]
 	}
 	if (respLog != [:]) {
-//		logWarn("distResp: ${respLog}")
+		logWarn("distResp: ${respLog}")
 	}
 }
 
-def deviceSetupParse(parseData) {
-	def logData = [:]
-	tempUnit = parseData.temperatureMeasurement.temperature.unit
-	state.tempUnit = "°${tempUnit}"
-	logData << [tempUnit: tempUnit]
-
-	def supportedThermostatModes = parseData.airConditionerMode.supportedAcModes.value
-	supportedThermostatModes << "samsungAuto"
-	supportedThermostatModes << "off"
-	sendEvent(name: "supportedThermostatModes", value: supportedThermostatModes)
-	logData << [supportedThermostatModes: supportedThermostatModes]
-
-	def supportedThermostatFanModes = parseData.airConditionerFanMode.supportedAcFanModes.value
-	sendEvent(name: "supportedThermostatFanModes", value: supportedThermostatFanModes)
-	logData << [supportedThermostatFanModes: supportedThermostatFanModes]
-
-	state.minSetpoint = parseData["custom.thermostatSetpointControl"].minimumSetpoint.value
-	state.maxSetpoint = parseData["custom.thermostatSetpointControl"].maximumSetpoint.value 
-	
-	//	Initialize setpoints if required.
-	def coolSetpoint = 76
-	def heatSetpoint = 68
-	def samsungAutoSetpoint = 72
-	if (state.tempUnit == "°C") {
-		coolSetpoint = 24
-		heatSetpoint = 20
-		samsungAutoSetpoint = 22
-	}
-	if (!device.currentValue("coolingSetpoint")) {
-		sendEvent(name: "coolingSetpoint", value: coolSetpoint, unit: state.tempUnit)
-	}
-	if (!device.currentValue("heatingSetpoint")) {
-		sendEvent(name: "heatingSetpoint", value: heatSetpoint, unit: state.tempUnit)
-	}
-	if (!device.currentValue("samsungAutoSetpoint")) {
-		sendEvent(name: "samsungAutoSetpoint", value: samsungAutoSetpoint, unit: state.tempUnit)
-	}
-	logInfo("deviceSetupParse: ${logData}")
-}
-
-def statusParse(parseData) {
-	def logData = [:]
-	
-	def temperature = parseData.temperatureMeasurement.temperature.value
-	if (device.currentValue("temperature") != temperature) {
-		sendEvent(name: "temperature", value: temperature, unit: tempUnit)
-		logData << [temperature: temperature]
-	}
-
-	def thermostatSetpoint = parseData.thermostatCoolingSetpoint.coolingSetpoint.value
-	if (device.currentValue("thermostatSetpoint") != thermostatSetpoint) {
-		sendEvent(name: "thermostatSetpoint", value: thermostatSetpoint, unit: tempUnit)
-		logData << [thermostatSetpoint: thermostatSetpoint]
-	}
-
-	def onOff = parseData.switch.switch.value
-	def thermostatMode = parseData.airConditionerMode.airConditionerMode.value
-	state.rawMode = thermostatMode
-	if (state.autoMode) {
-		thermostatMode = "auto"
-	} else if (onOff == "off") {
-		thermostatMode = "off"
-	} else if (thermostatMode != "cool" && thermostatMode != "heat" &&
-			   thermostatMode != "wind" && thermostatMode != "dry" &&
-			   thermostatMode != "off") {
-		thermostatMode = "samsungAuto"
-	}
-	if (device.currentValue("thermostatMode") != thermostatMode) {
-		sendEvent(name: "thermostatMode", value: thermostatMode)
-		logData << [thermostatMode: thermostatMode]
-	}
-
-	def thermostatFanMode = parseData.airConditionerFanMode.fanMode.value
-	if (device.currentValue("thermostatFanMode") != thermostatFanMode) {
-		sendEvent(name: "thermostatFanMode", value: thermostatFanMode)
-		logData << [thermostatFanMode: thermostatFanMode]
-	}
-	
-	def execStatus = parseData.execute.data.value.payload["x.com.samsung.da.options"]
-	def lightStatus = "on"
-	if (execStatus.contains("Light_On")) { lightStatus = "off" }
-	if (device.currentValue("lightStatus") != lightStatus) {
-		sendEvent(name: "lightStatus", value: lightStatus)
-		logData << [lightStatus: lightStatus]
-	}
-	
-	runIn(2, updateOperation)
-	if (simulate() == true) {
-		runIn(4, listAttributes, [data: true])
+def deviceSetupParse(mainData) {
+	def setupData = [:]
+	if (mainData.mediaInputSource != null) {
+		def supportedInputs =  mainData.mediaInputSource.supportedInputSources.value
+		sendEvent(name: "supportedInputs", value: supportedInputs)	
+		state.supportedInputs = supportedInputs
+		setupData << [supportedInputs: supportedInputs]
 	} else {
-		runIn(4, listAttributes)
+		state.remove("supportedInputs")
+	}
+	if (setupData != [:]) {
+		logInfo("deviceSetupParse: ${setupData}")
 	}
 }
 
-def updateOperation() {
-	def respData = [:]
-	def setpoint = device.currentValue("thermostatSetpoint")
-	def temperature = device.currentValue("temperature")
-	def heatPoint = device.currentValue("heatingSetpoint")
-	def coolPoint = device.currentValue("coolingSetpoint")
-	def samsungPoint = device.currentValue("samsungAutoSetpoint")
-	def mode = device.currentValue("thermostatMode")
-	def rawMode = state.rawMode
-	def autoMode = state.autoMode
-
-	if (state.autoMode) {
-		def opMode
-		if (temperature <= heatPoint) {
-			opMode = "heat"
-		} else if (temperature >= coolSetpoint) {
-			opMode = "cool"
-		}
-		if (rawMode != opMode) {
-			def cmdStatus = sendModeCommand(opMode)
-			respData << [sendModeCommand: opMode]
-			logInfo("updateOperation: ${respData}")
-			return
-		}
+def statusParse(mainData) {
+	def stData = [:]
+	def onOff = mainData.switch.switch.value
+	if (device.currentValue("switch") != onOff) {
+		sendEvent(name: "switch", value: onOff)
+		stData << [switch: onOff]
 	}
 
-	def newSetpoint = setpoint
-	if (rawMode == "cool") {
-		newSetpoint = coolPoint
-	} else if (rawMode == "heat") {
-		newSetpoint = heatPoint
-	} else if (mode == "samsungAuto") {
-		newSetpoint = samsungPoint
+	def volume = mainData.audioVolume.volume.value.toInteger()
+	if (device.currentValue("volume").toInteger() != volume) {
+		sendEvent(name: "volume", value: volume)
+		stData << [volume: volume]
 	}
-	if (newSetpoint != setpoint) {
-		setThermostatSetpoint(newSetpoint)
-		respData << [thermostatSetpoint: newSetpoint]
-		logInfo("updateOperation: ${respData}")
-		return
+
+	def mute = mainData.audioMute.mute.value
+	if (device.currentValue("mute") != mute) {
+		sendEvent(name: "mute", value: mute)
+		stData << [mute: mute]
+	}
+
+	def transportStatus = mainData.mediaPlayback.playbackStatus.value
+	if (device.currentValue("transportStatus") != transportStatus) {
+		sendEvent(name: "transportStatus", value: transportStatus)
+		stData << [transportStatus: transportStatus]
 	}
 	
-	def opState = "idle"
-	if (mode == "off" || mode == "wind" || mode == "dry") {
-		opState = mode
-	} else if (mode == "samsungAuto") {
-		if (temperature - setpoint > 1.5) {
-			opState = "cooling"
-		} else if (setpoint - temperature > 1.5) {
-			opState = "heating"
-		}
-	} else if (rawMode == "cool") {
-		if (temperature - setpoint > 0) {
-			opState = "cooling"
-		}
-	} else if (rawMode == "heat") {
-		if (setpoint - temperature > 0) {
-			opState = "heating"
+	if (mainData.mediaInputSource != null) {
+		def mediaInputSource = mainData.mediaInputSource.inputSource.value
+		if (device.currentValue("mediaInputSource") != mediaInputSource) {
+			sendEvent(name: "mediaInputSource", value: mediaInputSource)
+			stData << [mediaInputSource: mediaInputSource]
 		}
 	}
-	if (device.currentValue("thermostatOperatingState") != opState) {
-		sendEvent(name: "thermostatOperatingState", value: opState)
-		respData << [thermostatOperatingState: opState]
-		logInfo("updateOperation: ${respData}")
+	
+	if (mainData.audioTrackData != null) {
+		def audioTrackData = mainData.audioTrackData.audioTrackData.value
+		if (device.currentValue("audioTrackData") != audioTrackData) {
+			sendEvent(name: "trackData", value: audioTrackData)
+			stData << [trackData: audioTrackData]
+		}
 	}
+
+	if (stData != [:] && stData != null) {
+		logInfo("statusParse: ${stData}")
+	}	
+	runIn(3, traceAttributes)
 }
+def traceAttributes() { listAttributes(true) }
 
 //	===== Library Integration =====
 
 
 
-def simulate() { return false}
-//#include davegut.Samsung-HVAC-Sim
+def simulate() { return false }
+//#include davegut.Samsung-Soundbar-Sim
 
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
@@ -493,33 +310,32 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 	} // library marker davegut.Logging, line 22
 } // library marker davegut.Logging, line 23
 
-//	6.7.2 Change B.  Remove driverVer() // library marker davegut.Logging, line 25
-def logTrace(msg){ // library marker davegut.Logging, line 26
-	log.trace "${device.displayName}: ${msg}" // library marker davegut.Logging, line 27
-} // library marker davegut.Logging, line 28
+def logTrace(msg){ // library marker davegut.Logging, line 25
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
+} // library marker davegut.Logging, line 27
 
-def logInfo(msg) {  // library marker davegut.Logging, line 30
-	if (!infoLog || infoLog == true) { // library marker davegut.Logging, line 31
-		log.info "${device.displayName}: ${msg}" // library marker davegut.Logging, line 32
-	} // library marker davegut.Logging, line 33
-} // library marker davegut.Logging, line 34
+def logInfo(msg) {  // library marker davegut.Logging, line 29
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
 
-def debugLogOff() { // library marker davegut.Logging, line 36
-	if (debug == true) { // library marker davegut.Logging, line 37
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 38
-	} else if (debugLog == true) { // library marker davegut.Logging, line 39
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 40
-	} // library marker davegut.Logging, line 41
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 42
-} // library marker davegut.Logging, line 43
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
 
-def logDebug(msg) { // library marker davegut.Logging, line 45
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 46
-		log.debug "${device.displayName}: ${msg}" // library marker davegut.Logging, line 47
-	} // library marker davegut.Logging, line 48
-} // library marker davegut.Logging, line 49
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName}: ${msg}" } // library marker davegut.Logging, line 51
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 

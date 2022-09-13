@@ -1,11 +1,11 @@
 {
   "packageName": "Samsung ST Appliances",
   "author": "David Gutheinz",
-  "version": "1.2",
+  "version": "1.1",
   "minimumHEVersion": "2.3.2",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/tree/master/SamsungAppliances#readme",
   "communityLink": "https://community.hubitat.com/t/drivers-for-samsung-appliances-controlled-via-smartthings-cloud-api/94807",
-  "dateReleased": "2022-09-14",
+  "dateReleased": "2022-09-12",
   "drivers": [
     {
       "id": "4ce5611b-9f5f-4f8e-9cc2-6a636d346e4f",

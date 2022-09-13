@@ -11,8 +11,7 @@ Library code is at the bottom of the distributed single-file driver.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
 ===== Version 1.1 ==============================================================================*/
-//def driverVer() { return "1.1" }
-def driverVer() { return "1.1" }
+def driverVer() { return "1.2" }
 def nameSpace() { return "davegut" }
 
 metadata {
@@ -54,6 +53,8 @@ metadata {
 		if (stDeviceId) {
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
 				   options: ["10sec", "20sec", "30sec", "1", "5", "10", "30"], defaultValue: "10")
+			input ("infoLog", "bool",  
+				   title: "Enable info logging", defaultValue: true)
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 		}
@@ -148,7 +149,8 @@ def distResp(resp, data) {
 }
 
 def deviceSetupParse(respData) {
-	def respLog = []
+	logInfo("deviceSetpParse")
+	def respLog = [:]
 	if (!getDataValue("dongle")) {
 		def dongle = "false"
 		def mnmo = respData.components.main.ocf.mnmo
@@ -160,29 +162,26 @@ def deviceSetupParse(respData) {
 	}
 	//	Install Children
 	def compData = respData.components
+	def disabledComponents = compData.main["custom.disabledComponents"].disabledComponents.value
 	compData.each {
 		if (it.key != "main") {
 			def childDni = dni + "-${it.key}"
 			def isChild = getChildDevice(childDni)
 			if (!isChild) {
-				def disabledComponents = []
-				if (disabledComponents == null) {
-					disabledComponents = compData.main["custom.disabledComponents"].disabledComponents.value
-				}
 				if(!disabledComponents.contains(it.key)) {
-					respLog << [component: it.key, status: "Installing"]
+					respLog << ["${it.key}": "Installing"]
 					addChild(it.key, childDni)
+				} else {
+					respLog << ["${it.key}": "Disabled"]
 				}
 			}
 		} else {
 			updateDataValue("component", "main")
 		}
 	}
-			
-	if (respLog != []) {
-		logInfo("deviceSetupParse: ${respLog}")
-	}
+	logInfo("deviceSetupParse: ${respLog}")
 }
+
 def addChild(component, childDni) {
 	def type
 	switch(component) {
@@ -199,7 +198,7 @@ def addChild(component, childDni) {
 			type = "Samsung Refrig cvroom"
 			break
 		default:
-			logWarn("addChild: [component: ${component}, error: not on components list.")
+			logWarn("addChild: [component: ${component}, error: component not implemented.")
 	}
 	try {
 		addChildDevice("davegut", "${type}", "${childDni}", [
@@ -245,7 +244,6 @@ def statusParse(respData) {
 
 	def filterStatus = parseData["custom.waterFilter"].waterFilterStatus.value
 	sendEvent(name: "filterStatus", value: filterStatus)
-
 	if (simulate() == true) {
 		runIn(1, listAttributes, [data: true])
 	} else {
@@ -286,32 +284,33 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 	} // library marker davegut.Logging, line 22
 } // library marker davegut.Logging, line 23
 
-def logTrace(msg){ // library marker davegut.Logging, line 25
-	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
-} // library marker davegut.Logging, line 27
+//	6.7.2 Change B.  Remove driverVer() // library marker davegut.Logging, line 25
+def logTrace(msg){ // library marker davegut.Logging, line 26
+	log.trace "${device.displayName}: ${msg}" // library marker davegut.Logging, line 27
+} // library marker davegut.Logging, line 28
 
-def logInfo(msg) {  // library marker davegut.Logging, line 29
-	if (infoLog == true) { // library marker davegut.Logging, line 30
-		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
-	} // library marker davegut.Logging, line 32
-} // library marker davegut.Logging, line 33
+def logInfo(msg) {  // library marker davegut.Logging, line 30
+	if (!infoLog || infoLog == true) { // library marker davegut.Logging, line 31
+		log.info "${device.displayName}: ${msg}" // library marker davegut.Logging, line 32
+	} // library marker davegut.Logging, line 33
+} // library marker davegut.Logging, line 34
 
-def debugLogOff() { // library marker davegut.Logging, line 35
-	if (debug == true) { // library marker davegut.Logging, line 36
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
-	} else if (debugLog == true) { // library marker davegut.Logging, line 38
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
-	} // library marker davegut.Logging, line 40
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
-} // library marker davegut.Logging, line 42
+def debugLogOff() { // library marker davegut.Logging, line 36
+	if (debug == true) { // library marker davegut.Logging, line 37
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 38
+	} else if (debugLog == true) { // library marker davegut.Logging, line 39
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 40
+	} // library marker davegut.Logging, line 41
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 42
+} // library marker davegut.Logging, line 43
 
-def logDebug(msg) { // library marker davegut.Logging, line 44
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
-		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
-	} // library marker davegut.Logging, line 47
-} // library marker davegut.Logging, line 48
+def logDebug(msg) { // library marker davegut.Logging, line 45
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 46
+		log.debug "${device.displayName}: ${msg}" // library marker davegut.Logging, line 47
+	} // library marker davegut.Logging, line 48
+} // library marker davegut.Logging, line 49
 
-def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
+def logWarn(msg) { log.warn "${device.displayName}: ${msg}" } // library marker davegut.Logging, line 51
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 

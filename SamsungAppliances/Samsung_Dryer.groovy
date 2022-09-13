@@ -8,7 +8,7 @@ and status of defined functions into Hubitat Environment.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
 ===== Version 1.1 ==============================================================================*/
-def driverVer() { return "1.1" }
+def driverVer() { return "1.2" }
 def nameSpace() { return "davegut" }
 
 metadata {
@@ -37,6 +37,8 @@ metadata {
 		if (stDeviceId) {
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
 				   options: ["10sec", "20sec", "30sec", "1", "5", "10", "30"], defaultValue: "10")
+			input ("infoLog", "bool",  
+				   title: "Info logging", defaultValue: true)
 			input ("debugLog", "bool",
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 			input("installChildren", "bool", title: "Install child devices",
@@ -181,8 +183,11 @@ def statusParse(respData) {
 		sendEvent(name: "timeRemaining", value: timeRemaining)
 	}
 
-//	runIn(1, listAttributes, [data: true])
-	runIn(1, listAttributes)
+	if (simulate() == true) {
+		runIn(1, listAttributes, [data: true])
+	} else {
+		runIn(1, listAttributes)
+	}
 }
 
 //	===== Library Integration =====
@@ -190,7 +195,7 @@ def statusParse(respData) {
 
 
 def simulate() { return false }
-//#include davegut.Samsung-Dryer-Sim
+
 
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
@@ -217,32 +222,33 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 	} // library marker davegut.Logging, line 22
 } // library marker davegut.Logging, line 23
 
-def logTrace(msg){ // library marker davegut.Logging, line 25
-	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
-} // library marker davegut.Logging, line 27
+//	6.7.2 Change B.  Remove driverVer() // library marker davegut.Logging, line 25
+def logTrace(msg){ // library marker davegut.Logging, line 26
+	log.trace "${device.displayName}: ${msg}" // library marker davegut.Logging, line 27
+} // library marker davegut.Logging, line 28
 
-def logInfo(msg) {  // library marker davegut.Logging, line 29
-	if (infoLog == true) { // library marker davegut.Logging, line 30
-		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
-	} // library marker davegut.Logging, line 32
-} // library marker davegut.Logging, line 33
+def logInfo(msg) {  // library marker davegut.Logging, line 30
+	if (!infoLog || infoLog == true) { // library marker davegut.Logging, line 31
+		log.info "${device.displayName}: ${msg}" // library marker davegut.Logging, line 32
+	} // library marker davegut.Logging, line 33
+} // library marker davegut.Logging, line 34
 
-def debugLogOff() { // library marker davegut.Logging, line 35
-	if (debug == true) { // library marker davegut.Logging, line 36
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
-	} else if (debugLog == true) { // library marker davegut.Logging, line 38
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
-	} // library marker davegut.Logging, line 40
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
-} // library marker davegut.Logging, line 42
+def debugLogOff() { // library marker davegut.Logging, line 36
+	if (debug == true) { // library marker davegut.Logging, line 37
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 38
+	} else if (debugLog == true) { // library marker davegut.Logging, line 39
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 40
+	} // library marker davegut.Logging, line 41
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 42
+} // library marker davegut.Logging, line 43
 
-def logDebug(msg) { // library marker davegut.Logging, line 44
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
-		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
-	} // library marker davegut.Logging, line 47
-} // library marker davegut.Logging, line 48
+def logDebug(msg) { // library marker davegut.Logging, line 45
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 46
+		log.debug "${device.displayName}: ${msg}" // library marker davegut.Logging, line 47
+	} // library marker davegut.Logging, line 48
+} // library marker davegut.Logging, line 49
 
-def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
+def logWarn(msg) { log.warn "${device.displayName}: ${msg}" } // library marker davegut.Logging, line 51
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 
@@ -516,3 +522,73 @@ def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, lin
 } // library marker davegut.ST-Common, line 172
 
 // ~~~~~ end include (1090) davegut.ST-Common ~~~~~
+
+// ~~~~~ start include (1155) davegut.Samsung-Dryer-Sim ~~~~~
+library ( // library marker davegut.Samsung-Dryer-Sim, line 1
+	name: "Samsung-Dryer-Sim", // library marker davegut.Samsung-Dryer-Sim, line 2
+	namespace: "davegut", // library marker davegut.Samsung-Dryer-Sim, line 3
+	author: "Dave Gutheinz", // library marker davegut.Samsung-Dryer-Sim, line 4
+	description: "Simulator - Samsung Dryer", // library marker davegut.Samsung-Dryer-Sim, line 5
+	category: "utilities", // library marker davegut.Samsung-Dryer-Sim, line 6
+	documentationLink: "" // library marker davegut.Samsung-Dryer-Sim, line 7
+) // library marker davegut.Samsung-Dryer-Sim, line 8
+
+def testData() { // library marker davegut.Samsung-Dryer-Sim, line 10
+	def flex = true // library marker davegut.Samsung-Dryer-Sim, line 11
+	def altTest = true // library marker davegut.Samsung-Dryer-Sim, line 12
+
+	def completionTime = "2022-08-29T18:15:00Z" // library marker davegut.Samsung-Dryer-Sim, line 14
+	def machineState = "run" // library marker davegut.Samsung-Dryer-Sim, line 15
+	def jobState = "drying" // library marker davegut.Samsung-Dryer-Sim, line 16
+	def onOff = "on" // library marker davegut.Samsung-Dryer-Sim, line 17
+	def kidsLock = "locked" // library marker davegut.Samsung-Dryer-Sim, line 18
+	def remoteControl = "true" // library marker davegut.Samsung-Dryer-Sim, line 19
+	if (altTest) { // library marker davegut.Samsung-Dryer-Sim, line 20
+		completionTime = "2022-08-29T18:15:30Z" // library marker davegut.Samsung-Dryer-Sim, line 21
+		machineState = "stopped" // library marker davegut.Samsung-Dryer-Sim, line 22
+		jobState = "stopped" // library marker davegut.Samsung-Dryer-Sim, line 23
+		onOff = "off" // library marker davegut.Samsung-Dryer-Sim, line 24
+		kidsLock = "unlocked" // library marker davegut.Samsung-Dryer-Sim, line 25
+		remoteControl = "false" // library marker davegut.Samsung-Dryer-Sim, line 26
+	} // library marker davegut.Samsung-Dryer-Sim, line 27
+
+	if (flex) { // library marker davegut.Samsung-Dryer-Sim, line 29
+		return  [components:[ // library marker davegut.Samsung-Dryer-Sim, line 30
+			sub:[ // library marker davegut.Samsung-Dryer-Sim, line 31
+				remoteControlStatus:[remoteControlEnabled:[value:remoteControl]],  // library marker davegut.Samsung-Dryer-Sim, line 32
+				dryerOperatingState:[ // library marker davegut.Samsung-Dryer-Sim, line 33
+					completionTime:[value:completionTime],  // library marker davegut.Samsung-Dryer-Sim, line 34
+					machineState:[value:machineState],  // library marker davegut.Samsung-Dryer-Sim, line 35
+					dryerJobState:[value:jobState]],  // library marker davegut.Samsung-Dryer-Sim, line 36
+				switch:[switch:[value:onOff]]],  // library marker davegut.Samsung-Dryer-Sim, line 37
+			main:[ // library marker davegut.Samsung-Dryer-Sim, line 38
+				switch:[switch:[value:onOff]], // library marker davegut.Samsung-Dryer-Sim, line 39
+				"samsungce.kidsLock":[lockState:[value:kidsLock]],  // library marker davegut.Samsung-Dryer-Sim, line 40
+				dryerOperatingState:[ // library marker davegut.Samsung-Dryer-Sim, line 41
+					completionTime:[value:completionTime],  // library marker davegut.Samsung-Dryer-Sim, line 42
+					machineState:[value:machineState],  // library marker davegut.Samsung-Dryer-Sim, line 43
+					dryerJobState:[value:jobState]],  // library marker davegut.Samsung-Dryer-Sim, line 44
+				remoteControlStatus:[remoteControlEnabled:[value:remoteControl]],  // library marker davegut.Samsung-Dryer-Sim, line 45
+			]]] // library marker davegut.Samsung-Dryer-Sim, line 46
+	} else { // library marker davegut.Samsung-Dryer-Sim, line 47
+		return  [components:[ // library marker davegut.Samsung-Dryer-Sim, line 48
+			main:[ // library marker davegut.Samsung-Dryer-Sim, line 49
+				switch:[switch:[value:onOff]], // library marker davegut.Samsung-Dryer-Sim, line 50
+				"samsungce.kidsLock":[lockState:[value:kidsLock]],  // library marker davegut.Samsung-Dryer-Sim, line 51
+				dryerOperatingState:[ // library marker davegut.Samsung-Dryer-Sim, line 52
+					completionTime:[value:completionTime],  // library marker davegut.Samsung-Dryer-Sim, line 53
+					machineState:[value:machineState],  // library marker davegut.Samsung-Dryer-Sim, line 54
+					dryerJobState:[value:jobState]],  // library marker davegut.Samsung-Dryer-Sim, line 55
+				remoteControlStatus:[remoteControlEnabled:[value:remoteControl]],  // library marker davegut.Samsung-Dryer-Sim, line 56
+			]]] // library marker davegut.Samsung-Dryer-Sim, line 57
+	} // library marker davegut.Samsung-Dryer-Sim, line 58
+} // library marker davegut.Samsung-Dryer-Sim, line 59
+
+def testResp(cmdData) { // library marker davegut.Samsung-Dryer-Sim, line 61
+	return [ // library marker davegut.Samsung-Dryer-Sim, line 62
+		cmdData: cmdData, // library marker davegut.Samsung-Dryer-Sim, line 63
+		status: [status: "OK", // library marker davegut.Samsung-Dryer-Sim, line 64
+				 results:[[id: "e9585885-3848-4fea-b0db-ece30ff1701e", status: "ACCEPTED"]]]] // library marker davegut.Samsung-Dryer-Sim, line 65
+} // library marker davegut.Samsung-Dryer-Sim, line 66
+
+// ~~~~~ end include (1155) davegut.Samsung-Dryer-Sim ~~~~~

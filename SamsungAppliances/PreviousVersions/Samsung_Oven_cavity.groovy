@@ -1,4 +1,4 @@
-/*	===== HUBITAT Samsung HVAC Using SmartThings ==========================================
+/*	===== HUBITAT Samsung Oven Using SmartThings ==========================================
 		Copyright 2022 Dave Gutheinz
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file
 except in compliance with the License. You may obtain a copy of the License at:
@@ -19,7 +19,7 @@ d.	Run a Save Preferences noting no ERRORS on the log page
 e.	If errors, contact developer.
 //	===== CHILD DEVICE =====
 ===========================================================================================*/
-def driverVer() { return "B0.1" }
+def driverVer() { return "1.1" }
 
 metadata {
 	definition (name: "Samsung Oven cavity",

@@ -5,7 +5,7 @@ License Information:
 ===== Description
 This is a child driver to Samsung Dryer and will not work indepenently of same.
 ===== Version 1.1 ==============================================================================*/
-def driverVer() { return "1.2" }
+def driverVer() { return "1.1" }
 def nameSpace() { return "davegut" }
 
 metadata {
@@ -27,8 +27,6 @@ metadata {
 		attribute "waterTemperature", "string"
 	}
 	preferences {
-		input ("infoLog", "bool",  
-			   title: "Info logging", defaultValue: true)
 		input ("debugLog", "bool",
 			   title: "Enable debug logging for 30 minutes", defaultValue: false)
 	}
@@ -100,11 +98,8 @@ def statusParse(respData) {
 	def waterTemperature = parseData["custom.washerWaterTemperature"].washerWaterTemperature.value
 	sendEvent(name: "waterTemperature", value: waterTemperature)
 
-	if (parent.simulate() == true) {
-		runIn(1, listAttributes, [data: true])
-	} else {
-		runIn(1, listAttributes)
-	}
+	runIn(1, listAttributes, [data: true])
+//	runIn(1, listAttributes)
 }
 
 //	===== Library Integration =====
@@ -135,32 +130,31 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 	} // library marker davegut.Logging, line 22
 } // library marker davegut.Logging, line 23
 
-//	6.7.2 Change B.  Remove driverVer() // library marker davegut.Logging, line 25
-def logTrace(msg){ // library marker davegut.Logging, line 26
-	log.trace "${device.displayName}: ${msg}" // library marker davegut.Logging, line 27
-} // library marker davegut.Logging, line 28
+def logTrace(msg){ // library marker davegut.Logging, line 25
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
+} // library marker davegut.Logging, line 27
 
-def logInfo(msg) {  // library marker davegut.Logging, line 30
-	if (!infoLog || infoLog == true) { // library marker davegut.Logging, line 31
-		log.info "${device.displayName}: ${msg}" // library marker davegut.Logging, line 32
-	} // library marker davegut.Logging, line 33
-} // library marker davegut.Logging, line 34
+def logInfo(msg) {  // library marker davegut.Logging, line 29
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
 
-def debugLogOff() { // library marker davegut.Logging, line 36
-	if (debug == true) { // library marker davegut.Logging, line 37
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 38
-	} else if (debugLog == true) { // library marker davegut.Logging, line 39
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 40
-	} // library marker davegut.Logging, line 41
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 42
-} // library marker davegut.Logging, line 43
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
 
-def logDebug(msg) { // library marker davegut.Logging, line 45
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 46
-		log.debug "${device.displayName}: ${msg}" // library marker davegut.Logging, line 47
-	} // library marker davegut.Logging, line 48
-} // library marker davegut.Logging, line 49
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName}: ${msg}" } // library marker davegut.Logging, line 51
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~

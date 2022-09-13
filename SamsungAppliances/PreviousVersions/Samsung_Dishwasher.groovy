@@ -1,4 +1,4 @@
-/*	Samsung Washer using SmartThings Interface
+/*	Samsung Dishwasher using SmartThings Interface
 		Copyright Dave Gutheinz
 License Information:
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
@@ -8,29 +8,33 @@ and status of defined functions into Hubitat Environment.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
 ===== Version 1.1 ==============================================================================*/
-def driverVer() { return "1.2" }
+def driverVer() { return "1.1" }
 def nameSpace() { return "davegut" }
 
 metadata {
-	definition (name: "Samsung Washer",
+	definition (name: "Samsung Dishwasher",
 				namespace: nameSpace(),
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
 			   ){
 		capability "Refresh"
-		attribute "switch", "string"
-		command "start"
-		command "pause"
-		command "stop"
-		attribute "machineState", "string"
+		capability "Switch"
+		command "toggleOnOff"
 		attribute "kidsLock", "string"
-		attribute "remoteControlEnabled", "string"
-		attribute "completionTime", "string"
-		attribute "timeRemaining", "number"
-		attribute "waterTemperature", "string"
-		attribute "jobState", "string"
-		attribute "soilLevel", "string"
-		attribute "spinLevel", "string"
+		command "setDishwasherMode", [[
+			name: "Dishwasher Mode",
+			constraints: ["auto", "normal", "heavy", "delicate", "express", "rinseOnly", "selfClean"],
+			type: "ENUM"]]
+		command "toggleDishwasherMode"
+		attribute "dishwasherMode", "string"
+		attribute "supportedDishwasherModes", "string"
+		attribute "operatingState", "string"
+		attribute "timeRemaining", "string"
+		attribute "currentJob", "string"
+		
+//		command "setTimeRemaining", ["string"]
+//		command "setKidsLock", ["string"]
+//		command "setJobState", ["string"]
 	}
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
@@ -40,12 +44,8 @@ metadata {
 		if (stDeviceId) {
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
 				   options: ["10sec", "20sec", "30sec", "1", "5", "10", "30"], defaultValue: "10")
-			input ("infoLog", "bool",  
-				   title: "Info logging", defaultValue: true)
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
-			input("installChildren", "bool", title: "Install child devices",
-				  defaultValue: false)
 		}
 	}
 }
@@ -59,23 +59,47 @@ def updated() {
 	} else {
 		logInfo("updated: ${commonStatus}")
 	}
-	if (installChildren) {
-		deviceSetup()
-		device.updateSetting("installChildren", [type:"bool", value: false])
-	}
+	deviceSetup()
 }
 
-def start() { setMachineState("run") }
-def pause() { setMachineState("pause") }
-def stop() { setMachineState("stop") }
-def setMachineState(machState) {
+def on() { setSwitch("on") }
+def off() { setSwitch("off") }
+def toggleOnOff() {
+	def onOff = "on"
+	if (device.currentValue("switch") == "on") {
+		onOff = "off"
+	}
+	setSwitch(onOff)
+}
+def setSwitch(onOff) {
 	def cmdData = [
 		component: "main",
-		capability: "dryerOperatingState",
-		command: "setMachineState",
-		arguments: [machState]]
+		capability: "switch",
+		command: onOff,
+		arguments: []]
 	def cmdStatus = deviceCommand(cmdData)
-	logInfo("setMachineState: [cmd: ${machState}, status: ${cmdStatus}]")
+	logInfo("setSwitch: [cmd: ${onOff}, ${cmdStatus}]")
+}
+
+def toggleDishwasherMode() {
+	if (state.supportedDishwasherModes) {
+		def modes = state.supportedDishwasherModes
+		def totalModes = modes.size()
+		def currentMode = device.currentValue("dishwasherMode")
+		def modeIndex = modes.indexOf(currentMode)
+		def newModeIndex = modeIndex + 1
+		if (newModeIndex == totalModes) { newModeIndex = 0 }
+		setDishwasherMode(modes[newModeIndex])
+	} else { logWarn("toggleInputSource: NOT SUPPORTED") }
+}
+def setDishwasherMode(dishwasherMode) {
+	def cmdData = [
+		component: "main",
+		capability: "samsungce.dishwasherWashingCourse",
+		command: "setWashingCourse",
+		arguments: [dishwasherMode]]
+	def cmdStatus = deviceCommand(cmdData)
+	logInfo("setDishwasherMode: [cmd: ${dishwasherMode}, ${cmdStatus}]")
 }
 
 def distResp(resp, data) {
@@ -83,15 +107,7 @@ def distResp(resp, data) {
 	if (resp.status == 200) {
 		try {
 			def respData = new JsonSlurper().parseText(resp.data)
-			if (data.reason == "deviceSetup") {
-				deviceSetupParse(respData)
-			} else {
-				def children = getChildDevices()
-				children.each {
-						it.statusParse(respData)
-				}
-				statusParse(respData)
-			}
+			statusParse(respData.components.main)
 		} catch (err) {
 			respLog << [status: "ERROR",
 						errorMsg: err,
@@ -107,103 +123,68 @@ def distResp(resp, data) {
 	}
 }
 
-def deviceSetupParse(respData) {
-	def respLog = []
-	def compData = respData.components
-	def dni = device.getDeviceNetworkId()
-	compData.each {
-		if (it.key != "main") {
-			def childDni = dni + "-${it.key}"
-			def isChild = getChildDevice(childDni)
-			if (!isChild) {
-				def disabledComponents = []
-				if (disabledComponents == null) {
-					disabledComponents = compData.main["custom.disabledComponents"].disabledComponents.value
-				}
-				if(!disabledComponents.contains(it.key)) {
-					respLog << [component: it.key, status: "Installing"]
-					addChild(it.key, childDni)
-				}
-			}
-		} else {
-			updateDataValue("component", "main")
-		}
-	}
-			
-	if (respLog != []) {
-		logInfo("deviceSetupParse: ${respLog}")
-	}
-}
-def addChild(component, childDni) {
-	def type = "Samsung Washer flex"
-	try {
-		addChildDevice(nameSpace(), "${type}", "${childDni}", [
-			 "label": "${device.displayName} flex", component: component])
-		logInfo("addChild: [status: ADDED, label: ${component}, type: ${type}]")
-	} catch (error) {
-		logWarn("addChild: [status: FAILED, type: ${type}, dni: ${childDni}, component: ${component}, error: ${error}]")
+def deviceSetupParse(parseData) {
+	def logData = [:]
+	
+	def supportedDishwasherModes = parseData["samsungce.dishwasherWashingCourse"].supportedCourses.value
+	sendEvent(name: "supportedDishwasherModes", value: supportedDishwasherModes)
+	state.supportedDishwasherModes = supportedDishwasherModes
+	logData << [supportedDishwasherModes: supportedDishwasherModes]
+
+	if (logData != [:]) {
+		logInfo("deviceSetupParse: ${logData}")
 	}
 }
 
-def statusParse(respData) {
-	def parseData
-	try {
-		parseData = respData.components.main
-	} catch (error) {
-		logWarn("statusParse: [parseData: ${respData}, error: ${error}]")
-		return
-	}
+def statusParse(mainData) {
+	def logData = [:]
 
-	def onOff = parseData.switch.switch.value
-	sendEvent(name: "switch", value: onOff)
+	def onOff = mainData.switch.switch.value
 	if (device.currentValue("switch") != onOff) {
 		if (onOff == "off") {
 			setPollInterval(state.pollInterval)
 		} else {
 			runEvery1Minute(poll)
 		}
+		sendEvent(name: "switch", value: onOff)
+		logData << [switch: onOff]
 	}
 	
-	if (parseData["samsungce.kidsLock"]) {
-		def kidsLock = parseData["samsungce.kidsLock"].lockState.value
+	def kidsLock = mainData["samsungce.kidsLock"].lockState.value
+	if (device.currentValue("kidsLock") != kidsLock) {
 		sendEvent(name: "kidsLock", value: kidsLock)
+		logData << [kidsLock: kidsLock]
 	}
 	
-	def machineState = parseData.washerOperatingState.machineState.value
-	sendEvent(name: "machineState", value: machineState)
-	
-	if (parseData["samsungce.kidsLock"]) {
-		def kidsLock = parseData["samsungce.kidsLock"].lockState.value
-		sendEvent(name: "kidsLock", value: kidsLock)
+	def dishwasherMode = mainData["samsungce.dishwasherWashingCourse"].washingCourse.value
+	if (device.currentValue("dishwasherMode") != dishwasherMode) {
+		sendEvent(name: "dishwasherMode", value: dishwasherMode)
+		logData << [dishwasherMode: dishwasherMode]
 	}
-
-	def jobState = parseData.washerOperatingState.washerJobState.value
-	sendEvent(name: "jobState", value: jobState)
 	
-	def remoteControlEnabled = parseData.remoteControlStatus.remoteControlEnabled.value
-	sendEvent(name: "remoteControlEnabled", value: remoteControlEnabled)
+	def operatingState = mainData["samsungce.dishwasherOperation"].operatingState.value
+	if (device.currentValue("operatingState") != operatingState) {
+		sendEvent(name: "operatingState", value: operatingState)
+		logData << [operatingState: operatingState]
+	}
 	
-	def completionTime = parseData.washerOperatingState.completionTime.value
-	if (completionTime != null) {
-		def timeRemaining = calcTimeRemaining(completionTime)
-		sendEvent(name: "completionTime", value: completionTime)
+	def timeRemaining = mainData["samsungce.dishwasherOperation"].remainingTimeStr.value
+	if (device.currentValue("timeRemaining") != timeRemaining) {
 		sendEvent(name: "timeRemaining", value: timeRemaining)
+		logData << [timeRemaining: timeRemaining]
 	}
-
-	def waterTemperature = parseData["custom.washerWaterTemperature"].washerWaterTemperature.value
-	sendEvent(name: "waterTemperature", value: waterTemperature)
-
-	def soilLevel = parseData["custom.washerSoilLevel"].washerSoilLevel.value
-	sendEvent(name: "soilLevel", value: soilLevel)
-
-	def spinLevel = parseData["custom.washerSpinLevel"].washerSpinLevel.value
-	sendEvent(name: "spinLevel", value: spinLevel)
 	
-	if (simulate() == true) {
-		runIn(1, listAttributes, [data: true])
-	} else {
-		runIn(1, listAttributes)
+	def currentJob = mainData["samsungce.dishwasherJobState"].dishwasherJobState.value
+	if (device.currentValue("currentJob") != currentJob) {
+		sendEvent(name: "currentJob", value: currentJob)
+		logData << [currentJob: currentJob]
 	}
+	
+	if (logData != [:]) {
+		logInfo("statusParse: ${logData}")
+	}
+	runIn(2, listAttributes, [data: true])
+//	runIn(2, listAttributes)
 }
 
 //	===== Library Integration =====
@@ -211,7 +192,7 @@ def statusParse(respData) {
 
 
 def simulate() { return false }
-//#include davegut.Samsung-Washer-Sim
+//#include davegut.Samsung-Dishwasher-Sim
 
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
@@ -238,33 +219,32 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 	} // library marker davegut.Logging, line 22
 } // library marker davegut.Logging, line 23
 
-//	6.7.2 Change B.  Remove driverVer() // library marker davegut.Logging, line 25
-def logTrace(msg){ // library marker davegut.Logging, line 26
-	log.trace "${device.displayName}: ${msg}" // library marker davegut.Logging, line 27
-} // library marker davegut.Logging, line 28
+def logTrace(msg){ // library marker davegut.Logging, line 25
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
+} // library marker davegut.Logging, line 27
 
-def logInfo(msg) {  // library marker davegut.Logging, line 30
-	if (!infoLog || infoLog == true) { // library marker davegut.Logging, line 31
-		log.info "${device.displayName}: ${msg}" // library marker davegut.Logging, line 32
-	} // library marker davegut.Logging, line 33
-} // library marker davegut.Logging, line 34
+def logInfo(msg) {  // library marker davegut.Logging, line 29
+	if (infoLog == true) { // library marker davegut.Logging, line 30
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
+	} // library marker davegut.Logging, line 32
+} // library marker davegut.Logging, line 33
 
-def debugLogOff() { // library marker davegut.Logging, line 36
-	if (debug == true) { // library marker davegut.Logging, line 37
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 38
-	} else if (debugLog == true) { // library marker davegut.Logging, line 39
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 40
-	} // library marker davegut.Logging, line 41
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 42
-} // library marker davegut.Logging, line 43
+def debugLogOff() { // library marker davegut.Logging, line 35
+	if (debug == true) { // library marker davegut.Logging, line 36
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
+	} else if (debugLog == true) { // library marker davegut.Logging, line 38
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
+	} // library marker davegut.Logging, line 40
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
+} // library marker davegut.Logging, line 42
 
-def logDebug(msg) { // library marker davegut.Logging, line 45
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 46
-		log.debug "${device.displayName}: ${msg}" // library marker davegut.Logging, line 47
-	} // library marker davegut.Logging, line 48
-} // library marker davegut.Logging, line 49
+def logDebug(msg) { // library marker davegut.Logging, line 44
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
+	} // library marker davegut.Logging, line 47
+} // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName}: ${msg}" } // library marker davegut.Logging, line 51
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 

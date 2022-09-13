@@ -21,7 +21,7 @@ d.	Automatically send refresh with any command (reducing timeline and number of 
 Updated to support newer soundbars with more commands
 B0.31.  Corrections to account for format differences between Soundbars.
 ==============================================================================*/
-def driverVer() { return "1.1" }
+def driverVer() { return "1.2" }
 
 metadata {
 	definition (name: "Samsung Soundbar",
@@ -42,6 +42,10 @@ metadata {
 		command "toggleMute"
 		capability "Refresh"
 		attribute "trackData", "JSON_OBJECT"
+//	Audio Notification Testing
+		capability "AudioNotification"
+//		command "playTrack", [[name: "Track Uri", type: "STRING"],
+//							  [name: "Volume", type: "NUMBER"]]
 	}
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
@@ -52,15 +56,14 @@ metadata {
 			input ("volIncrement", "number", title: "Volume Up/Down Increment", defaultValue: 1)
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
 				   options: ["1", "5", "10", "30"], defaultValue: "5")
+			input ("infoLog", "bool",  
+				   title: "Info logging", defaultValue: true)
 			input ("debugLog", "bool",  
 				   title: "Enable debug logging for 30 minutes", defaultValue: false)
 		}
 	}
 }
 
-//	========================================================
-//	===== Installation, setup and update ===================
-//	========================================================
 def installed() {
 	sendEvent(name: "switch", value: "on")
 	sendEvent(name: "volume", value: 0)
@@ -190,6 +193,54 @@ def setMute(muteValue) {
 	logInfo("setMute: [cmd: ${muteValue}, ${cmdStatus}]")
 }
 
+//	Audio Notification Test
+/*
+"Bell 1": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/bell1.mp3", duration: "10"]
+"Bell 2": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/bell2.mp3", duration: "10"]
+"Dogs Barking": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/dogs.mp3", duration: "10"]
+"Fire Alarm": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/alarm.mp3", duration: "17"]
+"The mail has arrived": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/the+mail+has+arrived.mp3", duration: "1"]
+"A door opened": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/a+door+opened.mp3", duration: "1"]
+"There is motion": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/there+is+motion.mp3", duration: "1"]
+"Someone is arriving": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/someone+is+arriving.mp3", duration: "1"]
+"Piano": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/piano2.mp3", duration: "10"]
+"Lightsaber": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/lightsaber.mp3", duration: "10"]
+*/
+def playText(text, volume = null) {
+	logDebug("playText: [text: ${text}, Volume: ${volume}]")
+	playNotification("playTrack", textToSpeech(text), volume)
+}
+def playTrack(uri, volume = null) {
+	logDebug("playText: [uri: ${uri}, volume: ${volume}]")
+	playNotification("playTrack", uri, volume)
+}
+def playTextAndRestore(text, volume = null) {
+	logDebug("playTextAndRestore: [text: ${text}, Volume: ${volume}]")
+	playNotification("playTrackAndRestore", textToSpeech(text), volume)
+}
+def playTrackAndRestore(uri, volume=null) {
+	logDebug("playTrackAndRestore: [uri: ${uri}, Volume: ${volume}]")
+	playNotification("playTrackAndRestore", uri, volume)
+}
+def playTextAndResume(text, volume = null) {
+	logDebug("playTextAndRResume: [text: ${text}, Volume: ${volume}]")
+	playNotification("playTrackAndResume", textToSpeech(text), volume)
+}
+def playTrackAndResume(uri, volume=null) {
+	logDebug("playTrackAndResume: [uri: ${uri}, Volume: ${volume}]")
+	playNotification("playTrackAndResume", uri, volume)
+}
+def playNotification(cmd, uri, volume) {
+	def cmdData = [
+		component: "main",
+		capability: "audioNotification",
+		command: cmd,
+		arguments: [uri, volume]]
+	def cmdStatus = deviceCommand(cmdData)
+	logInfo("[playNotification: [cmd: ${cmd}, uri: ${uri}, volume: ${volume}, status: ${cmdStatus}]")
+	runIn(1, refresh)
+}
+
 def distResp(resp, data) {
 	def respLog = [:]
 	if (resp.status == 200) {
@@ -230,53 +281,36 @@ def deviceSetupParse(mainData) {
 }
 
 def statusParse(mainData) {
-	def stData = [:]
 	def onOff = mainData.switch.switch.value
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff)
-		stData << [switch: onOff]
 	}
-
+	
 	def volume = mainData.audioVolume.volume.value.toInteger()
-	if (device.currentValue("volume").toInteger() != volume) {
-		sendEvent(name: "volume", value: volume)
-		stData << [volume: volume]
-	}
+	sendEvent(name: "volume", value: volume)
 
 	def mute = mainData.audioMute.mute.value
-	if (device.currentValue("mute") != mute) {
-		sendEvent(name: "mute", value: mute)
-		stData << [mute: mute]
-	}
+	sendEvent(name: "mute", value: mute)
 
 	def transportStatus = mainData.mediaPlayback.playbackStatus.value
-	if (device.currentValue("transportStatus") != transportStatus) {
-		sendEvent(name: "transportStatus", value: transportStatus)
-		stData << [transportStatus: transportStatus]
-	}
+	sendEvent(name: "transportStatus", value: transportStatus)
 	
 	if (mainData.mediaInputSource != null) {
 		def mediaInputSource = mainData.mediaInputSource.inputSource.value
-		if (device.currentValue("mediaInputSource") != mediaInputSource) {
-			sendEvent(name: "mediaInputSource", value: mediaInputSource)
-			stData << [mediaInputSource: mediaInputSource]
-		}
+		sendEvent(name: "mediaInputSource", value: mediaInputSource)
 	}
 	
 	if (mainData.audioTrackData != null) {
 		def audioTrackData = mainData.audioTrackData.audioTrackData.value
-		if (device.currentValue("audioTrackData") != audioTrackData) {
-			sendEvent(name: "trackData", value: audioTrackData)
-			stData << [trackData: audioTrackData]
-		}
+		sendEvent(name: "trackData", value: audioTrackData)
 	}
 
-	if (stData != [:] && stData != null) {
-		logInfo("statusParse: ${stData}")
-	}	
-	runIn(3, traceAttributes)
+	if (simulate() == true) {
+		runIn(1, listAttributes, [data: true])
+	} else {
+		runIn(1, listAttributes)
+	}
 }
-def traceAttributes() { listAttributes(true) }
 
 //	===== Library Integration =====
 
@@ -310,32 +344,33 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 	} // library marker davegut.Logging, line 22
 } // library marker davegut.Logging, line 23
 
-def logTrace(msg){ // library marker davegut.Logging, line 25
-	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
-} // library marker davegut.Logging, line 27
+//	6.7.2 Change B.  Remove driverVer() // library marker davegut.Logging, line 25
+def logTrace(msg){ // library marker davegut.Logging, line 26
+	log.trace "${device.displayName}: ${msg}" // library marker davegut.Logging, line 27
+} // library marker davegut.Logging, line 28
 
-def logInfo(msg) {  // library marker davegut.Logging, line 29
-	if (infoLog == true) { // library marker davegut.Logging, line 30
-		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
-	} // library marker davegut.Logging, line 32
-} // library marker davegut.Logging, line 33
+def logInfo(msg) {  // library marker davegut.Logging, line 30
+	if (!infoLog || infoLog == true) { // library marker davegut.Logging, line 31
+		log.info "${device.displayName}: ${msg}" // library marker davegut.Logging, line 32
+	} // library marker davegut.Logging, line 33
+} // library marker davegut.Logging, line 34
 
-def debugLogOff() { // library marker davegut.Logging, line 35
-	if (debug == true) { // library marker davegut.Logging, line 36
-		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 37
-	} else if (debugLog == true) { // library marker davegut.Logging, line 38
-		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 39
-	} // library marker davegut.Logging, line 40
-	logInfo("Debug logging is false.") // library marker davegut.Logging, line 41
-} // library marker davegut.Logging, line 42
+def debugLogOff() { // library marker davegut.Logging, line 36
+	if (debug == true) { // library marker davegut.Logging, line 37
+		device.updateSetting("debug", [type:"bool", value: false]) // library marker davegut.Logging, line 38
+	} else if (debugLog == true) { // library marker davegut.Logging, line 39
+		device.updateSetting("debugLog", [type:"bool", value: false]) // library marker davegut.Logging, line 40
+	} // library marker davegut.Logging, line 41
+	logInfo("Debug logging is false.") // library marker davegut.Logging, line 42
+} // library marker davegut.Logging, line 43
 
-def logDebug(msg) { // library marker davegut.Logging, line 44
-	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
-		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
-	} // library marker davegut.Logging, line 47
-} // library marker davegut.Logging, line 48
+def logDebug(msg) { // library marker davegut.Logging, line 45
+	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 46
+		log.debug "${device.displayName}: ${msg}" // library marker davegut.Logging, line 47
+	} // library marker davegut.Logging, line 48
+} // library marker davegut.Logging, line 49
 
-def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
+def logWarn(msg) { log.warn "${device.displayName}: ${msg}" } // library marker davegut.Logging, line 51
 
 // ~~~~~ end include (1072) davegut.Logging ~~~~~
 
