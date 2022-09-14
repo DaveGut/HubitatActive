@@ -44,8 +44,9 @@ metadata {
 		attribute "trackData", "JSON_OBJECT"
 //	Audio Notification Testing
 		capability "AudioNotification"
-//		command "playTrack", [[name: "Track Uri", type: "STRING"],
-//							  [name: "Volume", type: "NUMBER"]]
+		command "playText", [[name: "NOT IMPLEMENTED"]]
+		command "playTextAndRestore", [[name: "NOT IMPLEMENTED"]]
+		command "playTextAndResume", [[name: "NOT IMPLEMENTED"]]
 	}
 	preferences {
 		input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
@@ -53,6 +54,9 @@ metadata {
 			input ("stDeviceId", "string", title: "SmartThings Device ID", defaultValue: "")
 		}
 		if (stDeviceId) {
+			input ("deviceIp", "string", title: "Device IP for UPnP Notifications")
+			input ("upnpNotify", "bool",
+				   title: "Use UPnP for audio notifications", defaultValue: false)
 			input ("volIncrement", "number", title: "Volume Up/Down Increment", defaultValue: 1)
 			input ("pollInterval", "enum", title: "Poll Interval (minutes)",
 				   options: ["1", "5", "10", "30"], defaultValue: "5")
@@ -207,6 +211,8 @@ def setMute(muteValue) {
 "Lightsaber": [uri: "http://s3.amazonaws.com/smartapp-media/sonos/lightsaber.mp3", duration: "10"]
 */
 def playText(text, volume = null) {
+	logWarn("playText: NOT CURRENTLY IMPLEMENTED")
+	return
 	logDebug("playText: [text: ${text}, Volume: ${volume}]")
 	playNotification("playTrack", textToSpeech(text), volume)
 }
@@ -215,14 +221,18 @@ def playTrack(uri, volume = null) {
 	playNotification("playTrack", uri, volume)
 }
 def playTextAndRestore(text, volume = null) {
+	logWarn("playText: NOT CURRENTLY IMPLEMENTED")
+	return
 	logDebug("playTextAndRestore: [text: ${text}, Volume: ${volume}]")
 	playNotification("playTrackAndRestore", textToSpeech(text), volume)
 }
-def playTrackAndRestore(uri, volume=null) {
+def playTrackAndRestore(uri, volume= null) {
 	logDebug("playTrackAndRestore: [uri: ${uri}, Volume: ${volume}]")
 	playNotification("playTrackAndRestore", uri, volume)
 }
 def playTextAndResume(text, volume = null) {
+	logWarn("playText: NOT CURRENTLY IMPLEMENTED")
+	return
 	logDebug("playTextAndRResume: [text: ${text}, Volume: ${volume}]")
 	playNotification("playTrackAndResume", textToSpeech(text), volume)
 }
@@ -231,16 +241,72 @@ def playTrackAndResume(uri, volume=null) {
 	playNotification("playTrackAndResume", uri, volume)
 }
 def playNotification(cmd, uri, volume) {
-	def cmdData = [
-		component: "main",
-		capability: "audioNotification",
-		command: cmd,
-		arguments: [uri, volume]]
-	def cmdStatus = deviceCommand(cmdData)
-	logInfo("[playNotification: [cmd: ${cmd}, uri: ${uri}, volume: ${volume}, status: ${cmdStatus}]")
-	runIn(1, refresh)
+	if (volume == null) { volume = device.currentValue("volume") }
+	def currStates = [:]
+	currStates << [volume: device.currentValue("volume")]
+	currStates << [source: device.currentValue("mediaInputSource")]
+	currStates << [transport: device.currentValue("transportStatus")]
+	runIn(10, resetSpeaker, [data: currStates])
+						 
+	upnpSetVolume(volume)
+	pauseExecution(200)
+	playUri(uri)
+}
+def upnpSetVolume(volume) {
+	volume = volume.toInteger()
+	if (volume <= 0 || volume >= 100) { return }
+	sendUpnpCmd("RenderingControl",
+			"SetVolume",
+			["InstanceID" :0,
+			 "Channel": "Master",
+			 "DesiredVolume": volume])
+}
+def playUri(uri) {
+log.trace uri
+	sendUpnpCmd("AVTransport",
+				"SetAVTransportURI",
+				 [InstanceID: 0,
+				  CurrentURI: uri,
+				  CurrentURIMetaData: ""])
+	pauseExecution(200)
+	sendUpnpCmd("AVTransport",
+				"Play",
+				 ["InstanceID" :0,
+				  "Speed": "1"])
+}
+def resetSpeaker(currStates) {
+	upnpSetVolume(currStates.volume)
+	pauseExecution(100)
+	setInputSource(currStates.source)
+	pauseExecution(500)
+	if (currStates.transport == "playing") {
+		setMediaPlayback("play")
+	}
 }
 
+private sendUpnpCmd(type, action, body = []){
+	def deviceIP = getDataValue("deviceIp")
+	def host = "${deviceIp}:9197"
+	def hubCmd = new hubitat.device.HubSoapAction(
+		path:	"/upnp/control/${type}1",
+		urn:	 "urn:schemas-upnp-org:service:${type}:1",
+		action:  action,
+		body:	body,
+		headers: [Host: host]
+	)
+	sendHubCommand(hubCmd)
+}
+
+def parse(resp) {
+	//	Parse the Soap Action return.
+	def respData =  parseLanMessage(resp)
+	if (respData.status == 200) {
+		logDebug("parse: [udpCmdStatus: success]")
+	} else {
+		logWarn("parse: [udpCmdStatus: failed, data: ${respData.body}]")
+	}
+}
+				
 def distResp(resp, data) {
 	def respLog = [:]
 	if (resp.status == 200) {
