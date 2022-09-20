@@ -116,6 +116,8 @@ def setThermostatMode(thermostatMode) {
 		if (thermostatMode == "samsungAuto") {
 			thermostatMode = "auto"
 		}
+		cmdStatus = setOn()
+		logInfo("setOn: [cmd: on, ${cmdStatus}]")
 		cmdStatus = sendModeCommand(thermostatMode)
 	}
 	logInfo("setThermostatMode: [cmd: ${thermostatMode}, ${cmdStatus}]")
@@ -804,7 +806,7 @@ def calcTimeRemaining(completionTime) { // library marker davegut.ST-Common, lin
 
 // ~~~~~ end include (1090) davegut.ST-Common ~~~~~
 
-// ~~~~~ start include (1163) davegut.Samsung-HVAC-Sim ~~~~~
+// ~~~~~ start include (1167) davegut.Samsung-HVAC-Sim ~~~~~
 library ( // library marker davegut.Samsung-HVAC-Sim, line 1
 	name: "Samsung-HVAC-Sim", // library marker davegut.Samsung-HVAC-Sim, line 2
 	namespace: "davegut", // library marker davegut.Samsung-HVAC-Sim, line 3
@@ -880,4 +882,4 @@ def testResp(cmdData) { // library marker davegut.Samsung-HVAC-Sim, line 42
 				 results:[[id: "e9585885-3848-4fea-b0db-ece30ff1701e", status: "ACCEPTED"]]]] // library marker davegut.Samsung-HVAC-Sim, line 73
 } // library marker davegut.Samsung-HVAC-Sim, line 74
 
-// ~~~~~ end include (1163) davegut.Samsung-HVAC-Sim ~~~~~
+// ~~~~~ end include (1167) davegut.Samsung-HVAC-Sim ~~~~~

@@ -11,7 +11,7 @@ Library code is at the bottom of the distributed single-file driver.
 ===== Installation Instructions Link =====
 https://github.com/DaveGut/HubitatActive/blob/master/SamsungAppliances/Install_Samsung_Appliance.pdf
 ===== Version 1.1 ==============================================================================*/
-def driverVer() { return "1.2" }
+def driverVer() { return "1.2T" }
 def nameSpace() { return "davegut" }
 
 metadata {
@@ -40,9 +40,6 @@ metadata {
 			constraints: ["on", "off"],
 			type: "ENUM"]]
 		attribute "defrost", "string"
-		//	Sabbath Mode
-		command "toggleSabbathMode"
-		attribute "SabbathMode", "string"
 	}
 	
 	preferences {
@@ -100,23 +97,6 @@ def setRefrigeration(command, onOff) {
 		arguments: [onOff]]
 	def cmdStatus = deviceCommand(cmdData)
 	logInfo("setRefrigeration: [cmd ${command}, onOff: ${onOff}, status: ${cmdStatus}]")
-}
-
-def toggleSabbathMode() {
-	def currMode = device.currentValue("sabbathMode")
-	def newMode = "Off"
-	if (currMode == newMode) {
-		newMode = "On"
-	}
-	def arguments = [["x.com.samsung.da.sabbathMode":newMode]]
-
-	def cmdData = [
-		component: "main",
-		capability: "execute",
-		command: "execute",
-		arguments: arguments]
-	def cmdStatus = deviceCommand(cmdData)
-	logInfo("toggleSabbathMode: [cmd: ${setpoint}, ${cmdStatus}]")
 }
 
 def distResp(resp, data) {
