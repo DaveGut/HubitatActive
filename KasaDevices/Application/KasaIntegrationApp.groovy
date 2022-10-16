@@ -474,7 +474,7 @@ def getToken() {
 		params: [
 			appType: "Kasa_Android",
 			cloudUserName: "${userName}",
-			cloudPassword: "${userPassword}",
+			cloudPassword: "${userPassword}.replaceAll('&gt;', '>').replaceAll('&lt;','<')",
 			terminalUUID: "${termId}"]]
 	cmdData = [uri: "https://wap.tplinkcloud.com",
 			   cmdBody: cmdBody]
