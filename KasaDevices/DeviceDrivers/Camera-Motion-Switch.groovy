@@ -92,7 +92,6 @@ def updated() {
 }
 
 def setSysInfo(status) {
-	runIn(3, getPower)
 	def updates = [:]
 	def switchStatus = status.camera_switch
 	def ledStatus = status.led_status
@@ -136,7 +135,6 @@ def setSysInfo(status) {
 	if (nameSync == "device") {
 		updateName(status)
 	}
-	runIn(1, getPower)
 }
 
 def coordUpdate(cType, coordData) {
