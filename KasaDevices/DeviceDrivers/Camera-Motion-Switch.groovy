@@ -51,6 +51,10 @@ metadata {
 		input ("debug", "bool",
 			   title: "30 minutes of debug logging", 
 			   defaultValue: false)
+		input ("motion_Active_timeout", "num",
+			   title: "Motion Active Timeout (seconds)",
+			   defaultValue: 30)
+
 		if (getDataValue("feature") == "TIM:ENE") {
 			input ("emFunction", "bool", 
 				   title: "Enable Energy Monitor", 
@@ -152,13 +156,13 @@ def coordUpdate(cType, coordData) {
 
 def motionActive() {
     def descriptionText = "${device.displayName} is active"
-    if (txtEnable) log.info "${descriptionText}"
+    log.info "${descriptionText}"
     sendEvent(name: "motion", value: "active", descriptionText: descriptionText)
 }
 
 def motionInactive() {
     def descriptionText = "${device.displayName} is inactive"
-    if (txtEnable) log.info "${descriptionText}"
+    log.info "${descriptionText}"
     sendEvent(name: "motion", value: "inactive", descriptionText: descriptionText)
 }
 
