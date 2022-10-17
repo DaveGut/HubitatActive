@@ -42,9 +42,8 @@ metadata {
 		attribute "commsError", "string"
 	}
 	preferences {
-		input ("infoLog", "bool", 
-			   title: "Enable information logging " + helpLogo(),
-			   defaultValue: true)
+		input ("txtEnable", "bool",
+			   title: "Enable descriptionText logging", required: false, defaultValue: false)
 		input ("debug", "bool",
 			   title: "30 minutes of debug logging", 
 			   defaultValue: false)
@@ -713,7 +712,7 @@ def logTrace(msg){ // library marker davegut.Logging, line 25
 } // library marker davegut.Logging, line 27
 
 def logInfo(msg) {  // library marker davegut.Logging, line 29
-	if (infoLog == true) { // library marker davegut.Logging, line 30
+	if (txtEnable == true) { // library marker davegut.Logging, line 30
 		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
 	} // library marker davegut.Logging, line 32
 } // library marker davegut.Logging, line 33
