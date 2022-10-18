@@ -6,7 +6,7 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def driverVer() { return "6.6.1" }
+def driverVer() { return "6.7.1" }
 def type() { return "Light Strip" }
 
 metadata {
@@ -15,13 +15,13 @@ metadata {
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/LightStrip.groovy"
 			   ) {
-		capability "Configuration"
 		capability "Light"
 		capability "Switch"
 		capability "Switch Level"
 		capability "Change Level"
 		capability "Refresh"
 		capability "Actuator"
+		capability "Configuration"
 		capability "Color Temperature"
 		capability "Color Mode"
 		capability "Color Control"
@@ -58,7 +58,6 @@ metadata {
 		attribute "currMonthAvg", "number"
 		attribute "lastMonthTotal", "number"
 		attribute "lastMonthAvg", "number"
-		//	Communications
 		attribute "connection", "string"
 		attribute "commsError", "string"
 	}
@@ -82,8 +81,8 @@ metadata {
 			   title: "Kasa Cloud Binding",
 			   defalutValue: true)
 		input ("useCloud", "bool",
-			   title: "Use Kasa Cloud for device control",
-			   defaultValue: false)
+		 	  title: "Use Kasa Cloud for device control",
+		 	  defaultValue: false)
 		input ("nameSync", "enum", title: "Synchronize Names",
 			   defaultValue: "none",
 			   options: ["none": "Don't synchronize",
@@ -116,9 +115,8 @@ def updated() {
 	if (!state.effectPresets) { state.effectPresets = [] }
 	logInfo("updated: ${updStatus}")
 	refresh()
-}	//	6.6.0
+}
 
-//	==================================================
 def setColorTemperature(colorTemp, level = device.currentValue("level"), transTime = transition_Time) {
 	def lowCt = 1000
 	def highCt = 12000
@@ -192,10 +190,8 @@ def setSysInfo(status) {
 			} else if (colorTemp > 0) {
 				colorMode = "CT" 
 				colorName = convertTemperatureToGenericColorName(colorTemp.toInteger())
-//				colorName = getCtName(colorTemp)
 			} else {
 				colorMode = "RGB"
-//				colorName = getColorName(hue)
 				colorName = convertHueToGenericColorName(hubHue.toInteger())
 				color = "[hue: ${hubHue}, saturation: ${saturation}, level: ${level}]"
 				rgb = hubitat.helper.ColorUtils.hsvToRGB([hubHue, saturation, level])
@@ -217,12 +213,9 @@ def setSysInfo(status) {
 		}
 		sendEvent(name: "switch", value: onOff, type: "digital")
 	}
-	if (emFunction) {
-		runIn(3, getPower)
-	}
-}	//	6.6.0	Use hubitat color naming cmds.
+	runIn(1, getPower)
+}
 
-//	==================================================
 def effectCreate() {
 	state.createEffect = true
 	sendCmd("""{"smartlife.iot.lighting_effect":{"get_lighting_effect":{}}}""")
@@ -498,7 +491,6 @@ def getCtHslValue(kelvin) {
 	return hslData
 }
 
-//	==================================================
 
 
 
@@ -506,7 +498,7 @@ def getCtHslValue(kelvin) {
 
 
 
-// ~~~~~ start include (961) davegut.kasaCommon ~~~~~
+// ~~~~~ start include (1093) davegut.kasaCommon ~~~~~
 library ( // library marker davegut.kasaCommon, line 1
 	name: "kasaCommon", // library marker davegut.kasaCommon, line 2
 	namespace: "davegut", // library marker davegut.kasaCommon, line 3
@@ -516,278 +508,247 @@ library ( // library marker davegut.kasaCommon, line 1
 	documentationLink: "" // library marker davegut.kasaCommon, line 7
 ) // library marker davegut.kasaCommon, line 8
 
-//	====== Common Install / Update Elements ===== // library marker davegut.kasaCommon, line 10
-String helpLogo() { // library marker davegut.kasaCommon, line 11
-	return """<a href="https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/README.md">""" + // library marker davegut.kasaCommon, line 12
-		"""<div style="position: absolute; top: 10px; right: 10px; height: 80px; font-size: 20px;">Kasa Help</div></a>""" // library marker davegut.kasaCommon, line 13
-} // library marker davegut.kasaCommon, line 14
+String helpLogo() { // library marker davegut.kasaCommon, line 10
+	return """<a href="https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/README.md">""" + // library marker davegut.kasaCommon, line 11
+		"""<div style="position: absolute; top: 10px; right: 10px; height: 80px; font-size: 20px;">Kasa Help</div></a>""" // library marker davegut.kasaCommon, line 12
+} // library marker davegut.kasaCommon, line 13
 
-def installCommon() { // library marker davegut.kasaCommon, line 16
-	pauseExecution(3000) // library marker davegut.kasaCommon, line 17
-	def instStatus = [:] // library marker davegut.kasaCommon, line 18
-	if (getDataValue("deviceIP") == "CLOUD") { // library marker davegut.kasaCommon, line 19
-		sendEvent(name: "connection", value: "CLOUD") // library marker davegut.kasaCommon, line 20
-		device.updateSetting("useCloud", [type:"bool", value: true]) // library marker davegut.kasaCommon, line 21
-		instStatus << [useCloud: true, connection: "CLOUD"] // library marker davegut.kasaCommon, line 22
-	} else { // library marker davegut.kasaCommon, line 23
-		sendEvent(name: "connection", value: "LAN") // library marker davegut.kasaCommon, line 24
-		device.updateSetting("useCloud", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 25
-		instStatus << [useCloud: false, connection: "LAN"] // library marker davegut.kasaCommon, line 26
-	} // library marker davegut.kasaCommon, line 27
-	sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommon, line 28
-	state.errorCount = 0 // library marker davegut.kasaCommon, line 29
-	state.pollInterval = "30 minutes" // library marker davegut.kasaCommon, line 30
-	instStatus << [driverVersion: driverVer()] // library marker davegut.kasaCommon, line 31
-	runIn(2, updated) // library marker davegut.kasaCommon, line 32
-	return instStatus // library marker davegut.kasaCommon, line 33
-} // library marker davegut.kasaCommon, line 34
+def installCommon() { // library marker davegut.kasaCommon, line 15
+	pauseExecution(3000) // library marker davegut.kasaCommon, line 16
+	def instStatus = [:] // library marker davegut.kasaCommon, line 17
+	if (getDataValue("deviceIP") == "CLOUD") { // library marker davegut.kasaCommon, line 18
+		sendEvent(name: "connection", value: "CLOUD") // library marker davegut.kasaCommon, line 19
+		device.updateSetting("useCloud", [type:"bool", value: true]) // library marker davegut.kasaCommon, line 20
+		instStatus << [useCloud: true, connection: "CLOUD"] // library marker davegut.kasaCommon, line 21
+	} else { // library marker davegut.kasaCommon, line 22
+		sendEvent(name: "connection", value: "LAN") // library marker davegut.kasaCommon, line 23
+		device.updateSetting("useCloud", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 24
+		instStatus << [useCloud: false, connection: "LAN"] // library marker davegut.kasaCommon, line 25
+	} // library marker davegut.kasaCommon, line 26
+	sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommon, line 27
+	state.errorCount = 0 // library marker davegut.kasaCommon, line 28
+	state.pollInterval = "30 minutes" // library marker davegut.kasaCommon, line 29
+	instStatus << [driverVersion: driverVer()] // library marker davegut.kasaCommon, line 30
+	runIn(2, updated) // library marker davegut.kasaCommon, line 31
+	return instStatus // library marker davegut.kasaCommon, line 32
+} // library marker davegut.kasaCommon, line 33
 
-def updateCommon() { // library marker davegut.kasaCommon, line 36
-	unschedule() // library marker davegut.kasaCommon, line 37
-	def updStatus = [:] // library marker davegut.kasaCommon, line 38
-	if (rebootDev) { // library marker davegut.kasaCommon, line 39
-		updStatus << [rebootDev: rebootDevice()] // library marker davegut.kasaCommon, line 40
-		return updStatus // library marker davegut.kasaCommon, line 41
-	} // library marker davegut.kasaCommon, line 42
-	updStatus << [bind: bindUnbind()] // library marker davegut.kasaCommon, line 43
-	if (nameSync != "none") { // library marker davegut.kasaCommon, line 44
-		updStatus << [nameSync: syncName()] // library marker davegut.kasaCommon, line 45
-	} // library marker davegut.kasaCommon, line 46
-	if (debug) { runIn(1800, debugLogOff) } // library marker davegut.kasaCommon, line 47
-	updStatus << [debug: debug] // library marker davegut.kasaCommon, line 48
-	state.errorCount = 0 // library marker davegut.kasaCommon, line 49
-	sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommon, line 50
-	def pollInterval = state.pollInterval // library marker davegut.kasaCommon, line 51
-	if (pollInterval == null) { pollInterval = "30 minutes" } // library marker davegut.kasaCommon, line 52
-	updStatus << [pollInterval: setPollInterval(pollInterval)] // library marker davegut.kasaCommon, line 53
-	if(getDataValue("driverVersion") != driverVer()){ // library marker davegut.kasaCommon, line 54
-		updateDataValue("driverVersion", driverVer()) // library marker davegut.kasaCommon, line 55
-		updStatus << [driverVersion: driverVer()] // library marker davegut.kasaCommon, line 56
-		if (state.pollNote) { state.remove("pollNote") } // library marker davegut.kasaCommon, line 57
-		if (state.pollWarning) { state.remove("pollWarning") } // library marker davegut.kasaCommon, line 58
-		if (!infoLog || infoLog == null) { // library marker davegut.kasaCommon, line 59
-			device.updateSetting("infoLog", [type:"bool", value: true]) // library marker davegut.kasaCommon, line 60
-		} // library marker davegut.kasaCommon, line 61
-	} // library marker davegut.kasaCommon, line 62
-	if (emFunction) { // library marker davegut.kasaCommon, line 63
-		schedule("10 0 0 * * ?", getEnergyThisMonth) // library marker davegut.kasaCommon, line 64
-		schedule("15 2 0 1 * ?", getEnergyLastMonth) // library marker davegut.kasaCommon, line 65
-		state.getEnergy = "This Month" // library marker davegut.kasaCommon, line 66
-		updStatus << [emFunction: "scheduled"] // library marker davegut.kasaCommon, line 67
-	} // library marker davegut.kasaCommon, line 68
-	if (parent.configureEnabled == true) { // library marker davegut.kasaCommon, line 69
-		updStatus << [parentConfig: parent.updateConfigurations()] // library marker davegut.kasaCommon, line 70
-	} else { // library marker davegut.kasaCommon, line 71
-		updStatus << [parentConfig: "notAvailable"] // library marker davegut.kasaCommon, line 72
-	} // library marker davegut.kasaCommon, line 73
-	return updStatus // library marker davegut.kasaCommon, line 74
-}	//	6.6.0 // library marker davegut.kasaCommon, line 75
+def updateCommon() { // library marker davegut.kasaCommon, line 35
+	def updStatus = [:] // library marker davegut.kasaCommon, line 36
+	if (rebootDev) { // library marker davegut.kasaCommon, line 37
+		updStatus << [rebootDev: rebootDevice()] // library marker davegut.kasaCommon, line 38
+		return updStatus // library marker davegut.kasaCommon, line 39
+	} // library marker davegut.kasaCommon, line 40
+	unschedule() // library marker davegut.kasaCommon, line 41
+	updStatus << [bind: bindUnbind()] // library marker davegut.kasaCommon, line 42
+	if (nameSync != "none") { // library marker davegut.kasaCommon, line 43
+		updStatus << [nameSync: syncName()] // library marker davegut.kasaCommon, line 44
+	} // library marker davegut.kasaCommon, line 45
+	if (debug) { runIn(1800, debugLogOff) } // library marker davegut.kasaCommon, line 46
+	updStatus << [debug: debug] // library marker davegut.kasaCommon, line 47
+	state.errorCount = 0 // library marker davegut.kasaCommon, line 48
+	sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommon, line 49
+	def pollInterval = state.pollInterval // library marker davegut.kasaCommon, line 50
+	if (pollInterval == null) { pollInterval = "30 minutes" } // library marker davegut.kasaCommon, line 51
+	updStatus << [pollInterval: setPollInterval(pollInterval)] // library marker davegut.kasaCommon, line 52
+	if(getDataValue("driverVersion") != driverVer()) { // library marker davegut.kasaCommon, line 53
+		state.remove("UPDATE_AVAILABLE") // library marker davegut.kasaCommon, line 54
+		state.remove("releaseNotes") // library marker davegut.kasaCommon, line 55
+		updateDataValue("driverVersion", driverVer()) // library marker davegut.kasaCommon, line 56
+		updStatus << [driverVersion: driverVer()] // library marker davegut.kasaCommon, line 57
+	} // library marker davegut.kasaCommon, line 58
+	if (emFunction) { // library marker davegut.kasaCommon, line 59
+		schedule("10 0 0 * * ?", getEnergyThisMonth) // library marker davegut.kasaCommon, line 60
+		schedule("15 2 0 1 * ?", getEnergyLastMonth) // library marker davegut.kasaCommon, line 61
+		state.getEnergy = "This Month" // library marker davegut.kasaCommon, line 62
+		updStatus << [emFunction: "scheduled"] // library marker davegut.kasaCommon, line 63
+	} // library marker davegut.kasaCommon, line 64
+	runIn(5, listAttributes) // library marker davegut.kasaCommon, line 65
+	return updStatus // library marker davegut.kasaCommon, line 66
+} // library marker davegut.kasaCommon, line 67
 
-def childConfigure(updateData) { // library marker davegut.kasaCommon, line 77
-	def confResp = [:] // library marker davegut.kasaCommon, line 78
-	logDebug("childConfigure: ${updateData}") // library marker davegut.kasaCommon, line 79
-	confResp << [ipUpdate: "complete"] // library marker davegut.kasaCommon, line 80
-	if (driverVer().trim() != updateData.appVersion) { // library marker davegut.kasaCommon, line 81
-		confResp << [driverAppVersion: "mismatched"] // library marker davegut.kasaCommon, line 82
-		state.DRIVER_MISMATCH = "Driver version (${driverVer()}) not the same as App version (${updateData.appVersion})" // library marker davegut.kasaCommon, line 83
-		logWarn("childConfigure: Current driver does not match with App Version.  Update to assure proper operation.") // library marker davegut.kasaCommon, line 84
-	} else { // library marker davegut.kasaCommon, line 85
-		confResp << [driverAppVersion: "matched"] // library marker davegut.kasaCommon, line 86
-		state.remove("DRIVER_MISMATCH") // library marker davegut.kasaCommon, line 87
-	} // library marker davegut.kasaCommon, line 88
-	if (updateData.updateAvailable) { // library marker davegut.kasaCommon, line 89
-		confResp << [driverUpdate: "available"] // library marker davegut.kasaCommon, line 90
-		state.releaseNotes = "${updateData.releaseNotes}" // library marker davegut.kasaCommon, line 91
-		if (updateData.releaseNotes.contains("CRITICAL")) { // library marker davegut.kasaCommon, line 92
-			state.UPDATE_AVAILABLE = "A CRITICAL UPDATE TO APP AND DRIVER ARE AVAILABLE to version  ${updateData.currVersion}." // library marker davegut.kasaCommon, line 93
-			logWarn("<b>A CRITICAL</b> Applications and Drivers update is available for the Kasa Integration") // library marker davegut.kasaCommon, line 94
-		} else { // library marker davegut.kasaCommon, line 95
-			state.UPDATE_AVAILABLE = "App and driver updates are available to version ${updateData.currVersion}.  Consider updating." // library marker davegut.kasaCommon, line 96
-		} // library marker davegut.kasaCommon, line 97
-	} else { // library marker davegut.kasaCommon, line 98
-		confResp << [driverUpdate: "noneAvailable"] // library marker davegut.kasaCommon, line 99
-		state.remove("UPDATE_AVAILABLE") // library marker davegut.kasaCommon, line 100
-		state.remove("releaseNotes") // library marker davegut.kasaCommon, line 101
-	} // library marker davegut.kasaCommon, line 102
-	return confResp // library marker davegut.kasaCommon, line 103
-}	//	6.6.0 // library marker davegut.kasaCommon, line 104
+def configure() { // library marker davegut.kasaCommon, line 69
+	if (parent == null) { // library marker davegut.kasaCommon, line 70
+		logWarn("configure: No Parent Detected.  Configure function ABORTED.  Use Save Preferences instead.") // library marker davegut.kasaCommon, line 71
+	} else { // library marker davegut.kasaCommon, line 72
+		def confStatus = parent.updateConfigurations() // library marker davegut.kasaCommon, line 73
+		logInfo("configure: ${confStatus}") // library marker davegut.kasaCommon, line 74
+	} // library marker davegut.kasaCommon, line 75
+} // library marker davegut.kasaCommon, line 76
 
-//	===== Poll/Refresh ===== // library marker davegut.kasaCommon, line 106
-def refresh() { poll() } // library marker davegut.kasaCommon, line 107
+def refresh() { poll() } // library marker davegut.kasaCommon, line 78
 
-def poll() { getSysinfo() } // library marker davegut.kasaCommon, line 109
+def poll() { getSysinfo() } // library marker davegut.kasaCommon, line 80
 
-//	===== Preference Methods ===== // library marker davegut.kasaCommon, line 111
-def setPollInterval(interval = state.pollInterval) { // library marker davegut.kasaCommon, line 112
-	if (interval == "default" || interval == "off" || interval == null) { // library marker davegut.kasaCommon, line 113
-		interval = "30 minutes" // library marker davegut.kasaCommon, line 114
-	} else if (useCloud && interval.contains("sec")) { // library marker davegut.kasaCommon, line 115
-		interval = "1 minute" // library marker davegut.kasaCommon, line 116
-	} // library marker davegut.kasaCommon, line 117
-	state.pollInterval = interval // library marker davegut.kasaCommon, line 118
-	def pollInterval = interval.substring(0,2).toInteger() // library marker davegut.kasaCommon, line 119
-	if (interval.contains("sec")) { // library marker davegut.kasaCommon, line 120
-		def start = Math.round((pollInterval-1) * Math.random()).toInteger() // library marker davegut.kasaCommon, line 121
-		schedule("${start}/${pollInterval} * * * * ?", "poll") // library marker davegut.kasaCommon, line 122
-		logWarn("setPollInterval: Polling intervals of less than one minute " + // library marker davegut.kasaCommon, line 123
-				"can take high resources and may impact hub performance.") // library marker davegut.kasaCommon, line 124
-	} else { // library marker davegut.kasaCommon, line 125
-		def start = Math.round(59 * Math.random()).toInteger() // library marker davegut.kasaCommon, line 126
-		schedule("${start} */${pollInterval} * * * ?", "poll") // library marker davegut.kasaCommon, line 127
-	} // library marker davegut.kasaCommon, line 128
-	logDebug("setPollInterval: interval = ${interval}.") // library marker davegut.kasaCommon, line 129
-	return interval // library marker davegut.kasaCommon, line 130
-} // library marker davegut.kasaCommon, line 131
+def setPollInterval(interval = state.pollInterval) { // library marker davegut.kasaCommon, line 82
+	if (interval == "default" || interval == "off" || interval == null) { // library marker davegut.kasaCommon, line 83
+		interval = "30 minutes" // library marker davegut.kasaCommon, line 84
+	} else if (useCloud && interval.contains("sec")) { // library marker davegut.kasaCommon, line 85
+		interval = "1 minute" // library marker davegut.kasaCommon, line 86
+	} // library marker davegut.kasaCommon, line 87
+	state.pollInterval = interval // library marker davegut.kasaCommon, line 88
+	def pollInterval = interval.substring(0,2).toInteger() // library marker davegut.kasaCommon, line 89
+	if (interval.contains("sec")) { // library marker davegut.kasaCommon, line 90
+		def start = Math.round((pollInterval-1) * Math.random()).toInteger() // library marker davegut.kasaCommon, line 91
+		schedule("${start}/${pollInterval} * * * * ?", "poll") // library marker davegut.kasaCommon, line 92
+		logWarn("setPollInterval: Polling intervals of less than one minute " + // library marker davegut.kasaCommon, line 93
+				"can take high resources and may impact hub performance.") // library marker davegut.kasaCommon, line 94
+	} else { // library marker davegut.kasaCommon, line 95
+		def start = Math.round(59 * Math.random()).toInteger() // library marker davegut.kasaCommon, line 96
+		schedule("${start} */${pollInterval} * * * ?", "poll") // library marker davegut.kasaCommon, line 97
+	} // library marker davegut.kasaCommon, line 98
+	logDebug("setPollInterval: interval = ${interval}.") // library marker davegut.kasaCommon, line 99
+	return interval // library marker davegut.kasaCommon, line 100
+} // library marker davegut.kasaCommon, line 101
 
-def rebootDevice() { // library marker davegut.kasaCommon, line 133
-	device.updateSetting("rebootDev", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 134
-	reboot() // library marker davegut.kasaCommon, line 135
-	pauseExecution(10000) // library marker davegut.kasaCommon, line 136
-	return "REBOOTING DEVICE" // library marker davegut.kasaCommon, line 137
-} // library marker davegut.kasaCommon, line 138
+def rebootDevice() { // library marker davegut.kasaCommon, line 103
+	device.updateSetting("rebootDev", [type:"bool", value: false]) // library marker davegut.kasaCommon, line 104
+	reboot() // library marker davegut.kasaCommon, line 105
+	pauseExecution(10000) // library marker davegut.kasaCommon, line 106
+	return "REBOOTING DEVICE" // library marker davegut.kasaCommon, line 107
+} // library marker davegut.kasaCommon, line 108
 
-def bindUnbind() { // library marker davegut.kasaCommon, line 140
-	def message // library marker davegut.kasaCommon, line 141
-	if (bind == null || // library marker davegut.kasaCommon, line 142
-	    getDataValue("deviceIP") == "CLOUD" || // library marker davegut.kasaCommon, line 143
-	    type() == "Light Strip") { // library marker davegut.kasaCommon, line 144
-		message = "Getting current bind state" // library marker davegut.kasaCommon, line 145
-		getBind() // library marker davegut.kasaCommon, line 146
-	} else if (bind == true) { // library marker davegut.kasaCommon, line 147
-		if (!parent.kasaToken || parent.userName == null || parent.userPassword == null) { // library marker davegut.kasaCommon, line 148
-			message = "Username/pwd not set." // library marker davegut.kasaCommon, line 149
-			getBind() // library marker davegut.kasaCommon, line 150
-		} else { // library marker davegut.kasaCommon, line 151
-			message = "Binding device to the Kasa Cloud." // library marker davegut.kasaCommon, line 152
-			setBind(parent.userName, parent.userPassword) // library marker davegut.kasaCommon, line 153
-		} // library marker davegut.kasaCommon, line 154
-	} else if (bind == false) { // library marker davegut.kasaCommon, line 155
-		message = "Unbinding device from the Kasa Cloud." // library marker davegut.kasaCommon, line 156
-		setUnbind() // library marker davegut.kasaCommon, line 157
-	} // library marker davegut.kasaCommon, line 158
-	pauseExecution(5000) // library marker davegut.kasaCommon, line 159
-	return message // library marker davegut.kasaCommon, line 160
-} // library marker davegut.kasaCommon, line 161
+def bindUnbind() { // library marker davegut.kasaCommon, line 110
+	def message // library marker davegut.kasaCommon, line 111
+	if (getDataValue("deviceIP") == "CLOUD") { // library marker davegut.kasaCommon, line 112
+		device.updateSetting("bind", [type:"bool", value: true]) // library marker davegut.kasaCommon, line 113
+		device.updateSetting("useCloud", [type:"bool", value: true]) // library marker davegut.kasaCommon, line 114
+		message = "No deviceIp.  Bind not modified." // library marker davegut.kasaCommon, line 115
+	} else if (bind == null || // library marker davegut.kasaCommon, line 116
+	    type() == "Light Strip") { // library marker davegut.kasaCommon, line 117
+		message = "Getting current bind state" // library marker davegut.kasaCommon, line 118
+		getBind() // library marker davegut.kasaCommon, line 119
+	} else if (bind == true) { // library marker davegut.kasaCommon, line 120
+		if (!parent.kasaToken || parent.userName == null || parent.userPassword == null) { // library marker davegut.kasaCommon, line 121
+			message = "Username/pwd not set." // library marker davegut.kasaCommon, line 122
+			getBind() // library marker davegut.kasaCommon, line 123
+		} else { // library marker davegut.kasaCommon, line 124
+			message = "Binding device to the Kasa Cloud." // library marker davegut.kasaCommon, line 125
+			setBind(parent.userName, parent.userPassword) // library marker davegut.kasaCommon, line 126
+		} // library marker davegut.kasaCommon, line 127
+	} else if (bind == false) { // library marker davegut.kasaCommon, line 128
+		message = "Unbinding device from the Kasa Cloud." // library marker davegut.kasaCommon, line 129
+		setUnbind() // library marker davegut.kasaCommon, line 130
+	} // library marker davegut.kasaCommon, line 131
+	pauseExecution(5000) // library marker davegut.kasaCommon, line 132
+	return message // library marker davegut.kasaCommon, line 133
+} // library marker davegut.kasaCommon, line 134
 
-def setBindUnbind(cmdResp) { // library marker davegut.kasaCommon, line 163
-	def bindState = true // library marker davegut.kasaCommon, line 164
-	if (cmdResp.get_info) { // library marker davegut.kasaCommon, line 165
-		if (cmdResp.get_info.binded == 0) { bindState = false } // library marker davegut.kasaCommon, line 166
-		logInfo("setBindUnbind: Bind status set to ${bindState}") // library marker davegut.kasaCommon, line 167
-		setCommsType(bindState) // library marker davegut.kasaCommon, line 168
-	} else if (cmdResp.bind.err_code == 0){ // library marker davegut.kasaCommon, line 169
-		getBind() // library marker davegut.kasaCommon, line 170
-	} else { // library marker davegut.kasaCommon, line 171
-		logWarn("setBindUnbind: Unhandled response: ${cmdResp}") // library marker davegut.kasaCommon, line 172
-	} // library marker davegut.kasaCommon, line 173
+def setBindUnbind(cmdResp) { // library marker davegut.kasaCommon, line 136
+	def bindState = true // library marker davegut.kasaCommon, line 137
+	if (cmdResp.get_info) { // library marker davegut.kasaCommon, line 138
+		if (cmdResp.get_info.binded == 0) { bindState = false } // library marker davegut.kasaCommon, line 139
+		logInfo("setBindUnbind: Bind status set to ${bindState}") // library marker davegut.kasaCommon, line 140
+		setCommsType(bindState) // library marker davegut.kasaCommon, line 141
+	} else if (cmdResp.bind.err_code == 0){ // library marker davegut.kasaCommon, line 142
+		getBind() // library marker davegut.kasaCommon, line 143
+	} else { // library marker davegut.kasaCommon, line 144
+		logWarn("setBindUnbind: Unhandled response: ${cmdResp}") // library marker davegut.kasaCommon, line 145
+	} // library marker davegut.kasaCommon, line 146
+} // library marker davegut.kasaCommon, line 147
+
+def setCommsType(bindState) { // library marker davegut.kasaCommon, line 149
+	def commsType = "LAN" // library marker davegut.kasaCommon, line 150
+	def cloudCtrl = false // library marker davegut.kasaCommon, line 151
+	if (bindState == false && useCloud == true) { // library marker davegut.kasaCommon, line 152
+		logWarn("setCommsType: Can not use cloud.  Device is not bound to Kasa cloud.") // library marker davegut.kasaCommon, line 153
+	} else if (bindState == true && useCloud == true && parent.kasaToken) { // library marker davegut.kasaCommon, line 154
+		commsType = "CLOUD" // library marker davegut.kasaCommon, line 155
+		cloudCtrl = true // library marker davegut.kasaCommon, line 156
+	} else if (altLan == true) { // library marker davegut.kasaCommon, line 157
+		commsType = "AltLAN" // library marker davegut.kasaCommon, line 158
+		state.response = "" // library marker davegut.kasaCommon, line 159
+	} // library marker davegut.kasaCommon, line 160
+	def commsSettings = [bind: bindState, useCloud: cloudCtrl, commsType: commsType] // library marker davegut.kasaCommon, line 161
+	device.updateSetting("bind", [type:"bool", value: bindState]) // library marker davegut.kasaCommon, line 162
+	device.updateSetting("useCloud", [type:"bool", value: cloudCtrl]) // library marker davegut.kasaCommon, line 163
+	sendEvent(name: "connection", value: "${commsType}") // library marker davegut.kasaCommon, line 164
+	logInfo("setCommsType: ${commsSettings}") // library marker davegut.kasaCommon, line 165
+	if (getDataValue("plugNo") != null) { // library marker davegut.kasaCommon, line 166
+		def coordData = [:] // library marker davegut.kasaCommon, line 167
+		coordData << [bind: bindState] // library marker davegut.kasaCommon, line 168
+		coordData << [useCloud: cloudCtrl] // library marker davegut.kasaCommon, line 169
+		coordData << [connection: commsType] // library marker davegut.kasaCommon, line 170
+		parent.coordinate("commsData", coordData, getDataValue("deviceId"), getDataValue("plugNo")) // library marker davegut.kasaCommon, line 171
+	} // library marker davegut.kasaCommon, line 172
+	pauseExecution(1000) // library marker davegut.kasaCommon, line 173
 } // library marker davegut.kasaCommon, line 174
 
-def setCommsType(bindState) { // library marker davegut.kasaCommon, line 176
-	def commsType = "LAN" // library marker davegut.kasaCommon, line 177
-	def cloudCtrl = false // library marker davegut.kasaCommon, line 178
-	if (getDataValue("deviceIP") == "CLOUD") { // library marker davegut.kasaCommon, line 179
-		commsType = "CLOUD" // library marker davegut.kasaCommon, line 180
-		cloudCtrl = true // library marker davegut.kasaCommon, line 181
-	} else if (bindState == false && useCloud == true) { // library marker davegut.kasaCommon, line 182
-		logWarn("setCommsType: Can not use cloud.  Device is not bound to Kasa cloud.") // library marker davegut.kasaCommon, line 183
-	} else if (bindState == true && useCloud == true && parent.kasaToken) { // library marker davegut.kasaCommon, line 184
-		commsType = "CLOUD" // library marker davegut.kasaCommon, line 185
-		cloudCtrl = true // library marker davegut.kasaCommon, line 186
-	} else if (altLan == true) { // library marker davegut.kasaCommon, line 187
-		commsType = "AltLAN" // library marker davegut.kasaCommon, line 188
-		state.response = "" // library marker davegut.kasaCommon, line 189
-	} // library marker davegut.kasaCommon, line 190
-	def commsSettings = [bind: bindState, useCloud: cloudCtrl, commsType: commsType] // library marker davegut.kasaCommon, line 191
-	device.updateSetting("bind", [type:"bool", value: bindState]) // library marker davegut.kasaCommon, line 192
-	device.updateSetting("useCloud", [type:"bool", value: cloudCtrl]) // library marker davegut.kasaCommon, line 193
-	sendEvent(name: "connection", value: "${commsType}") // library marker davegut.kasaCommon, line 194
-	logInfo("setCommsType: ${commsSettings}") // library marker davegut.kasaCommon, line 195
-	if (getDataValue("plugNo") != null) { // library marker davegut.kasaCommon, line 196
-		def coordData = [:] // library marker davegut.kasaCommon, line 197
-		coordData << [bind: bindState] // library marker davegut.kasaCommon, line 198
-		coordData << [useCloud: cloudCtrl] // library marker davegut.kasaCommon, line 199
-		coordData << [connection: commsType] // library marker davegut.kasaCommon, line 200
-		parent.coordinate("commsData", coordData, getDataValue("deviceId"), getDataValue("plugNo")) // library marker davegut.kasaCommon, line 201
-	} // library marker davegut.kasaCommon, line 202
-	pauseExecution(1000) // library marker davegut.kasaCommon, line 203
-} // library marker davegut.kasaCommon, line 204
+def syncName() { // library marker davegut.kasaCommon, line 176
+	def message // library marker davegut.kasaCommon, line 177
+	if (nameSync == "Hubitat") { // library marker davegut.kasaCommon, line 178
+		message = "Hubitat Label Sync" // library marker davegut.kasaCommon, line 179
+		setDeviceAlias(device.getLabel()) // library marker davegut.kasaCommon, line 180
+	} else if (nameSync == "device") { // library marker davegut.kasaCommon, line 181
+		message = "Device Alias Sync" // library marker davegut.kasaCommon, line 182
+	} else { // library marker davegut.kasaCommon, line 183
+		message = "Not Syncing" // library marker davegut.kasaCommon, line 184
+	} // library marker davegut.kasaCommon, line 185
+	return message // library marker davegut.kasaCommon, line 186
+} // library marker davegut.kasaCommon, line 187
 
-def syncName() { // library marker davegut.kasaCommon, line 206
-	def message // library marker davegut.kasaCommon, line 207
-	if (nameSync == "Hubitat") { // library marker davegut.kasaCommon, line 208
-		message = "Hubitat Label Sync" // library marker davegut.kasaCommon, line 209
-		setDeviceAlias(device.getLabel()) // library marker davegut.kasaCommon, line 210
-	} else if (nameSync == "device") { // library marker davegut.kasaCommon, line 211
-		message = "Device Alias Sync" // library marker davegut.kasaCommon, line 212
-	} else { // library marker davegut.kasaCommon, line 213
-		message = "Not Syncing" // library marker davegut.kasaCommon, line 214
-	} // library marker davegut.kasaCommon, line 215
-	return message // library marker davegut.kasaCommon, line 216
-} // library marker davegut.kasaCommon, line 217
+def updateName(response) { // library marker davegut.kasaCommon, line 189
+	device.updateSetting("nameSync",[type:"enum", value:"none"]) // library marker davegut.kasaCommon, line 190
+	def name = device.getLabel() // library marker davegut.kasaCommon, line 191
+	if (response.alias) { // library marker davegut.kasaCommon, line 192
+		name = response.alias // library marker davegut.kasaCommon, line 193
+		device.setLabel(name) // library marker davegut.kasaCommon, line 194
+	} else if (response.err_code != 0) { // library marker davegut.kasaCommon, line 195
+		def msg = "updateName: Name Sync from Hubitat to Device returned an error." // library marker davegut.kasaCommon, line 196
+		msg+= "Note: <b>some devices do not support syncing name from the hub.</b>\n\r" // library marker davegut.kasaCommon, line 197
+		logWarn(msg) // library marker davegut.kasaCommon, line 198
+		return // library marker davegut.kasaCommon, line 199
+	} // library marker davegut.kasaCommon, line 200
+	logInfo("updateName: Hubitat and Kasa device name synchronized to ${name}") // library marker davegut.kasaCommon, line 201
+} // library marker davegut.kasaCommon, line 202
 
-def updateName(response) { // library marker davegut.kasaCommon, line 219
-	device.updateSetting("nameSync",[type:"enum", value:"none"]) // library marker davegut.kasaCommon, line 220
-	def name = device.getLabel() // library marker davegut.kasaCommon, line 221
-	if (response.alias) { // library marker davegut.kasaCommon, line 222
-		name = response.alias // library marker davegut.kasaCommon, line 223
-		device.setLabel(name) // library marker davegut.kasaCommon, line 224
-	} else if (response.err_code != 0) { // library marker davegut.kasaCommon, line 225
-		def msg = "updateName: Name Sync from Hubitat to Device returned an error." // library marker davegut.kasaCommon, line 226
-		msg+= "Note: <b>some devices do not support syncing name from the hub.</b>\n\r" // library marker davegut.kasaCommon, line 227
-		logWarn(msg) // library marker davegut.kasaCommon, line 228
-		return // library marker davegut.kasaCommon, line 229
-	} // library marker davegut.kasaCommon, line 230
-	logInfo("updateName: Hubitat and Kasa device name synchronized to ${name}") // library marker davegut.kasaCommon, line 231
+def getSysinfo() { // library marker davegut.kasaCommon, line 204
+	sendCmd("""{"system":{"get_sysinfo":{}}}""") // library marker davegut.kasaCommon, line 205
+} // library marker davegut.kasaCommon, line 206
+
+def reboot() { // library marker davegut.kasaCommon, line 208
+	def method = "system" // library marker davegut.kasaCommon, line 209
+	if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 210
+		method = "smartlife.iot.common.system" // library marker davegut.kasaCommon, line 211
+	} // library marker davegut.kasaCommon, line 212
+	sendCmd("""{"${method}":{"reboot":{"delay":1}}}""") // library marker davegut.kasaCommon, line 213
+} // library marker davegut.kasaCommon, line 214
+
+def bindService() { // library marker davegut.kasaCommon, line 216
+	def service = "cnCloud" // library marker davegut.kasaCommon, line 217
+	if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 218
+		service = "smartlife.iot.common.cloud" // library marker davegut.kasaCommon, line 219
+	} // library marker davegut.kasaCommon, line 220
+	return service // library marker davegut.kasaCommon, line 221
+} // library marker davegut.kasaCommon, line 222
+
+def getBind() {	 // library marker davegut.kasaCommon, line 224
+	sendLanCmd("""{"${bindService()}":{"get_info":{}}}""") // library marker davegut.kasaCommon, line 225
+} // library marker davegut.kasaCommon, line 226
+
+def setBind(userName, password) { // library marker davegut.kasaCommon, line 228
+	sendLanCmd("""{"${bindService()}":{"bind":{"username":"${userName}",""" + // library marker davegut.kasaCommon, line 229
+			   """"password":"${password}"}},""" + // library marker davegut.kasaCommon, line 230
+			   """"${bindService()}":{"get_info":{}}}""") // library marker davegut.kasaCommon, line 231
 } // library marker davegut.kasaCommon, line 232
 
-//	===== Kasa API Commands ===== // library marker davegut.kasaCommon, line 234
-def getSysinfo() { // library marker davegut.kasaCommon, line 235
-	sendCmd("""{"system":{"get_sysinfo":{}}}""") // library marker davegut.kasaCommon, line 236
+def setUnbind() { // library marker davegut.kasaCommon, line 234
+	sendLanCmd("""{"${bindService()}":{"unbind":""},""" + // library marker davegut.kasaCommon, line 235
+			   """"${bindService()}":{"get_info":{}}}""") // library marker davegut.kasaCommon, line 236
 } // library marker davegut.kasaCommon, line 237
 
-def reboot() { // library marker davegut.kasaCommon, line 239
-	def method = "system" // library marker davegut.kasaCommon, line 240
-	if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 241
-		method = "smartlife.iot.common.system" // library marker davegut.kasaCommon, line 242
-	} // library marker davegut.kasaCommon, line 243
-	sendCmd("""{"${method}":{"reboot":{"delay":1}}}""") // library marker davegut.kasaCommon, line 244
-} // library marker davegut.kasaCommon, line 245
+def setDeviceAlias(newAlias) { // library marker davegut.kasaCommon, line 239
+	if (getDataValue("plugNo") != null) { // library marker davegut.kasaCommon, line 240
+	sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaCommon, line 241
+				""""system":{"set_dev_alias":{"alias":"${device.getLabel()}"}}}""") // library marker davegut.kasaCommon, line 242
+	} else { // library marker davegut.kasaCommon, line 243
+		sendCmd("""{"system":{"set_dev_alias":{"alias":"${device.getLabel()}"}}}""") // library marker davegut.kasaCommon, line 244
+	} // library marker davegut.kasaCommon, line 245
+} // library marker davegut.kasaCommon, line 246
 
-def bindService() { // library marker davegut.kasaCommon, line 247
-	def service = "cnCloud" // library marker davegut.kasaCommon, line 248
-	if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaCommon, line 249
-		service = "smartlife.iot.common.cloud" // library marker davegut.kasaCommon, line 250
-	} // library marker davegut.kasaCommon, line 251
-	return service // library marker davegut.kasaCommon, line 252
-} // library marker davegut.kasaCommon, line 253
+// ~~~~~ end include (1093) davegut.kasaCommon ~~~~~
 
-def getBind() {	 // library marker davegut.kasaCommon, line 255
-	sendLanCmd("""{"${bindService()}":{"get_info":{}}}""") // library marker davegut.kasaCommon, line 256
-} // library marker davegut.kasaCommon, line 257
-
-def setBind(userName, password) { // library marker davegut.kasaCommon, line 259
-	sendLanCmd("""{"${bindService()}":{"bind":{"username":"${userName}",""" + // library marker davegut.kasaCommon, line 260
-			   """"password":"${password}"}},""" + // library marker davegut.kasaCommon, line 261
-			   """"${bindService()}":{"get_info":{}}}""") // library marker davegut.kasaCommon, line 262
-} // library marker davegut.kasaCommon, line 263
-
-def setUnbind() { // library marker davegut.kasaCommon, line 265
-	sendLanCmd("""{"${bindService()}":{"unbind":""},""" + // library marker davegut.kasaCommon, line 266
-			   """"${bindService()}":{"get_info":{}}}""") // library marker davegut.kasaCommon, line 267
-} // library marker davegut.kasaCommon, line 268
-
-def setDeviceAlias(newAlias) { // library marker davegut.kasaCommon, line 270
-	if (getDataValue("plugNo") != null) { // library marker davegut.kasaCommon, line 271
-	sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaCommon, line 272
-				""""system":{"set_dev_alias":{"alias":"${device.getLabel()}"}}}""") // library marker davegut.kasaCommon, line 273
-	} else { // library marker davegut.kasaCommon, line 274
-		sendCmd("""{"system":{"set_dev_alias":{"alias":"${device.getLabel()}"}}}""") // library marker davegut.kasaCommon, line 275
-	} // library marker davegut.kasaCommon, line 276
-} // library marker davegut.kasaCommon, line 277
-
-// ~~~~~ end include (961) davegut.kasaCommon ~~~~~
-
-// ~~~~~ start include (962) davegut.kasaCommunications ~~~~~
+// ~~~~~ start include (1094) davegut.kasaCommunications ~~~~~
 library ( // library marker davegut.kasaCommunications, line 1
 	name: "kasaCommunications", // library marker davegut.kasaCommunications, line 2
 	namespace: "davegut", // library marker davegut.kasaCommunications, line 3
@@ -808,276 +769,277 @@ def getPort() { // library marker davegut.kasaCommunications, line 12
 } // library marker davegut.kasaCommunications, line 18
 
 def sendCmd(command) { // library marker davegut.kasaCommunications, line 20
-	if (!command.contains("password")) { // library marker davegut.kasaCommunications, line 21
-		state.lastCommand = command // library marker davegut.kasaCommunications, line 22
-	} // library marker davegut.kasaCommunications, line 23
-	def connection = device.currentValue("connection") // library marker davegut.kasaCommunications, line 24
-	if (connection == "LAN") { // library marker davegut.kasaCommunications, line 25
-		sendLanCmd(command) // library marker davegut.kasaCommunications, line 26
-	} else if (connection == "CLOUD"){ // library marker davegut.kasaCommunications, line 27
-		sendKasaCmd(command) // library marker davegut.kasaCommunications, line 28
-	} else if (connection == "AltLAN") { // library marker davegut.kasaCommunications, line 29
-		sendTcpCmd(command) // library marker davegut.kasaCommunications, line 30
-	} else { // library marker davegut.kasaCommunications, line 31
-		logWarn("sendCmd: attribute connection is not set.") // library marker davegut.kasaCommunications, line 32
-	} // library marker davegut.kasaCommunications, line 33
-} // library marker davegut.kasaCommunications, line 34
+	state.lastCommand = command // library marker davegut.kasaCommunications, line 21
+	def connection = device.currentValue("connection") // library marker davegut.kasaCommunications, line 22
+	if (connection == "LAN") { // library marker davegut.kasaCommunications, line 23
+		sendLanCmd(command) // library marker davegut.kasaCommunications, line 24
+	} else if (connection == "CLOUD"){ // library marker davegut.kasaCommunications, line 25
+		sendKasaCmd(command) // library marker davegut.kasaCommunications, line 26
+	} else if (connection == "AltLAN") { // library marker davegut.kasaCommunications, line 27
+		sendTcpCmd(command) // library marker davegut.kasaCommunications, line 28
+	} else { // library marker davegut.kasaCommunications, line 29
+		logWarn("sendCmd: attribute connection is not set.") // library marker davegut.kasaCommunications, line 30
+	} // library marker davegut.kasaCommunications, line 31
+} // library marker davegut.kasaCommunications, line 32
 
-def sendLanCmd(command, commsTo = 3) { // library marker davegut.kasaCommunications, line 36
-	logDebug("sendLanCmd: [ip: ${getDataValue("deviceIP")}, commsTo: ${commsTo}, cmd: ${command}]") // library marker davegut.kasaCommunications, line 37
-	def myHubAction = new hubitat.device.HubAction( // library marker davegut.kasaCommunications, line 38
-		outputXOR(command), // library marker davegut.kasaCommunications, line 39
-		hubitat.device.Protocol.LAN, // library marker davegut.kasaCommunications, line 40
-		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT, // library marker davegut.kasaCommunications, line 41
-		 destinationAddress: "${getDataValue("deviceIP")}:${getPort()}", // library marker davegut.kasaCommunications, line 42
-		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING, // library marker davegut.kasaCommunications, line 43
-		 parseWarning: true, // library marker davegut.kasaCommunications, line 44
-		 timeout: commsTo, // library marker davegut.kasaCommunications, line 45
-		 callback: parseUdp]) // library marker davegut.kasaCommunications, line 46
-	try { // library marker davegut.kasaCommunications, line 47
-		sendHubCommand(myHubAction) // library marker davegut.kasaCommunications, line 48
-	} catch (e) { // library marker davegut.kasaCommunications, line 49
-		logWarn("sendLanCmd: LAN Error = ${e}.\n\rNo retry on this error.") // library marker davegut.kasaCommunications, line 50
-	} // library marker davegut.kasaCommunications, line 51
-} // library marker davegut.kasaCommunications, line 52
+def sendLanCmd(command) { // library marker davegut.kasaCommunications, line 34
+	logDebug("sendLanCmd: [ip: ${getDataValue("deviceIP")}, cmd: ${command}]") // library marker davegut.kasaCommunications, line 35
+	def myHubAction = new hubitat.device.HubAction( // library marker davegut.kasaCommunications, line 36
+		outputXOR(command), // library marker davegut.kasaCommunications, line 37
+		hubitat.device.Protocol.LAN, // library marker davegut.kasaCommunications, line 38
+		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT, // library marker davegut.kasaCommunications, line 39
+		 destinationAddress: "${getDataValue("deviceIP")}:${getPort()}", // library marker davegut.kasaCommunications, line 40
+		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING, // library marker davegut.kasaCommunications, line 41
+		 parseWarning: true, // library marker davegut.kasaCommunications, line 42
+		 timeout: 4, // library marker davegut.kasaCommunications, line 43
+		 ignoreResponse: false, // library marker davegut.kasaCommunications, line 44
+		 callback: parseUdp]) // library marker davegut.kasaCommunications, line 45
+	try { // library marker davegut.kasaCommunications, line 46
+		sendHubCommand(myHubAction) // library marker davegut.kasaCommunications, line 47
+	} catch (e) { // library marker davegut.kasaCommunications, line 48
+		logWarn("sendLanCmd: LAN Error = ${e}.\n\rNo retry on this error.") // library marker davegut.kasaCommunications, line 49
+	} // library marker davegut.kasaCommunications, line 50
+} // library marker davegut.kasaCommunications, line 51
 
-def parseUdp(message) { // library marker davegut.kasaCommunications, line 54
-	def resp = parseLanMessage(message) // library marker davegut.kasaCommunications, line 55
-	if (resp.type == "LAN_TYPE_UDPCLIENT") { // library marker davegut.kasaCommunications, line 56
-		def clearResp = inputXOR(resp.payload) // library marker davegut.kasaCommunications, line 57
-		if (clearResp.length() > 1022) { // library marker davegut.kasaCommunications, line 58
-			if (clearResp.contains("preferred")) { // library marker davegut.kasaCommunications, line 59
-				clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}" // library marker davegut.kasaCommunications, line 60
-			} else { // library marker davegut.kasaCommunications, line 61
-				def msg = "parseUdp: Response is too long for Hubitat UDP implementation." // library marker davegut.kasaCommunications, line 62
-				msg += "\n\t<b>Device attributes have not been updated.</b>" // library marker davegut.kasaCommunications, line 63
-				if(device.getName().contains("Multi")) { // library marker davegut.kasaCommunications, line 64
-					msg += "\n\t<b>HS300:</b>\tCheck your device names. The total Kasa App names of all " // library marker davegut.kasaCommunications, line 65
-					msg += "\n\t\t\tdevice names can't exceed 96 charactrs (16 per device).\n\r" // library marker davegut.kasaCommunications, line 66
-				} // library marker davegut.kasaCommunications, line 67
-				logWarn(msg) // library marker davegut.kasaCommunications, line 68
-				return // library marker davegut.kasaCommunications, line 69
-			} // library marker davegut.kasaCommunications, line 70
-		} // library marker davegut.kasaCommunications, line 71
-		def cmdResp = new JsonSlurper().parseText(clearResp) // library marker davegut.kasaCommunications, line 72
-		logDebug("parseUdp: ${cmdResp}") // library marker davegut.kasaCommunications, line 73
-		distResp(cmdResp) // library marker davegut.kasaCommunications, line 74
-		resetCommsError() // library marker davegut.kasaCommunications, line 75
-	} else { // library marker davegut.kasaCommunications, line 76
-		logDebug("parse: LAN Error = ${resp.type}") // library marker davegut.kasaCommunications, line 77
-		handleCommsError() // library marker davegut.kasaCommunications, line 78
-	} // library marker davegut.kasaCommunications, line 79
-} // library marker davegut.kasaCommunications, line 80
+def parseUdp(message) { // library marker davegut.kasaCommunications, line 53
+	def resp = parseLanMessage(message) // library marker davegut.kasaCommunications, line 54
+	if (resp.type == "LAN_TYPE_UDPCLIENT") { // library marker davegut.kasaCommunications, line 55
+		def clearResp = inputXOR(resp.payload) // library marker davegut.kasaCommunications, line 56
+		if (clearResp.length() > 1022) { // library marker davegut.kasaCommunications, line 57
+			if (clearResp.contains("preferred")) { // library marker davegut.kasaCommunications, line 58
+				clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}" // library marker davegut.kasaCommunications, line 59
+			} else { // library marker davegut.kasaCommunications, line 60
+				def msg = "parseUdp: Response is too long for Hubitat UDP implementation." // library marker davegut.kasaCommunications, line 61
+				msg += "\n\t<b>Device attributes have not been updated.</b>" // library marker davegut.kasaCommunications, line 62
+				if(device.getName().contains("Multi")) { // library marker davegut.kasaCommunications, line 63
+					msg += "\n\t<b>HS300:</b>\tCheck your device names. The total Kasa App names of all " // library marker davegut.kasaCommunications, line 64
+					msg += "\n\t\t\tdevice names can't exceed 96 charactrs (16 per device).\n\r" // library marker davegut.kasaCommunications, line 65
+				} // library marker davegut.kasaCommunications, line 66
+				logWarn(msg) // library marker davegut.kasaCommunications, line 67
+				return // library marker davegut.kasaCommunications, line 68
+			} // library marker davegut.kasaCommunications, line 69
+		} // library marker davegut.kasaCommunications, line 70
+		def cmdResp = new JsonSlurper().parseText(clearResp) // library marker davegut.kasaCommunications, line 71
+		logDebug("parseUdp: ${cmdResp}") // library marker davegut.kasaCommunications, line 72
+		distResp(cmdResp) // library marker davegut.kasaCommunications, line 73
+		resetCommsError() // library marker davegut.kasaCommunications, line 74
+	} else { // library marker davegut.kasaCommunications, line 75
+		logDebug("parse: LAN Error = ${resp.type}") // library marker davegut.kasaCommunications, line 76
+		handleCommsError() // library marker davegut.kasaCommunications, line 77
+	} // library marker davegut.kasaCommunications, line 78
+} // library marker davegut.kasaCommunications, line 79
 
-def sendKasaCmd(command) { // library marker davegut.kasaCommunications, line 82
-	logDebug("sendKasaCmd: ${command}") // library marker davegut.kasaCommunications, line 83
-	def cmdResponse = "" // library marker davegut.kasaCommunications, line 84
-	def cmdBody = [ // library marker davegut.kasaCommunications, line 85
-		method: "passthrough", // library marker davegut.kasaCommunications, line 86
-		params: [ // library marker davegut.kasaCommunications, line 87
-			deviceId: getDataValue("deviceId"), // library marker davegut.kasaCommunications, line 88
-			requestData: "${command}" // library marker davegut.kasaCommunications, line 89
-		] // library marker davegut.kasaCommunications, line 90
-	] // library marker davegut.kasaCommunications, line 91
-	if (!parent.kasaCloudUrl || !parent.kasaToken) { // library marker davegut.kasaCommunications, line 92
-		logWarn("sendKasaCmd: Cloud interface not properly set up.") // library marker davegut.kasaCommunications, line 93
-		return // library marker davegut.kasaCommunications, line 94
-	} // library marker davegut.kasaCommunications, line 95
-	def sendCloudCmdParams = [ // library marker davegut.kasaCommunications, line 96
-		uri: "${parent.kasaCloudUrl}/?token=${parent.kasaToken}", // library marker davegut.kasaCommunications, line 97
-		requestContentType: 'application/json', // library marker davegut.kasaCommunications, line 98
-		contentType: 'application/json', // library marker davegut.kasaCommunications, line 99
-		headers: ['Accept':'application/json; version=1, */*; q=0.01'], // library marker davegut.kasaCommunications, line 100
-		timeout: 10, // library marker davegut.kasaCommunications, line 101
-		body : new groovy.json.JsonBuilder(cmdBody).toString() // library marker davegut.kasaCommunications, line 102
-	] // library marker davegut.kasaCommunications, line 103
-	try { // library marker davegut.kasaCommunications, line 104
-		asynchttpPost("cloudParse", sendCloudCmdParams) // library marker davegut.kasaCommunications, line 105
-	} catch (e) { // library marker davegut.kasaCommunications, line 106
-		def msg = "sendKasaCmd: <b>Error in Cloud Communications.</b> The Kasa Cloud is unreachable." // library marker davegut.kasaCommunications, line 107
-		msg += "\nAdditional Data: Error = ${e}\n\n" // library marker davegut.kasaCommunications, line 108
-		logWarn(msg) // library marker davegut.kasaCommunications, line 109
-	} // library marker davegut.kasaCommunications, line 110
-} // library marker davegut.kasaCommunications, line 111
+def sendKasaCmd(command) { // library marker davegut.kasaCommunications, line 81
+	logDebug("sendKasaCmd: ${command}") // library marker davegut.kasaCommunications, line 82
+	def cmdResponse = "" // library marker davegut.kasaCommunications, line 83
+	def cmdBody = [ // library marker davegut.kasaCommunications, line 84
+		method: "passthrough", // library marker davegut.kasaCommunications, line 85
+		params: [ // library marker davegut.kasaCommunications, line 86
+			deviceId: getDataValue("deviceId"), // library marker davegut.kasaCommunications, line 87
+			requestData: "${command}" // library marker davegut.kasaCommunications, line 88
+		] // library marker davegut.kasaCommunications, line 89
+	] // library marker davegut.kasaCommunications, line 90
+	if (!parent.kasaCloudUrl || !parent.kasaToken) { // library marker davegut.kasaCommunications, line 91
+		logWarn("sendKasaCmd: Cloud interface not properly set up.") // library marker davegut.kasaCommunications, line 92
+		return // library marker davegut.kasaCommunications, line 93
+	} // library marker davegut.kasaCommunications, line 94
+	def sendCloudCmdParams = [ // library marker davegut.kasaCommunications, line 95
+		uri: "${parent.kasaCloudUrl}/?token=${parent.kasaToken}", // library marker davegut.kasaCommunications, line 96
+		requestContentType: 'application/json', // library marker davegut.kasaCommunications, line 97
+		contentType: 'application/json', // library marker davegut.kasaCommunications, line 98
+		headers: ['Accept':'application/json; version=1, */*; q=0.01'], // library marker davegut.kasaCommunications, line 99
+		timeout: 10, // library marker davegut.kasaCommunications, line 100
+		body : new groovy.json.JsonBuilder(cmdBody).toString() // library marker davegut.kasaCommunications, line 101
+	] // library marker davegut.kasaCommunications, line 102
+	try { // library marker davegut.kasaCommunications, line 103
+		asynchttpPost("cloudParse", sendCloudCmdParams) // library marker davegut.kasaCommunications, line 104
+	} catch (e) { // library marker davegut.kasaCommunications, line 105
+		def msg = "sendKasaCmd: <b>Error in Cloud Communications.</b> The Kasa Cloud is unreachable." // library marker davegut.kasaCommunications, line 106
+		msg += "\nAdditional Data: Error = ${e}\n\n" // library marker davegut.kasaCommunications, line 107
+		logWarn(msg) // library marker davegut.kasaCommunications, line 108
+	} // library marker davegut.kasaCommunications, line 109
+} // library marker davegut.kasaCommunications, line 110
 
-def cloudParse(resp, data = null) { // library marker davegut.kasaCommunications, line 113
-	def jsonSlurper = new groovy.json.JsonSlurper() // library marker davegut.kasaCommunications, line 114
-	def response = jsonSlurper.parseText(resp.data) // library marker davegut.kasaCommunications, line 115
-	if (resp.status == 200 && response.error_code == 0) { // library marker davegut.kasaCommunications, line 116
-		def cmdResp = new JsonSlurper().parseText(response.result.responseData) // library marker davegut.kasaCommunications, line 117
-		logDebug("cloudParse: ${cmdResp}") // library marker davegut.kasaCommunications, line 118
-		distResp(cmdResp) // library marker davegut.kasaCommunications, line 119
-		resetCommsError() // library marker davegut.kasaCommunications, line 120
-	} else { // library marker davegut.kasaCommunications, line 121
-		def msg = "sendKasaCmd:\n<b>Error from the Kasa Cloud.</b> Most common cause is " // library marker davegut.kasaCommunications, line 122
-		msg += "your Kasa Token has expired.  Run Kasa Login and Token update and try again." // library marker davegut.kasaCommunications, line 123
-		msg += "\nAdditional Data: Error = ${resp.data}\n\n" // library marker davegut.kasaCommunications, line 124
-		logDebug(msg) // library marker davegut.kasaCommunications, line 125
-		handleCommsError() // library marker davegut.kasaCommunications, line 126
-	} // library marker davegut.kasaCommunications, line 127
-} // library marker davegut.kasaCommunications, line 128
+def cloudParse(resp, data = null) { // library marker davegut.kasaCommunications, line 112
+	def response // library marker davegut.kasaCommunications, line 113
+	try { // library marker davegut.kasaCommunications, line 114
+		response = new JsonSlurper().parseText(resp.data) // library marker davegut.kasaCommunications, line 115
+	} catch (e) { // library marker davegut.kasaCommunications, line 116
+		response = [error_code: 9999, data: e] // library marker davegut.kasaCommunications, line 117
+	} // library marker davegut.kasaCommunications, line 118
+	if (resp.status == 200 && response.error_code == 0 && resp != []) { // library marker davegut.kasaCommunications, line 119
+		def cmdResp = new JsonSlurper().parseText(response.result.responseData) // library marker davegut.kasaCommunications, line 120
+		logDebug("cloudParse: ${cmdResp}") // library marker davegut.kasaCommunications, line 121
+		distResp(cmdResp) // library marker davegut.kasaCommunications, line 122
+		resetCommsError() // library marker davegut.kasaCommunications, line 123
+	} else { // library marker davegut.kasaCommunications, line 124
+		def msg = "cloudParse:\n<b>Error from the Kasa Cloud.</b> Most common cause is " // library marker davegut.kasaCommunications, line 125
+		msg += "your Kasa Token has expired.  Run Kasa Login and Token update and try again." // library marker davegut.kasaCommunications, line 126
+		msg += "\nAdditional Data: Error = ${resp.data}\n\n" // library marker davegut.kasaCommunications, line 127
+		logDebug(msg) // library marker davegut.kasaCommunications, line 128
+		handleCommsError() // library marker davegut.kasaCommunications, line 129
+	} // library marker davegut.kasaCommunications, line 130
+} // library marker davegut.kasaCommunications, line 131
 
-private sendTcpCmd(command) { // library marker davegut.kasaCommunications, line 130
-	logDebug("sendTcpCmd: ${command}") // library marker davegut.kasaCommunications, line 131
-	try { // library marker davegut.kasaCommunications, line 132
-		interfaces.rawSocket.connect("${getDataValue("deviceIP")}", // library marker davegut.kasaCommunications, line 133
-									 getPort().toInteger(), byteInterface: true) // library marker davegut.kasaCommunications, line 134
-	} catch (error) { // library marker davegut.kasaCommunications, line 135
-		logDebug("SendTcpCmd: Unable to connect to device at ${getDataValue("deviceIP")}:${getDataValue("devicePort")}. " + // library marker davegut.kasaCommunications, line 136
-				 "Error = ${error}") // library marker davegut.kasaCommunications, line 137
-	} // library marker davegut.kasaCommunications, line 138
-	state.lastCommand = command // library marker davegut.kasaCommunications, line 139
-	interfaces.rawSocket.sendMessage(outputXorTcp(command)) // library marker davegut.kasaCommunications, line 140
-	runIn(2, close) // library marker davegut.kasaCommunications, line 141
-} // library marker davegut.kasaCommunications, line 142
+private sendTcpCmd(command) { // library marker davegut.kasaCommunications, line 133
+	logDebug("sendTcpCmd: ${command}") // library marker davegut.kasaCommunications, line 134
+	try { // library marker davegut.kasaCommunications, line 135
+		interfaces.rawSocket.connect("${getDataValue("deviceIP")}", // library marker davegut.kasaCommunications, line 136
+									 getPort().toInteger(), byteInterface: true) // library marker davegut.kasaCommunications, line 137
+	} catch (error) { // library marker davegut.kasaCommunications, line 138
+		logDebug("SendTcpCmd: Unable to connect to device at ${getDataValue("deviceIP")}:${getDataValue("devicePort")}. " + // library marker davegut.kasaCommunications, line 139
+				 "Error = ${error}") // library marker davegut.kasaCommunications, line 140
+	} // library marker davegut.kasaCommunications, line 141
+	state.lastCommand = command // library marker davegut.kasaCommunications, line 142
+	interfaces.rawSocket.sendMessage(outputXorTcp(command)) // library marker davegut.kasaCommunications, line 143
+	runIn(2, close) // library marker davegut.kasaCommunications, line 144
+} // library marker davegut.kasaCommunications, line 145
 
-def close() { interfaces.rawSocket.close() } // library marker davegut.kasaCommunications, line 144
+def close() { interfaces.rawSocket.close() } // library marker davegut.kasaCommunications, line 147
 
-def socketStatus(message) { // library marker davegut.kasaCommunications, line 146
-	if (message != "receive error: Stream closed.") { // library marker davegut.kasaCommunications, line 147
-		logDebug("socketStatus: Socket Established") // library marker davegut.kasaCommunications, line 148
-	} else { // library marker davegut.kasaCommunications, line 149
-		logWarn("socketStatus = ${message}") // library marker davegut.kasaCommunications, line 150
-	} // library marker davegut.kasaCommunications, line 151
-} // library marker davegut.kasaCommunications, line 152
+def socketStatus(message) { // library marker davegut.kasaCommunications, line 149
+	if (message != "receive error: Stream closed.") { // library marker davegut.kasaCommunications, line 150
+		logDebug("socketStatus: Socket Established") // library marker davegut.kasaCommunications, line 151
+	} else { // library marker davegut.kasaCommunications, line 152
+		logWarn("socketStatus = ${message}") // library marker davegut.kasaCommunications, line 153
+	} // library marker davegut.kasaCommunications, line 154
+} // library marker davegut.kasaCommunications, line 155
 
-def parse(message) { // library marker davegut.kasaCommunications, line 154
-	def response = state.response.concat(message) // library marker davegut.kasaCommunications, line 155
-	state.response = response // library marker davegut.kasaCommunications, line 156
-	runInMillis(50, extractTcpResp, [data: response]) // library marker davegut.kasaCommunications, line 157
-} // library marker davegut.kasaCommunications, line 158
+def parse(message) { // library marker davegut.kasaCommunications, line 157
+	def response = state.response.concat(message) // library marker davegut.kasaCommunications, line 158
+	state.response = response // library marker davegut.kasaCommunications, line 159
+	runInMillis(50, extractTcpResp, [data: response]) // library marker davegut.kasaCommunications, line 160
+} // library marker davegut.kasaCommunications, line 161
 
-def extractTcpResp(response) { // library marker davegut.kasaCommunications, line 160
-	state.response = "" // library marker davegut.kasaCommunications, line 161
-	if (response.length() == null) { // library marker davegut.kasaCommunications, line 162
-		logDebug("extractTcpResp: null return rejected.") // library marker davegut.kasaCommunications, line 163
-		return  // library marker davegut.kasaCommunications, line 164
-	} // library marker davegut.kasaCommunications, line 165
-	logDebug("extractTcpResp: ${response}") // library marker davegut.kasaCommunications, line 166
-	try { // library marker davegut.kasaCommunications, line 167
-//		distResp(parseJson(inputXorTcp(response))) // library marker davegut.kasaCommunications, line 168
-		def cmdResp = parseJson(inputXorTcp(response)) // library marker davegut.kasaCommunications, line 169
-		logDebug("cloudParse: ${cmdResp}") // library marker davegut.kasaCommunications, line 170
-		distResp(cmdResp) // library marker davegut.kasaCommunications, line 171
-		resetCommsError() // library marker davegut.kasaCommunications, line 172
-	} catch (e) { // library marker davegut.kasaCommunications, line 173
-		logDebug("extractTcpResponse: comms error = ${e}") // library marker davegut.kasaCommunications, line 174
-		handleCommsError() // library marker davegut.kasaCommunications, line 175
-	} // library marker davegut.kasaCommunications, line 176
-} // library marker davegut.kasaCommunications, line 177
+def extractTcpResp(response) { // library marker davegut.kasaCommunications, line 163
+	state.response = "" // library marker davegut.kasaCommunications, line 164
+	if (response.length() == null) { // library marker davegut.kasaCommunications, line 165
+		logDebug("extractTcpResp: null return rejected.") // library marker davegut.kasaCommunications, line 166
+		return  // library marker davegut.kasaCommunications, line 167
+	} // library marker davegut.kasaCommunications, line 168
+	logDebug("extractTcpResp: ${response}") // library marker davegut.kasaCommunications, line 169
+	try { // library marker davegut.kasaCommunications, line 170
+		def cmdResp = parseJson(inputXorTcp(response)) // library marker davegut.kasaCommunications, line 171
+		logDebug("cloudParse: ${cmdResp}") // library marker davegut.kasaCommunications, line 172
+		distResp(cmdResp) // library marker davegut.kasaCommunications, line 173
+		resetCommsError() // library marker davegut.kasaCommunications, line 174
+	} catch (e) { // library marker davegut.kasaCommunications, line 175
+		logDebug("extractTcpResponse: comms error = ${e}") // library marker davegut.kasaCommunications, line 176
+		handleCommsError() // library marker davegut.kasaCommunications, line 177
+	} // library marker davegut.kasaCommunications, line 178
+} // library marker davegut.kasaCommunications, line 179
 
-def handleCommsError() { // library marker davegut.kasaCommunications, line 179
-	def count = state.errorCount + 1 // library marker davegut.kasaCommunications, line 180
-	state.errorCount = count // library marker davegut.kasaCommunications, line 181
-	def retry = true // library marker davegut.kasaCommunications, line 182
-	def status = [count: count, command: state.lastCommand] // library marker davegut.kasaCommunications, line 183
-	if (count == 3) { // library marker davegut.kasaCommunications, line 184
-		def attemptFix = parent.fixConnection() // library marker davegut.kasaCommunications, line 185
-		status << [attemptFixResult: [attemptFix]] // library marker davegut.kasaCommunications, line 186
-	} else if (count >= 4) { // library marker davegut.kasaCommunications, line 187
-		retry = false // library marker davegut.kasaCommunications, line 188
-	} // library marker davegut.kasaCommunications, line 189
-	if (retry == true) { // library marker davegut.kasaCommunications, line 190
-		def commsTo = 5 // library marker davegut.kasaCommunications, line 191
-		sendLanCmd(state.lastCommand, commsTo) // library marker davegut.kasaCommunications, line 192
-		if (count > 1) { // library marker davegut.kasaCommunications, line 193
-			logDebug("handleCommsError: [count: ${count}, timeout: ${commsTo}]") // library marker davegut.kasaCommunications, line 194
-		} // library marker davegut.kasaCommunications, line 195
-	} else { // library marker davegut.kasaCommunications, line 196
-		setCommsError() // library marker davegut.kasaCommunications, line 197
-	} // library marker davegut.kasaCommunications, line 198
-	status << [retry: retry] // library marker davegut.kasaCommunications, line 199
-	if (status.count > 2) { // library marker davegut.kasaCommunications, line 200
-		logWarn("handleCommsError: ${status}") // library marker davegut.kasaCommunications, line 201
-	} else { // library marker davegut.kasaCommunications, line 202
-		logDebug("handleCommsError: ${status}") // library marker davegut.kasaCommunications, line 203
-	} // library marker davegut.kasaCommunications, line 204
-} // library marker davegut.kasaCommunications, line 205
+def handleCommsError() { // library marker davegut.kasaCommunications, line 181
+	def count = state.errorCount + 1 // library marker davegut.kasaCommunications, line 182
+	state.errorCount = count // library marker davegut.kasaCommunications, line 183
+	def retry = true // library marker davegut.kasaCommunications, line 184
+	def status = [count: count, command: state.lastCommand] // library marker davegut.kasaCommunications, line 185
+	if (count == 3) { // library marker davegut.kasaCommunications, line 186
+		def attemptFix = parent.fixConnection() // library marker davegut.kasaCommunications, line 187
+		status << [attemptFixResult: [attemptFix]] // library marker davegut.kasaCommunications, line 188
+	} else if (count >= 4) { // library marker davegut.kasaCommunications, line 189
+		retry = false // library marker davegut.kasaCommunications, line 190
+	} // library marker davegut.kasaCommunications, line 191
+	if (retry == true) { // library marker davegut.kasaCommunications, line 192
+		sendLanCmd(state.lastCommand) // library marker davegut.kasaCommunications, line 193
+		if (count > 1) { // library marker davegut.kasaCommunications, line 194
+			logDebug("handleCommsError: [count: ${count}, timeout: ${commsTo}]") // library marker davegut.kasaCommunications, line 195
+		} // library marker davegut.kasaCommunications, line 196
+	} else { // library marker davegut.kasaCommunications, line 197
+		setCommsError() // library marker davegut.kasaCommunications, line 198
+	} // library marker davegut.kasaCommunications, line 199
+	status << [retry: retry] // library marker davegut.kasaCommunications, line 200
+	if (status.count > 2) { // library marker davegut.kasaCommunications, line 201
+		logWarn("handleCommsError: ${status}") // library marker davegut.kasaCommunications, line 202
+	} else { // library marker davegut.kasaCommunications, line 203
+		logDebug("handleCommsError: ${status}") // library marker davegut.kasaCommunications, line 204
+	} // library marker davegut.kasaCommunications, line 205
+} // library marker davegut.kasaCommunications, line 206
 
-def setCommsError() { // library marker davegut.kasaCommunications, line 207
-	if (device.currentValue("commsError") == "false") { // library marker davegut.kasaCommunications, line 208
-		def message = "Can't connect to your device at ${getDataValue("deviceIP")}:${getPort()}. " // library marker davegut.kasaCommunications, line 209
-		message += "Refer to troubleshooting guide commsError section." // library marker davegut.kasaCommunications, line 210
-		sendEvent(name: "commsError", value: "true") // library marker davegut.kasaCommunications, line 211
-		state.COMMS_ERROR = message			 // library marker davegut.kasaCommunications, line 212
-		logWarn("setCommsError: <b>${message}</b>") // library marker davegut.kasaCommunications, line 213
-		runIn(15, limitPollInterval) // library marker davegut.kasaCommunications, line 214
-	} // library marker davegut.kasaCommunications, line 215
-} // library marker davegut.kasaCommunications, line 216
+def setCommsError() { // library marker davegut.kasaCommunications, line 208
+	if (device.currentValue("commsError") == "false") { // library marker davegut.kasaCommunications, line 209
+		def message = "Can't connect to your device at ${getDataValue("deviceIP")}:${getPort()}. " // library marker davegut.kasaCommunications, line 210
+		message += "Refer to troubleshooting guide commsError section." // library marker davegut.kasaCommunications, line 211
+		sendEvent(name: "commsError", value: "true") // library marker davegut.kasaCommunications, line 212
+		state.COMMS_ERROR = message			 // library marker davegut.kasaCommunications, line 213
+		logWarn("setCommsError: <b>${message}</b>") // library marker davegut.kasaCommunications, line 214
+		runIn(15, limitPollInterval) // library marker davegut.kasaCommunications, line 215
+	} // library marker davegut.kasaCommunications, line 216
+} // library marker davegut.kasaCommunications, line 217
 
-def limitPollInterval() { // library marker davegut.kasaCommunications, line 218
-	state.nonErrorPollInterval = state.pollInterval // library marker davegut.kasaCommunications, line 219
-	setPollInterval("30 minutes") // library marker davegut.kasaCommunications, line 220
-} // library marker davegut.kasaCommunications, line 221
+def limitPollInterval() { // library marker davegut.kasaCommunications, line 219
+	state.nonErrorPollInterval = state.pollInterval // library marker davegut.kasaCommunications, line 220
+	setPollInterval("30 minutes") // library marker davegut.kasaCommunications, line 221
+} // library marker davegut.kasaCommunications, line 222
 
-def resetCommsError() { // library marker davegut.kasaCommunications, line 223
-	state.errorCount = 0 // library marker davegut.kasaCommunications, line 224
-	if (device.currentValue("commsError") == "true") { // library marker davegut.kasaCommunications, line 225
-		sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommunications, line 226
-		setPollInterval(state.nonErrorPollInterval) // library marker davegut.kasaCommunications, line 227
-		state.remove("nonErrorPollInterval") // library marker davegut.kasaCommunications, line 228
-		state.remove("COMMS_ERROR") // library marker davegut.kasaCommunications, line 229
-		logInfo("resetCommsError: Comms error cleared!") // library marker davegut.kasaCommunications, line 230
-	} // library marker davegut.kasaCommunications, line 231
-} // library marker davegut.kasaCommunications, line 232
+def resetCommsError() { // library marker davegut.kasaCommunications, line 224
+	state.errorCount = 0 // library marker davegut.kasaCommunications, line 225
+	if (device.currentValue("commsError") == "true") { // library marker davegut.kasaCommunications, line 226
+		sendEvent(name: "commsError", value: "false") // library marker davegut.kasaCommunications, line 227
+		setPollInterval(state.nonErrorPollInterval) // library marker davegut.kasaCommunications, line 228
+		state.remove("nonErrorPollInterval") // library marker davegut.kasaCommunications, line 229
+		state.remove("COMMS_ERROR") // library marker davegut.kasaCommunications, line 230
+		logInfo("resetCommsError: Comms error cleared!") // library marker davegut.kasaCommunications, line 231
+	} // library marker davegut.kasaCommunications, line 232
+} // library marker davegut.kasaCommunications, line 233
 
-private outputXOR(command) { // library marker davegut.kasaCommunications, line 234
-	def str = "" // library marker davegut.kasaCommunications, line 235
-	def encrCmd = "" // library marker davegut.kasaCommunications, line 236
- 	def key = 0xAB // library marker davegut.kasaCommunications, line 237
-	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommunications, line 238
-		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommunications, line 239
-		key = str // library marker davegut.kasaCommunications, line 240
-		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommunications, line 241
-	} // library marker davegut.kasaCommunications, line 242
-   	return encrCmd // library marker davegut.kasaCommunications, line 243
-} // library marker davegut.kasaCommunications, line 244
+private outputXOR(command) { // library marker davegut.kasaCommunications, line 235
+	def str = "" // library marker davegut.kasaCommunications, line 236
+	def encrCmd = "" // library marker davegut.kasaCommunications, line 237
+ 	def key = 0xAB // library marker davegut.kasaCommunications, line 238
+	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommunications, line 239
+		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommunications, line 240
+		key = str // library marker davegut.kasaCommunications, line 241
+		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommunications, line 242
+	} // library marker davegut.kasaCommunications, line 243
+   	return encrCmd // library marker davegut.kasaCommunications, line 244
+} // library marker davegut.kasaCommunications, line 245
 
-private inputXOR(encrResponse) { // library marker davegut.kasaCommunications, line 246
-	String[] strBytes = encrResponse.split("(?<=\\G.{2})") // library marker davegut.kasaCommunications, line 247
-	def cmdResponse = "" // library marker davegut.kasaCommunications, line 248
-	def key = 0xAB // library marker davegut.kasaCommunications, line 249
-	def nextKey // library marker davegut.kasaCommunications, line 250
-	byte[] XORtemp // library marker davegut.kasaCommunications, line 251
-	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommunications, line 252
-		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommunications, line 253
-		XORtemp = nextKey ^ key // library marker davegut.kasaCommunications, line 254
-		key = nextKey // library marker davegut.kasaCommunications, line 255
-		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommunications, line 256
-	} // library marker davegut.kasaCommunications, line 257
-	return cmdResponse // library marker davegut.kasaCommunications, line 258
-} // library marker davegut.kasaCommunications, line 259
+private inputXOR(encrResponse) { // library marker davegut.kasaCommunications, line 247
+	String[] strBytes = encrResponse.split("(?<=\\G.{2})") // library marker davegut.kasaCommunications, line 248
+	def cmdResponse = "" // library marker davegut.kasaCommunications, line 249
+	def key = 0xAB // library marker davegut.kasaCommunications, line 250
+	def nextKey // library marker davegut.kasaCommunications, line 251
+	byte[] XORtemp // library marker davegut.kasaCommunications, line 252
+	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommunications, line 253
+		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommunications, line 254
+		XORtemp = nextKey ^ key // library marker davegut.kasaCommunications, line 255
+		key = nextKey // library marker davegut.kasaCommunications, line 256
+		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommunications, line 257
+	} // library marker davegut.kasaCommunications, line 258
+	return cmdResponse // library marker davegut.kasaCommunications, line 259
+} // library marker davegut.kasaCommunications, line 260
 
-private outputXorTcp(command) { // library marker davegut.kasaCommunications, line 261
-	def str = "" // library marker davegut.kasaCommunications, line 262
-	def encrCmd = "000000" + Integer.toHexString(command.length())  // library marker davegut.kasaCommunications, line 263
- 	def key = 0xAB // library marker davegut.kasaCommunications, line 264
-	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommunications, line 265
-		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommunications, line 266
-		key = str // library marker davegut.kasaCommunications, line 267
-		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommunications, line 268
-	} // library marker davegut.kasaCommunications, line 269
-   	return encrCmd // library marker davegut.kasaCommunications, line 270
-} // library marker davegut.kasaCommunications, line 271
+private outputXorTcp(command) { // library marker davegut.kasaCommunications, line 262
+	def str = "" // library marker davegut.kasaCommunications, line 263
+	def encrCmd = "000000" + Integer.toHexString(command.length())  // library marker davegut.kasaCommunications, line 264
+ 	def key = 0xAB // library marker davegut.kasaCommunications, line 265
+	for (int i = 0; i < command.length(); i++) { // library marker davegut.kasaCommunications, line 266
+		str = (command.charAt(i) as byte) ^ key // library marker davegut.kasaCommunications, line 267
+		key = str // library marker davegut.kasaCommunications, line 268
+		encrCmd += Integer.toHexString(str) // library marker davegut.kasaCommunications, line 269
+	} // library marker davegut.kasaCommunications, line 270
+   	return encrCmd // library marker davegut.kasaCommunications, line 271
+} // library marker davegut.kasaCommunications, line 272
 
-private inputXorTcp(resp) { // library marker davegut.kasaCommunications, line 273
-	String[] strBytes = resp.substring(8).split("(?<=\\G.{2})") // library marker davegut.kasaCommunications, line 274
-	def cmdResponse = "" // library marker davegut.kasaCommunications, line 275
-	def key = 0xAB // library marker davegut.kasaCommunications, line 276
-	def nextKey // library marker davegut.kasaCommunications, line 277
-	byte[] XORtemp // library marker davegut.kasaCommunications, line 278
-	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommunications, line 279
-		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommunications, line 280
-		XORtemp = nextKey ^ key // library marker davegut.kasaCommunications, line 281
-		key = nextKey // library marker davegut.kasaCommunications, line 282
-		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommunications, line 283
-	} // library marker davegut.kasaCommunications, line 284
-	return cmdResponse // library marker davegut.kasaCommunications, line 285
-} // library marker davegut.kasaCommunications, line 286
+private inputXorTcp(resp) { // library marker davegut.kasaCommunications, line 274
+	String[] strBytes = resp.substring(8).split("(?<=\\G.{2})") // library marker davegut.kasaCommunications, line 275
+	def cmdResponse = "" // library marker davegut.kasaCommunications, line 276
+	def key = 0xAB // library marker davegut.kasaCommunications, line 277
+	def nextKey // library marker davegut.kasaCommunications, line 278
+	byte[] XORtemp // library marker davegut.kasaCommunications, line 279
+	for(int i = 0; i < strBytes.length; i++) { // library marker davegut.kasaCommunications, line 280
+		nextKey = (byte)Integer.parseInt(strBytes[i], 16)	// could be negative // library marker davegut.kasaCommunications, line 281
+		XORtemp = nextKey ^ key // library marker davegut.kasaCommunications, line 282
+		key = nextKey // library marker davegut.kasaCommunications, line 283
+		cmdResponse += new String(XORtemp) // library marker davegut.kasaCommunications, line 284
+	} // library marker davegut.kasaCommunications, line 285
+	return cmdResponse // library marker davegut.kasaCommunications, line 286
+} // library marker davegut.kasaCommunications, line 287
 
-// ~~~~~ end include (962) davegut.kasaCommunications ~~~~~
+// ~~~~~ end include (1094) davegut.kasaCommunications ~~~~~
 
-// ~~~~~ start include (865) davegut.Logging ~~~~~
+// ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1
 	name: "Logging", // library marker davegut.Logging, line 2
 	namespace: "davegut", // library marker davegut.Logging, line 3
@@ -1103,12 +1065,12 @@ def listAttributes(trace = false) { // library marker davegut.Logging, line 11
 } // library marker davegut.Logging, line 23
 
 def logTrace(msg){ // library marker davegut.Logging, line 25
-	log.trace "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 26
+	log.trace "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 26
 } // library marker davegut.Logging, line 27
 
 def logInfo(msg) {  // library marker davegut.Logging, line 29
 	if (infoLog == true) { // library marker davegut.Logging, line 30
-		log.info "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 31
+		log.info "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 31
 	} // library marker davegut.Logging, line 32
 } // library marker davegut.Logging, line 33
 
@@ -1123,15 +1085,15 @@ def debugLogOff() { // library marker davegut.Logging, line 35
 
 def logDebug(msg) { // library marker davegut.Logging, line 44
 	if (debug == true || debugLog == true) { // library marker davegut.Logging, line 45
-		log.debug "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" // library marker davegut.Logging, line 46
+		log.debug "${device.displayName} ${driverVer()}: ${msg}" // library marker davegut.Logging, line 46
 	} // library marker davegut.Logging, line 47
 } // library marker davegut.Logging, line 48
 
-def logWarn(msg) { log.warn "${device.displayName} ${getDataValue("driverVersion")}: ${msg}" } // library marker davegut.Logging, line 50
+def logWarn(msg) { log.warn "${device.displayName} ${driverVer()}: ${msg}" } // library marker davegut.Logging, line 50
 
-// ~~~~~ end include (865) davegut.Logging ~~~~~
+// ~~~~~ end include (1072) davegut.Logging ~~~~~
 
-// ~~~~~ start include (964) davegut.kasaLights ~~~~~
+// ~~~~~ start include (1096) davegut.kasaLights ~~~~~
 library ( // library marker davegut.kasaLights, line 1
 	name: "kasaLights", // library marker davegut.kasaLights, line 2
 	namespace: "davegut", // library marker davegut.kasaLights, line 3
@@ -1141,96 +1103,94 @@ library ( // library marker davegut.kasaLights, line 1
 	documentationLink: "" // library marker davegut.kasaLights, line 7
 ) // library marker davegut.kasaLights, line 8
 
-//	===== Commands Common to all Bulbs/Lights ===== // library marker davegut.kasaLights, line 10
-def on() { setLightOnOff(1, transition_Time) } // library marker davegut.kasaLights, line 11
+def on() { setLightOnOff(1, transition_Time) } // library marker davegut.kasaLights, line 10
 
-def off() { setLightOnOff(0, transition_Time) } // library marker davegut.kasaLights, line 13
+def off() { setLightOnOff(0, transition_Time) } // library marker davegut.kasaLights, line 12
 
-def setLevel(level, transTime = transition_Time) { // library marker davegut.kasaLights, line 15
-	setLightLevel(level, transTime) // library marker davegut.kasaLights, line 16
-} // library marker davegut.kasaLights, line 17
+def setLevel(level, transTime = transition_Time) { // library marker davegut.kasaLights, line 14
+	setLightLevel(level, transTime) // library marker davegut.kasaLights, line 15
+} // library marker davegut.kasaLights, line 16
 
-def startLevelChange(direction) { // library marker davegut.kasaLights, line 19
-	if (direction == "up") { levelUp() } // library marker davegut.kasaLights, line 20
-	else { levelDown() } // library marker davegut.kasaLights, line 21
-} // library marker davegut.kasaLights, line 22
+def startLevelChange(direction) { // library marker davegut.kasaLights, line 18
+	if (direction == "up") { levelUp() } // library marker davegut.kasaLights, line 19
+	else { levelDown() } // library marker davegut.kasaLights, line 20
+} // library marker davegut.kasaLights, line 21
 
-def stopLevelChange() { // library marker davegut.kasaLights, line 24
-	unschedule(levelUp) // library marker davegut.kasaLights, line 25
-	unschedule(levelDown) // library marker davegut.kasaLights, line 26
-} // library marker davegut.kasaLights, line 27
+def stopLevelChange() { // library marker davegut.kasaLights, line 23
+	unschedule(levelUp) // library marker davegut.kasaLights, line 24
+	unschedule(levelDown) // library marker davegut.kasaLights, line 25
+} // library marker davegut.kasaLights, line 26
 
-def levelUp() { // library marker davegut.kasaLights, line 29
-	def curLevel = device.currentValue("level").toInteger() // library marker davegut.kasaLights, line 30
-	if (curLevel == 100) { return } // library marker davegut.kasaLights, line 31
-	def newLevel = curLevel + 4 // library marker davegut.kasaLights, line 32
-	if (newLevel > 100) { newLevel = 100 } // library marker davegut.kasaLights, line 33
-	setLevel(newLevel, 0) // library marker davegut.kasaLights, line 34
-	runIn(1, levelUp) // library marker davegut.kasaLights, line 35
-} // library marker davegut.kasaLights, line 36
+def levelUp() { // library marker davegut.kasaLights, line 28
+	def curLevel = device.currentValue("level").toInteger() // library marker davegut.kasaLights, line 29
+	if (curLevel == 100) { return } // library marker davegut.kasaLights, line 30
+	def newLevel = curLevel + 4 // library marker davegut.kasaLights, line 31
+	if (newLevel > 100) { newLevel = 100 } // library marker davegut.kasaLights, line 32
+	setLevel(newLevel, 0) // library marker davegut.kasaLights, line 33
+	runIn(1, levelUp) // library marker davegut.kasaLights, line 34
+} // library marker davegut.kasaLights, line 35
 
-def levelDown() { // library marker davegut.kasaLights, line 38
-	def curLevel = device.currentValue("level").toInteger() // library marker davegut.kasaLights, line 39
-	if (curLevel == 0 || device.currentValue("switch") == "off") { return } // library marker davegut.kasaLights, line 40
-	def newLevel = curLevel - 4 // library marker davegut.kasaLights, line 41
-	if (newLevel < 0) { off() } // library marker davegut.kasaLights, line 42
-	else { // library marker davegut.kasaLights, line 43
-		setLevel(newLevel, 0) // library marker davegut.kasaLights, line 44
-		runIn(1, levelDown) // library marker davegut.kasaLights, line 45
-	} // library marker davegut.kasaLights, line 46
-} // library marker davegut.kasaLights, line 47
+def levelDown() { // library marker davegut.kasaLights, line 37
+	def curLevel = device.currentValue("level").toInteger() // library marker davegut.kasaLights, line 38
+	if (curLevel == 0 || device.currentValue("switch") == "off") { return } // library marker davegut.kasaLights, line 39
+	def newLevel = curLevel - 4 // library marker davegut.kasaLights, line 40
+	if (newLevel < 0) { off() } // library marker davegut.kasaLights, line 41
+	else { // library marker davegut.kasaLights, line 42
+		setLevel(newLevel, 0) // library marker davegut.kasaLights, line 43
+		runIn(1, levelDown) // library marker davegut.kasaLights, line 44
+	} // library marker davegut.kasaLights, line 45
+} // library marker davegut.kasaLights, line 46
 
-//	===== API Prep and Call Methods ===== // library marker davegut.kasaLights, line 49
-def service() { // library marker davegut.kasaLights, line 50
-	def service = "smartlife.iot.smartbulb.lightingservice" // library marker davegut.kasaLights, line 51
-	if (getDataValue("feature") == "lightStrip") { service = "smartlife.iot.lightStrip" } // library marker davegut.kasaLights, line 52
-	return service // library marker davegut.kasaLights, line 53
-} // library marker davegut.kasaLights, line 54
+def service() { // library marker davegut.kasaLights, line 48
+	def service = "smartlife.iot.smartbulb.lightingservice" // library marker davegut.kasaLights, line 49
+	if (getDataValue("feature") == "lightStrip") { service = "smartlife.iot.lightStrip" } // library marker davegut.kasaLights, line 50
+	return service // library marker davegut.kasaLights, line 51
+} // library marker davegut.kasaLights, line 52
 
-def method() { // library marker davegut.kasaLights, line 56
-	def method = "transition_light_state" // library marker davegut.kasaLights, line 57
-	if (getDataValue("feature") == "lightStrip") { method = "set_light_state" } // library marker davegut.kasaLights, line 58
-	return method // library marker davegut.kasaLights, line 59
-} // library marker davegut.kasaLights, line 60
+def method() { // library marker davegut.kasaLights, line 54
+	def method = "transition_light_state" // library marker davegut.kasaLights, line 55
+	if (getDataValue("feature") == "lightStrip") { method = "set_light_state" } // library marker davegut.kasaLights, line 56
+	return method // library marker davegut.kasaLights, line 57
+} // library marker davegut.kasaLights, line 58
 
-def checkTransTime(transTime) { // library marker davegut.kasaLights, line 62
-	if (transTime == null || transTime < 0) { transTime = 0 } // library marker davegut.kasaLights, line 63
-	transTime = 1000 * transTime.toInteger() // library marker davegut.kasaLights, line 64
-	if (transTime > 8000) { transTime = 8000 } // library marker davegut.kasaLights, line 65
-	return transTime // library marker davegut.kasaLights, line 66
-} // library marker davegut.kasaLights, line 67
+def checkTransTime(transTime) { // library marker davegut.kasaLights, line 60
+	if (transTime == null || transTime < 0) { transTime = 0 } // library marker davegut.kasaLights, line 61
+	transTime = 1000 * transTime.toInteger() // library marker davegut.kasaLights, line 62
+	if (transTime > 8000) { transTime = 8000 } // library marker davegut.kasaLights, line 63
+	return transTime // library marker davegut.kasaLights, line 64
+} // library marker davegut.kasaLights, line 65
 
-def checkLevel(level) { // library marker davegut.kasaLights, line 69
-	if (level == null || level < 0) { // library marker davegut.kasaLights, line 70
-		level = device.currentValue("level") // library marker davegut.kasaLights, line 71
-		logWarn("checkLevel: Entered level null or negative. Level set to ${level}") // library marker davegut.kasaLights, line 72
-	} else if (level > 100) { // library marker davegut.kasaLights, line 73
-		level = 100 // library marker davegut.kasaLights, line 74
-		logWarn("checkLevel: Entered level > 100.  Level set to ${level}") // library marker davegut.kasaLights, line 75
-	} // library marker davegut.kasaLights, line 76
-	return level // library marker davegut.kasaLights, line 77
-}	//	6.6.0 Change null/<0 values to use currentValue("level") // library marker davegut.kasaLights, line 78
+def checkLevel(level) { // library marker davegut.kasaLights, line 67
+	if (level == null || level < 0) { // library marker davegut.kasaLights, line 68
+		level = device.currentValue("level") // library marker davegut.kasaLights, line 69
+		logWarn("checkLevel: Entered level null or negative. Level set to ${level}") // library marker davegut.kasaLights, line 70
+	} else if (level > 100) { // library marker davegut.kasaLights, line 71
+		level = 100 // library marker davegut.kasaLights, line 72
+		logWarn("checkLevel: Entered level > 100.  Level set to ${level}") // library marker davegut.kasaLights, line 73
+	} // library marker davegut.kasaLights, line 74
+	return level // library marker davegut.kasaLights, line 75
+} // library marker davegut.kasaLights, line 76
 
-def setLightOnOff(onOff, transTime = 0) { // library marker davegut.kasaLights, line 80
-	transTime = checkTransTime(transTime) // library marker davegut.kasaLights, line 81
-	sendCmd("""{"${service()}":{"${method()}":{"on_off":${onOff},""" + // library marker davegut.kasaLights, line 82
-			""""transition_period":${transTime}}}}""") // library marker davegut.kasaLights, line 83
-} // library marker davegut.kasaLights, line 84
+def setLightOnOff(onOff, transTime = 0) { // library marker davegut.kasaLights, line 78
+	transTime = checkTransTime(transTime) // library marker davegut.kasaLights, line 79
+	sendCmd("""{"${service()}":{"${method()}":{"on_off":${onOff},""" + // library marker davegut.kasaLights, line 80
+			""""transition_period":${transTime}}}}""") // library marker davegut.kasaLights, line 81
+} // library marker davegut.kasaLights, line 82
 
-def setLightLevel(level, transTime = 0) { // library marker davegut.kasaLights, line 86
-	level = checkLevel(level) // library marker davegut.kasaLights, line 87
-	if (level == 0) { // library marker davegut.kasaLights, line 88
-		setLightOnOff(0, transTime) // library marker davegut.kasaLights, line 89
-	} else { // library marker davegut.kasaLights, line 90
-		transTime = checkTransTime(transTime) // library marker davegut.kasaLights, line 91
-		sendCmd("""{"${service()}":{"${method()}":{"ignore_default":1,"on_off":1,""" + // library marker davegut.kasaLights, line 92
-				""""brightness":${level},"transition_period":${transTime}}}}""") // library marker davegut.kasaLights, line 93
-	} // library marker davegut.kasaLights, line 94
-} // library marker davegut.kasaLights, line 95
+def setLightLevel(level, transTime = 0) { // library marker davegut.kasaLights, line 84
+	level = checkLevel(level) // library marker davegut.kasaLights, line 85
+	if (level == 0) { // library marker davegut.kasaLights, line 86
+		setLightOnOff(0, transTime) // library marker davegut.kasaLights, line 87
+	} else { // library marker davegut.kasaLights, line 88
+		transTime = checkTransTime(transTime) // library marker davegut.kasaLights, line 89
+		sendCmd("""{"${service()}":{"${method()}":{"ignore_default":1,"on_off":1,""" + // library marker davegut.kasaLights, line 90
+				""""brightness":${level},"transition_period":${transTime}}}}""") // library marker davegut.kasaLights, line 91
+	} // library marker davegut.kasaLights, line 92
+} // library marker davegut.kasaLights, line 93
 
-// ~~~~~ end include (964) davegut.kasaLights ~~~~~
+// ~~~~~ end include (1096) davegut.kasaLights ~~~~~
 
-// ~~~~~ start include (966) davegut.kasaColorLights ~~~~~
+// ~~~~~ start include (1092) davegut.kasaColorLights ~~~~~
 library ( // library marker davegut.kasaColorLights, line 1
 	name: "kasaColorLights", // library marker davegut.kasaColorLights, line 2
 	namespace: "davegut", // library marker davegut.kasaColorLights, line 3
@@ -1240,112 +1200,110 @@ library ( // library marker davegut.kasaColorLights, line 1
 	documentationLink: "" // library marker davegut.kasaColorLights, line 7
 ) // library marker davegut.kasaColorLights, line 8
 
-//	===== Commands === // library marker davegut.kasaColorLights, line 10
-def setCircadian() { // library marker davegut.kasaColorLights, line 11
-	sendCmd("""{"${service()}":{"${method()}":{"mode":"circadian"}}}""") // library marker davegut.kasaColorLights, line 12
-} // library marker davegut.kasaColorLights, line 13
+def setCircadian() { // library marker davegut.kasaColorLights, line 10
+	sendCmd("""{"${service()}":{"${method()}":{"mode":"circadian"}}}""") // library marker davegut.kasaColorLights, line 11
+} // library marker davegut.kasaColorLights, line 12
 
-def setHue(hue) { setColor([hue: hue]) } // library marker davegut.kasaColorLights, line 15
+def setHue(hue) { setColor([hue: hue]) } // library marker davegut.kasaColorLights, line 14
 
-def setSaturation(saturation) { setColor([saturation: saturation]) } // library marker davegut.kasaColorLights, line 17
+def setSaturation(saturation) { setColor([saturation: saturation]) } // library marker davegut.kasaColorLights, line 16
 
-def setColor(Map color, transTime = transition_Time) { // library marker davegut.kasaColorLights, line 19
-	if (color == null) { // library marker davegut.kasaColorLights, line 20
-		LogWarn("setColor: Color map is null. Command not executed.") // library marker davegut.kasaColorLights, line 21
-	} else { // library marker davegut.kasaColorLights, line 22
-		def level = device.currentValue("level") // library marker davegut.kasaColorLights, line 23
-		if (color.level) { level = color.level } // library marker davegut.kasaColorLights, line 24
-		def hue = device.currentValue("hue") // library marker davegut.kasaColorLights, line 25
-		if (color.hue || color.hue == 0) { hue = color.hue.toInteger() } // library marker davegut.kasaColorLights, line 26
-		def saturation = device.currentValue("saturation") // library marker davegut.kasaColorLights, line 27
-		if (color.saturation || color.saturation == 0) { saturation = color.saturation } // library marker davegut.kasaColorLights, line 28
-		hue = Math.round(0.49 + hue * 3.6).toInteger() // library marker davegut.kasaColorLights, line 29
-		if (hue < 0 || hue > 360 || saturation < 0 || saturation > 100 || level < 0 || level > 100) { // library marker davegut.kasaColorLights, line 30
-			logWarn("setColor: Entered hue, saturation, or level out of range! (H:${hue}, S:${saturation}, L:${level}") // library marker davegut.kasaColorLights, line 31
- 		} else { // library marker davegut.kasaColorLights, line 32
-			setLightColor(level, 0, hue, saturation, transTime) // library marker davegut.kasaColorLights, line 33
-		} // library marker davegut.kasaColorLights, line 34
-	} // library marker davegut.kasaColorLights, line 35
-} // library marker davegut.kasaColorLights, line 36
+def setColor(Map color, transTime = transition_Time) { // library marker davegut.kasaColorLights, line 18
+	if (color == null) { // library marker davegut.kasaColorLights, line 19
+		LogWarn("setColor: Color map is null. Command not executed.") // library marker davegut.kasaColorLights, line 20
+	} else { // library marker davegut.kasaColorLights, line 21
+		def level = device.currentValue("level") // library marker davegut.kasaColorLights, line 22
+		if (color.level) { level = color.level } // library marker davegut.kasaColorLights, line 23
+		def hue = device.currentValue("hue") // library marker davegut.kasaColorLights, line 24
+		if (color.hue || color.hue == 0) { hue = color.hue.toInteger() } // library marker davegut.kasaColorLights, line 25
+		def saturation = device.currentValue("saturation") // library marker davegut.kasaColorLights, line 26
+		if (color.saturation || color.saturation == 0) { saturation = color.saturation } // library marker davegut.kasaColorLights, line 27
+		hue = Math.round(0.49 + hue * 3.6).toInteger() // library marker davegut.kasaColorLights, line 28
+		if (hue < 0 || hue > 360 || saturation < 0 || saturation > 100 || level < 0 || level > 100) { // library marker davegut.kasaColorLights, line 29
+			logWarn("setColor: Entered hue, saturation, or level out of range! (H:${hue}, S:${saturation}, L:${level}") // library marker davegut.kasaColorLights, line 30
+ 		} else { // library marker davegut.kasaColorLights, line 31
+			setLightColor(level, 0, hue, saturation, transTime) // library marker davegut.kasaColorLights, line 32
+		} // library marker davegut.kasaColorLights, line 33
+	} // library marker davegut.kasaColorLights, line 34
+} // library marker davegut.kasaColorLights, line 35
 
-def setRGB(rgb) { // library marker davegut.kasaColorLights, line 38
-	logDebug("setRGB: ${rgb}")  // library marker davegut.kasaColorLights, line 39
-	def rgbArray = rgb.split('\\,') // library marker davegut.kasaColorLights, line 40
-	def hsvData = hubitat.helper.ColorUtils.rgbToHSV([rgbArray[0].toInteger(), rgbArray[1].toInteger(), rgbArray[2].toInteger()]) // library marker davegut.kasaColorLights, line 41
-	def hue = (0.5 + hsvData[0]).toInteger() // library marker davegut.kasaColorLights, line 42
-	def saturation = (0.5 + hsvData[1]).toInteger() // library marker davegut.kasaColorLights, line 43
-	def level = (0.5 + hsvData[2]).toInteger() // library marker davegut.kasaColorLights, line 44
-	def Map hslData = [ // library marker davegut.kasaColorLights, line 45
-		hue: hue, // library marker davegut.kasaColorLights, line 46
-		saturation: saturation, // library marker davegut.kasaColorLights, line 47
-		level: level // library marker davegut.kasaColorLights, line 48
-		] // library marker davegut.kasaColorLights, line 49
-	setColor(hslData) // library marker davegut.kasaColorLights, line 50
-} // library marker davegut.kasaColorLights, line 51
+def setRGB(rgb) { // library marker davegut.kasaColorLights, line 37
+	logDebug("setRGB: ${rgb}")  // library marker davegut.kasaColorLights, line 38
+	def rgbArray = rgb.split('\\,') // library marker davegut.kasaColorLights, line 39
+	def hsvData = hubitat.helper.ColorUtils.rgbToHSV([rgbArray[0].toInteger(), rgbArray[1].toInteger(), rgbArray[2].toInteger()]) // library marker davegut.kasaColorLights, line 40
+	def hue = (0.5 + hsvData[0]).toInteger() // library marker davegut.kasaColorLights, line 41
+	def saturation = (0.5 + hsvData[1]).toInteger() // library marker davegut.kasaColorLights, line 42
+	def level = (0.5 + hsvData[2]).toInteger() // library marker davegut.kasaColorLights, line 43
+	def Map hslData = [ // library marker davegut.kasaColorLights, line 44
+		hue: hue, // library marker davegut.kasaColorLights, line 45
+		saturation: saturation, // library marker davegut.kasaColorLights, line 46
+		level: level // library marker davegut.kasaColorLights, line 47
+		] // library marker davegut.kasaColorLights, line 48
+	setColor(hslData) // library marker davegut.kasaColorLights, line 49
+} // library marker davegut.kasaColorLights, line 50
 
-//	===== API Prep and Call Methods ===== // library marker davegut.kasaColorLights, line 53
-def setLightColor(level, colorTemp, hue, saturation, transTime = 0) { // library marker davegut.kasaColorLights, line 54
-	level = checkLevel(level) // library marker davegut.kasaColorLights, line 55
-	if (level == 0) { // library marker davegut.kasaColorLights, line 56
-		setLightOnOff(0, transTime) // library marker davegut.kasaColorLights, line 57
-	} else { // library marker davegut.kasaColorLights, line 58
-		transTime = checkTransTime(transTime) // library marker davegut.kasaColorLights, line 59
-		sendCmd("""{"${service()}":{"${method()}":{"ignore_default":1,"on_off":1,""" + // library marker davegut.kasaColorLights, line 60
-				""""brightness":${level},"color_temp":${colorTemp},""" + // library marker davegut.kasaColorLights, line 61
-				""""hue":${hue},"saturation":${saturation},"transition_period":${transTime}}}}""") // library marker davegut.kasaColorLights, line 62
-	} // library marker davegut.kasaColorLights, line 63
-} // library marker davegut.kasaColorLights, line 64
+def setLightColor(level, colorTemp, hue, saturation, transTime = 0) { // library marker davegut.kasaColorLights, line 52
+	level = checkLevel(level) // library marker davegut.kasaColorLights, line 53
+	if (level == 0) { // library marker davegut.kasaColorLights, line 54
+		setLightOnOff(0, transTime) // library marker davegut.kasaColorLights, line 55
+	} else { // library marker davegut.kasaColorLights, line 56
+		transTime = checkTransTime(transTime) // library marker davegut.kasaColorLights, line 57
+		sendCmd("""{"${service()}":{"${method()}":{"ignore_default":1,"on_off":1,""" + // library marker davegut.kasaColorLights, line 58
+				""""brightness":${level},"color_temp":${colorTemp},""" + // library marker davegut.kasaColorLights, line 59
+				""""hue":${hue},"saturation":${saturation},"transition_period":${transTime}}}}""") // library marker davegut.kasaColorLights, line 60
+	} // library marker davegut.kasaColorLights, line 61
+} // library marker davegut.kasaColorLights, line 62
 
-def bulbPresetCreate(psName) { // library marker davegut.kasaColorLights, line 66
-	if (!state.bulbPresets) { state.bulbPresets = [:] } // library marker davegut.kasaColorLights, line 67
-	psName = psName.trim().toLowerCase() // library marker davegut.kasaColorLights, line 68
-	logDebug("bulbPresetCreate: ${psName}") // library marker davegut.kasaColorLights, line 69
-	def psData = [:] // library marker davegut.kasaColorLights, line 70
-	psData["hue"] = device.currentValue("hue") // library marker davegut.kasaColorLights, line 71
-	psData["saturation"] = device.currentValue("saturation") // library marker davegut.kasaColorLights, line 72
-	psData["level"] = device.currentValue("level") // library marker davegut.kasaColorLights, line 73
-	def colorTemp = device.currentValue("colorTemperature") // library marker davegut.kasaColorLights, line 74
-	if (colorTemp == null) { colorTemp = 0 } // library marker davegut.kasaColorLights, line 75
-	psData["colTemp"] = colorTemp // library marker davegut.kasaColorLights, line 76
-	state.bulbPresets << ["${psName}": psData] // library marker davegut.kasaColorLights, line 77
-} // library marker davegut.kasaColorLights, line 78
+def bulbPresetCreate(psName) { // library marker davegut.kasaColorLights, line 64
+	if (!state.bulbPresets) { state.bulbPresets = [:] } // library marker davegut.kasaColorLights, line 65
+	psName = psName.trim().toLowerCase() // library marker davegut.kasaColorLights, line 66
+	logDebug("bulbPresetCreate: ${psName}") // library marker davegut.kasaColorLights, line 67
+	def psData = [:] // library marker davegut.kasaColorLights, line 68
+	psData["hue"] = device.currentValue("hue") // library marker davegut.kasaColorLights, line 69
+	psData["saturation"] = device.currentValue("saturation") // library marker davegut.kasaColorLights, line 70
+	psData["level"] = device.currentValue("level") // library marker davegut.kasaColorLights, line 71
+	def colorTemp = device.currentValue("colorTemperature") // library marker davegut.kasaColorLights, line 72
+	if (colorTemp == null) { colorTemp = 0 } // library marker davegut.kasaColorLights, line 73
+	psData["colTemp"] = colorTemp // library marker davegut.kasaColorLights, line 74
+	state.bulbPresets << ["${psName}": psData] // library marker davegut.kasaColorLights, line 75
+} // library marker davegut.kasaColorLights, line 76
 
-def bulbPresetDelete(psName) { // library marker davegut.kasaColorLights, line 80
-	psName = psName.trim() // library marker davegut.kasaColorLights, line 81
-	logDebug("bulbPresetDelete: ${psName}") // library marker davegut.kasaColorLights, line 82
-	def presets = state.bulbPresets // library marker davegut.kasaColorLights, line 83
-	if (presets.toString().contains(psName)) { // library marker davegut.kasaColorLights, line 84
-		presets.remove(psName) // library marker davegut.kasaColorLights, line 85
-	} else { // library marker davegut.kasaColorLights, line 86
-		logWarn("bulbPresetDelete: ${psName} is not a valid name.") // library marker davegut.kasaColorLights, line 87
-	} // library marker davegut.kasaColorLights, line 88
-} // library marker davegut.kasaColorLights, line 89
+def bulbPresetDelete(psName) { // library marker davegut.kasaColorLights, line 78
+	psName = psName.trim() // library marker davegut.kasaColorLights, line 79
+	logDebug("bulbPresetDelete: ${psName}") // library marker davegut.kasaColorLights, line 80
+	def presets = state.bulbPresets // library marker davegut.kasaColorLights, line 81
+	if (presets.toString().contains(psName)) { // library marker davegut.kasaColorLights, line 82
+		presets.remove(psName) // library marker davegut.kasaColorLights, line 83
+	} else { // library marker davegut.kasaColorLights, line 84
+		logWarn("bulbPresetDelete: ${psName} is not a valid name.") // library marker davegut.kasaColorLights, line 85
+	} // library marker davegut.kasaColorLights, line 86
+} // library marker davegut.kasaColorLights, line 87
 
-def syncBulbPresets() { // library marker davegut.kasaColorLights, line 91
-	device.updateSetting("syncBulbs", [type:"bool", value: false]) // library marker davegut.kasaColorLights, line 92
-	parent.syncBulbPresets(state.bulbPresets) // library marker davegut.kasaColorLights, line 93
-	return "Syncing" // library marker davegut.kasaColorLights, line 94
-} // library marker davegut.kasaColorLights, line 95
+def syncBulbPresets() { // library marker davegut.kasaColorLights, line 89
+	device.updateSetting("syncBulbs", [type:"bool", value: false]) // library marker davegut.kasaColorLights, line 90
+	parent.syncBulbPresets(state.bulbPresets) // library marker davegut.kasaColorLights, line 91
+	return "Syncing" // library marker davegut.kasaColorLights, line 92
+} // library marker davegut.kasaColorLights, line 93
 
-def updatePresets(bulbPresets) { // library marker davegut.kasaColorLights, line 97
-	logInfo("updatePresets: ${bulbPresets}") // library marker davegut.kasaColorLights, line 98
-	state.bulbPresets = bulbPresets // library marker davegut.kasaColorLights, line 99
-} // library marker davegut.kasaColorLights, line 100
+def updatePresets(bulbPresets) { // library marker davegut.kasaColorLights, line 95
+	logInfo("updatePresets: ${bulbPresets}") // library marker davegut.kasaColorLights, line 96
+	state.bulbPresets = bulbPresets // library marker davegut.kasaColorLights, line 97
+} // library marker davegut.kasaColorLights, line 98
 
-def bulbPresetSet(psName, transTime = transition_Time) { // library marker davegut.kasaColorLights, line 102
-	psName = psName.trim() // library marker davegut.kasaColorLights, line 103
-	if (state.bulbPresets."${psName}") { // library marker davegut.kasaColorLights, line 104
-		def psData = state.bulbPresets."${psName}" // library marker davegut.kasaColorLights, line 105
-		def hue = Math.round(0.49 + psData.hue.toInteger() * 3.6).toInteger() // library marker davegut.kasaColorLights, line 106
-		setLightColor(psData.level, psData.colTemp, hue, psData.saturation, transTime) // library marker davegut.kasaColorLights, line 107
-	} else { // library marker davegut.kasaColorLights, line 108
-		logWarn("bulbPresetSet: ${psName} is not a valid name.") // library marker davegut.kasaColorLights, line 109
-	} // library marker davegut.kasaColorLights, line 110
-} // library marker davegut.kasaColorLights, line 111
+def bulbPresetSet(psName, transTime = transition_Time) { // library marker davegut.kasaColorLights, line 100
+	psName = psName.trim() // library marker davegut.kasaColorLights, line 101
+	if (state.bulbPresets."${psName}") { // library marker davegut.kasaColorLights, line 102
+		def psData = state.bulbPresets."${psName}" // library marker davegut.kasaColorLights, line 103
+		def hue = Math.round(0.49 + psData.hue.toInteger() * 3.6).toInteger() // library marker davegut.kasaColorLights, line 104
+		setLightColor(psData.level, psData.colTemp, hue, psData.saturation, transTime) // library marker davegut.kasaColorLights, line 105
+	} else { // library marker davegut.kasaColorLights, line 106
+		logWarn("bulbPresetSet: ${psName} is not a valid name.") // library marker davegut.kasaColorLights, line 107
+	} // library marker davegut.kasaColorLights, line 108
+} // library marker davegut.kasaColorLights, line 109
 
-// ~~~~~ end include (966) davegut.kasaColorLights ~~~~~
+// ~~~~~ end include (1092) davegut.kasaColorLights ~~~~~
 
-// ~~~~~ start include (963) davegut.kasaEnergyMonitor ~~~~~
+// ~~~~~ start include (1095) davegut.kasaEnergyMonitor ~~~~~
 library ( // library marker davegut.kasaEnergyMonitor, line 1
 	name: "kasaEnergyMonitor", // library marker davegut.kasaEnergyMonitor, line 2
 	namespace: "davegut", // library marker davegut.kasaEnergyMonitor, line 3
@@ -1424,7 +1382,7 @@ def distEmeter(emeterResp) { // library marker davegut.kasaEnergyMonitor, line 5
 } // library marker davegut.kasaEnergyMonitor, line 76
 
 def getPower() { // library marker davegut.kasaEnergyMonitor, line 78
-	if (device.currentValue("switch") == "on") { // library marker davegut.kasaEnergyMonitor, line 79
+	if (emFunction && device.currentValue("switch") == "on") { // library marker davegut.kasaEnergyMonitor, line 79
 		getRealtime() // library marker davegut.kasaEnergyMonitor, line 80
 	} else if (device.currentValue("power") != 0) { // library marker davegut.kasaEnergyMonitor, line 81
 		sendEvent(name: "power", value: 0, descriptionText: "Watts", unit: "W", type: "digital") // library marker davegut.kasaEnergyMonitor, line 82
@@ -1586,27 +1544,26 @@ def setLastMonth(monthList, date) { // library marker davegut.kasaEnergyMonitor,
 	logInfo("setLastMonth: ${status}") // library marker davegut.kasaEnergyMonitor, line 238
 } // library marker davegut.kasaEnergyMonitor, line 239
 
-//	===== API Commands: Energy Monitor ===== // library marker davegut.kasaEnergyMonitor, line 241
-def getRealtime() { // library marker davegut.kasaEnergyMonitor, line 242
-	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 243
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 244
-				""""emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 245
-	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 246
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 247
-	} else { // library marker davegut.kasaEnergyMonitor, line 248
-		sendCmd("""{"emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 249
-	} // library marker davegut.kasaEnergyMonitor, line 250
-} // library marker davegut.kasaEnergyMonitor, line 251
+def getRealtime() { // library marker davegut.kasaEnergyMonitor, line 241
+	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 242
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 243
+				""""emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 244
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 245
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 246
+	} else { // library marker davegut.kasaEnergyMonitor, line 247
+		sendCmd("""{"emeter":{"get_realtime":{}}}""") // library marker davegut.kasaEnergyMonitor, line 248
+	} // library marker davegut.kasaEnergyMonitor, line 249
+} // library marker davegut.kasaEnergyMonitor, line 250
 
-def getMonthstat(year) { // library marker davegut.kasaEnergyMonitor, line 253
-	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 254
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 255
-				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 256
-	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 257
-		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 258
-	} else { // library marker davegut.kasaEnergyMonitor, line 259
-		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 260
-	} // library marker davegut.kasaEnergyMonitor, line 261
-} // library marker davegut.kasaEnergyMonitor, line 262
+def getMonthstat(year) { // library marker davegut.kasaEnergyMonitor, line 252
+	if (getDataValue("plugNo") != null) { // library marker davegut.kasaEnergyMonitor, line 253
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaEnergyMonitor, line 254
+				""""emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 255
+	} else if (type().contains("Bulb") || type().contains("Light")) { // library marker davegut.kasaEnergyMonitor, line 256
+		sendCmd("""{"smartlife.iot.common.emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 257
+	} else { // library marker davegut.kasaEnergyMonitor, line 258
+		sendCmd("""{"emeter":{"get_monthstat":{"year": ${year}}}}""") // library marker davegut.kasaEnergyMonitor, line 259
+	} // library marker davegut.kasaEnergyMonitor, line 260
+} // library marker davegut.kasaEnergyMonitor, line 261
 
-// ~~~~~ end include (963) davegut.kasaEnergyMonitor ~~~~~
+// ~~~~~ end include (1095) davegut.kasaEnergyMonitor ~~~~~
