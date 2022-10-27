@@ -461,7 +461,7 @@ def parseUdp(message) { // library marker davegut.kasaCommunications, line 52
 	def resp = parseLanMessage(message) // library marker davegut.kasaCommunications, line 53
 	if (resp.type == "LAN_TYPE_UDPCLIENT") { // library marker davegut.kasaCommunications, line 54
 		def clearResp = inputXOR(resp.payload) // library marker davegut.kasaCommunications, line 55
-log.trace clearResp // library marker davegut.kasaCommunications, line 56
+//log.trace clearResp // library marker davegut.kasaCommunications, line 56
 		if (clearResp.length() > 1022) { // library marker davegut.kasaCommunications, line 57
 			if (clearResp.contains("preferred")) { // library marker davegut.kasaCommunications, line 58
 				clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}" // library marker davegut.kasaCommunications, line 59
