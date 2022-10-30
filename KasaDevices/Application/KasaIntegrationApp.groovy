@@ -325,9 +325,9 @@ def addDevStatus() {
 		state.failedAdds.each{
 			failMsg += "\t${it}\n"
 		}
-		if (prodVer() == false) {
-			failMsg+= "Check to see if all required drivers are installed"
-		}
+//		if (prodVer() == false) {
+//			failMsg+= "Check to see if all required drivers are installed"
+//		}
 	}
 		
 	return dynamicPage(name:"addDeviceStatus",
