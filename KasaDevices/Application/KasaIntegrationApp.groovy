@@ -5,8 +5,12 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Changes.pdf
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
+
+Version 2.3.4-R1
+
 ===================================================================================================*/
 def nameSpace() { return "davegut" }
+def appVersion() { return "2.3.4-1" }
 import groovy.json.JsonSlurper
 
 definition(
@@ -295,7 +299,10 @@ def addDevicesPage(discType) {
 					   title: "Add Kasa Devices to Hubitat",
 					   nextPage: addDevStatus,
 					   install: false) {
+		def text = "This page updates every 30 seconds. "
+		text += "It can take up to two minutes for all discovered devices to appear."
 	 	section() {
+			paragraph text
 			input ("selectedAddDevices", "enum",
 				   required: false,
 				   multiple: true,
@@ -325,9 +332,6 @@ def addDevStatus() {
 		state.failedAdds.each{
 			failMsg += "\t${it}\n"
 		}
-//		if (prodVer() == false) {
-//			failMsg+= "Check to see if all required drivers are installed"
-//		}
 	}
 		
 	return dynamicPage(name:"addDeviceStatus",
@@ -361,17 +365,14 @@ def addDevices() {
 				deviceData["plugNo"] = device.value.plugNo
 				deviceData["plugId"] = device.value.plugId
 			}
-			if (device.value.alias.contains("TEMP")) {
-				deviceData["altComms"] = "true"
-			}
 			try {
 				addChildDevice(
 					nameSpace(),
 					device.value.type,
 					device.value.dni,
-					hub.id, [
+					[
 						"label": device.value.alias.replaceAll("[\u201C\u201D]", "\"").replaceAll("[\u2018\u2019]", "'").replaceAll("[^\\p{ASCII}]", ""),
-						"name" : device.value.type,
+//						"name" : device.value.type,
 						"data" : deviceData
 					]
 				)
@@ -529,8 +530,7 @@ def findDevices() {
 			sendLanCmd(deviceIPs.join(','), port, """{"system":{"get_sysinfo":{}}}""", "getLanData", 15)
 		}
 	}
-	def delay = 50 * (finish - start) + 8000
-	pauseExecution(delay)
+	pauseExecution(30000)
 	updateChildren()
 	return
 }
@@ -562,7 +562,7 @@ def manualGetDevices() {
 			logWarn("manualGetDevices: A Kasa device was not detected at ${ip}")
 		}
 	}
-	return
+//	return
 }
 
 def ipExists(ip) {
@@ -653,7 +653,7 @@ def cloudGetDevices() {
 		app?.updateSetting("kasaCloudUrl", cloudUrl)
 		message += " kasaCloudUrl uptdated to ${cloudUrl}."
 	}
-	pauseExecution(5000)
+//	pauseExecution(5000)
 	return message
 }
 
@@ -694,8 +694,8 @@ def parseDeviceData(cmdResp, ip = "CLOUD", port = "CLOUD") {
 			type = "Kasa Mono Bulb"
 		}
 	} else if (kasaType == "IOT.IPCAMERA") {
-		feature = cmdResp.f_list
-		type = "CAM NOT SUPPORTED"
+		feature = "ipCamera"
+		type = "NOT AVAILABLE"
 	}
 	def model = cmdResp.model.substring(0,5)
 	def alias = cmdResp.alias
@@ -1217,8 +1217,13 @@ def parseLanData(response) {
 		def ip = convertHexToIP(resp.ip)
 		def port = convertHexToInt(resp.port)
 		def clearResp = inputXOR(resp.payload)
-		if (clearResp.length() > 1022) {
-			if (clearResp.contains("children")) {
+		def cmdResp
+		try {
+			cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
+		} catch (err) {
+			if (clearResp.contains("child_num")) {
+				clearResp = clearResp.substring(0,clearResp.indexOf("child_num")-2) + "}}}"
+			} else if (clearResp.contains("children")) {
 				clearResp = clearResp.substring(0,clearResp.indexOf("children")-2) + "}}}"
 			} else if (clearResp.contains("preferred")) {
 				clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
@@ -1226,8 +1231,8 @@ def parseLanData(response) {
 				logWarn("parseLanData: [error: msg too long, data: ${clearResp}]")
 				return [error: "error", reason: "message to long"]
 			}
+			cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
 		}
-		def cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
 		return [cmdResp: cmdResp, ip: ip, port: port]
 	} else {
 		return [error: "error", reason: "not LAN_TYPE_UDPCLIENT", respType: resp.type]
@@ -1298,9 +1303,9 @@ private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 
 def debugOff() { app.updateSetting("debugLog", false) }
 
-def logTrace(msg) { log.trace "KasaInt: ${msg}" }
+def logTrace(msg) { log.trace "KasaInt-${appVersion()}: ${msg}" }
 def logDebug(msg){
-	if(debugLog == true) { log.debug "KasaInt: ${msg}" }
+	if(debugLog == true) { log.debug "KasaInt-${appVersion()}: ${msg}" }
 }
-def logInfo(msg) { log.info "KasaInt: ${msg}" }
-def logWarn(msg) { log.warn "KasaInt: ${msg}" }
+def logInfo(msg) { log.info "KasaInt-${appVersion()}: ${msg}" }
+def logWarn(msg) { log.warn "KasaInt-${appVersion()}: ${msg}" }			  

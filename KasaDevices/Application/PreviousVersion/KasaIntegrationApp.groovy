@@ -6,17 +6,18 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def appVersion() { return "6.7.1" }
+def nameSpace() { return "davegut" }
 import groovy.json.JsonSlurper
 
 definition(
 	name: "Kasa Integration",
-	namespace: "davegut",
+	namespace: nameSpace(),
 	author: "Dave Gutheinz",
 	description: "Application to install TP-Link bulbs, plugs, and switches.",
 	category: "Convenience",
 	iconUrl: "",
 	iconX2Url: "",
+	installOnOpen: true,
 	singleInstance: true,
 	documentationLink: "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/README.md",
 	importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy"
@@ -53,19 +54,16 @@ def updated() {
 	app?.updateSetting("utilities", [type:"bool", value: false])
 	app?.updateSetting("debugLog", [type:"bool", value: false])
 	app?.removeSetting("pingKasaDevices")
-	app?.removeSetting("lanSegment")
 	app?.removeSetting("devAddresses")
 	app?.removeSetting("devPort")
-	app?.removeSetting("installHelp")
-	app?.removeSetting("missingDevHelp")
-	if (userName && userName != "") {
-		schedule("0 30 2 ? * MON,WED,SAT", schedGetToken)
-	}
-	configureEnable()
 	state.remove("lanTest")
 	state.remove("addedDevices")
 	state.remove("failedAdds")
 	state.remove("listDevices")
+	configureEnable()
+	if (userName && userName != "") {
+		schedule("0 30 2 ? * MON,WED,SAT", schedGetToken)
+	}
 }
 
 def uninstalled() {
@@ -118,12 +116,17 @@ def startPage() {
 		app?.updateSetting("hostLimits", [type:"string", value: "1, 254"])
 	}
 
+	def hs300 = "<b>Special instructions for HS300 multi-plugs:</b>\r"
+	hs300 += "The HS300 requires special handling prior to installation. "
+	hs300 += "Please read the <b>Installation Instructions</b> using the <b>?</b> "
+	hs300 += "in the upper right of this page.\n\n"
+	
 	return dynamicPage(name:"startPage",
-					   title:"<b>Kasa Hubitat Integration, Version ${appVersion()}</b>" +
-					   		 "\n(Instructions available using <b>?</b> at upper right corner.)",
+					   title:"<b>Kasa Hubitat Integration</b>",
 					   uninstall: true,
 					   install: true) {
 		section() {
+			paragraph hs300
 			paragraph "<b>LAN Configuration</b>:  [LanSegments: ${state.segArray},  " +
 				"Ports ${state.portArray},  hostRange: ${state.hostArray}]"
 			input "appSetup", "bool",
@@ -179,6 +182,7 @@ def startPage() {
 				href "commsTest", title: "<b>IP Comms Ping Test Tool</b>",
 					description: "Select for Ping Test Page."
 			}
+
 			input "debugLog", "bool",
 				   title: "<b>Enable debug logging for 30 minutes</b>",
 				   submitOnChange: true,
@@ -195,7 +199,7 @@ def lanAddDevicesPage() {
 def cloudAddDevicesPage() {
 	logInfo("cloudAddDevicesPage")
 	return dynamicPage (name: "cloudAddDevicesPage", 
-    					title: "Get device data from Kasa Cloud, Version ${appVersion()}",
+    					title: "Get device data from Kasa Cloud",
 						nextPage: startPage,
                         install: false) {
 		def note = "Instructions: \n\ta.\tIf not already done, select 'Kasa " +
@@ -223,7 +227,7 @@ def cloudAddStart() { addDevicesPage("CLOUD") }
 def manAddDevicesPage() {
 	logInfo("manAddDevicesPage")
 	return dynamicPage (name: "manAddDevicesPage", 
-    					title: "Manually add devices by IP, Version ${appVersion()}",
+    					title: "Manually add devices by IP",
 						nextPage: startPage,
                         install: false) {
 		def note = "Instructions: \n\ta.\tEnter the segment for you LAN.\n\tab.\t" +
@@ -281,24 +285,17 @@ def addDevicesPage(discType) {
 			requiredDrivers["${it.value.type}"] = "${it.value.type}"
 		}
 	}
+	uninstalledDevices.sort()
 	def reqDrivers = []
 	requiredDrivers.each {
 		reqDrivers << it.key
 	}
-	def pageInstructions = "<b>Before Installing New Devices "
-	pageInstructions += "Assure the drivers listed below are installed.</b>"
-	pageInstructions += "${reqDrivers}"
 
 	return dynamicPage(name:"addDevicesPage",
-					   title: "Add Kasa Devices to Hubitat, Version ${appVersion()}",
+					   title: "Add Kasa Devices to Hubitat",
 					   nextPage: addDevStatus,
 					   install: false) {
 	 	section() {
-			paragraph pageInstructions
-			input "missingDevHelp", "bool",
-				title: "<b>Missing Device Help</b>",
-				submitOnChange: true,
-				defaultalue: false
 			input ("selectedAddDevices", "enum",
 				   required: false,
 				   multiple: true,
@@ -323,18 +320,18 @@ def addDevStatus() {
 		}
 	}
 	def failMsg = ""
-	if (state.failedAdds == null) {
-		failMsg += "Failed Adds: No devices failed to add."
-	} else {
+	if (state.failedAdds) {
 		failMsg += "<b>The following devices were not installed:</b>\n"
 		state.failedAdds.each{
 			failMsg += "\t${it}\n"
 		}
-		failMsg += "\t<b>Most common failure cause: Driver not installed.</b>"
+		if (prodVer() == false) {
+			failMsg+= "Check to see if all required drivers are installed"
+		}
 	}
-			
+		
 	return dynamicPage(name:"addDeviceStatus",
-					   title: "Installation Status, Version ${appVersion()}",
+					   title: "Installation Status",
 					   nextPage: listDevices,
 					   install: false) {
 	 	section() {
@@ -357,18 +354,23 @@ def addDevices() {
 			def deviceData = [:]
 			deviceData["deviceIP"] = device.value.ip
 			deviceData["devicePort"] = device.value.port
-			deviceData["plugNo"] = device.value.plugNo
-			deviceData["plugId"] = device.value.plugId
 			deviceData["deviceId"] = device.value.deviceId
 			deviceData["model"] = device.value.model
 			deviceData["feature"] = device.value.feature
+			if (device.value.plugNo) {
+				deviceData["plugNo"] = device.value.plugNo
+				deviceData["plugId"] = device.value.plugId
+			}
+			if (device.value.alias.contains("TEMP")) {
+				deviceData["altComms"] = "true"
+			}
 			try {
 				addChildDevice(
-					"davegut",
+					nameSpace(),
 					device.value.type,
 					device.value.dni,
 					hub.id, [
-						"label": device.value.alias,
+						"label": device.value.alias.replaceAll("[\u201C\u201D]", "\"").replaceAll("[\u2018\u2019]", "'").replaceAll("[^\\p{ASCII}]", ""),
 						"name" : device.value.type,
 						"data" : deviceData
 					]
@@ -377,11 +379,9 @@ def addDevices() {
 				logInfo("Installed ${device.value.alias}.")
 			} catch (error) {
 				state.failedAdds << [label: device.value.alias, driver: device.value.type, ip: device.value.ip]
-				def msg = "addDevice: \n<b>Failed to install device.</b> Most likely "
-				msg += "could not find driver <b>${device.value.type}</b> in the "
-				msg += "Hubitat Drivers Code page.  Check that page."
-				msg += "\nAdditional data: Device Data = ${device}.\n\r"
-				logWarn(msg)
+				def msgData = [status: "failedToAdd", label: device.value.alias, driver: device.value.type, ip: device.value.ip]
+				msgData << [errorMsg: error]
+				logWarn("addDevice: ${msgData}")
 			}
 		}
 		pauseExecution(3000)
@@ -398,26 +398,24 @@ def listDevices() {
 		theListTitle += "<b>No devices in the device database.</b>"
 	} else {
 		theListTitle += "<b>Total Kasa devices: ${devices.size() ?: 0}</b>\n"
-		theListTitle +=  "<b>Alias: [Ip:Port, RSSI, Driver Version, Installed?</b>]\n"
+		theListTitle +=  "<b>Alias: [Ip:Port, RSSI, Installed?</b>]\n"
 		def deviceList = []
 		devices.each{
 			def dni = it.key
-			def driverVer = "n/a"
 			def installed = "No"
 			def isChild = getChildDevice(it.key)
 			if (isChild) {
-				driverVer = isChild.driverVer()
 				installed = "Yes"
 			}
-			deviceList << "<b>${it.value.alias} - ${it.value.model}</b>: [${it.value.ip}:${it.value.port}, ${it.value.rssi}, ${driverVer}, ${installed}]"
+			deviceList << "<b>${it.value.alias} - ${it.value.model}</b>: [${it.value.ip}:${it.value.port}, ${it.value.rssi}, ${installed}]"
 		}
-		deviceList.sort()
 		deviceList.each {
 			theList += "${it}\n"
 		}
+		deviceList.sort()
 	}
 	return dynamicPage(name:"listDevices",
-					   title: "List Kasa Devices from Add Devices, Version ${appVersion()}",
+					   title: "List Kasa Devices from Add Devices",
 					   nextPage: startPage,
 					   install: false) {
 	 	section() {
@@ -430,7 +428,7 @@ def listDevices() {
 def kasaAuthenticationPage() {
 	logInfo("kasaAuthenticationPage")
 	return dynamicPage (name: "kasaAuthenticationPage", 
-    					title: "Initial Kasa Login Page, Version ${appVersion()}",
+    					title: "Initial Kasa Login Page",
 						nextPage: startPage,
                         install: false) {
 		def note = "You only need to enter your Kasa credentials and get a token " +
@@ -474,7 +472,7 @@ def getToken() {
 		params: [
 			appType: "Kasa_Android",
 			cloudUserName: "${userName}",
-			cloudPassword: "${userPassword}",
+			cloudPassword: "${userPassword.replaceAll('&gt;', '>').replaceAll('&lt;','<')}",
 			terminalUUID: "${termId}"]]
 	cmdData = [uri: "https://wap.tplinkcloud.com",
 			   cmdBody: cmdBody]
@@ -531,7 +529,7 @@ def findDevices() {
 			sendLanCmd(deviceIPs.join(','), port, """{"system":{"get_sysinfo":{}}}""", "getLanData", 15)
 		}
 	}
-	def delay = 50 * (finish - start) + 5000
+	def delay = 50 * (finish - start) + 8000
 	pauseExecution(delay)
 	updateChildren()
 	return
@@ -713,22 +711,27 @@ def parseDeviceData(cmdResp, ip = "CLOUD", port = "CLOUD") {
 			def childDni = "${dni}${plugNo}"
 			plugId = "${deviceId}${plugNo}"
 			alias = it.alias
-			
-			def existingDev = devices.find{ it.key == childDni}
-			if ((existingDev && ip == "CLOUD") ||
-			    (existingDev && ip == existingDev.value.ip)) {
-				return
+			def device = createDevice(childDni, ip, port, rssi, type, feature, model, alias, deviceId, plugNo, plugId)
+			devices["${childDni}"] = device
+			logInfo("parseDeviceData: ${type} ${alias} (${ip}) added to devices array.")
+		}
+	} else if (model == "HS300") {
+		def parentAlias = alias
+		for(int i = 0; i < 6; i++) {
+			plugNo = "0${i.toString()}"
+			def childDni = "${dni}${plugNo}"
+			plugId = "${deviceId}${plugNo}"
+			def child = getChildDevice(childDni)
+			if (child) {
+				alias = child.device.getLabel()
+			} else {
+				alias = "${parentAlias}_${plugNo}_TEMP"
 			}
 			def device = createDevice(childDni, ip, port, rssi, type, feature, model, alias, deviceId, plugNo, plugId)
 			devices["${childDni}"] = device
 			logInfo("parseDeviceData: ${type} ${alias} (${ip}) added to devices array.")
 		}
 	} else {
-		def existingDev = devices.find{ it.key == dni}
-			if ((existingDev && ip == "CLOUD") ||
-			    (existingDev && ip == existingDev.value.ip)) {
-				return
-			}
 		def device = createDevice(dni, ip, port, rssi, type, feature, model, alias, deviceId, plugNo, plugId)
 		devices["${dni}"] = device
 		logInfo("parseDeviceData: ${type} ${alias} (${ip}) added to devices array.")
@@ -770,7 +773,7 @@ def removeDevicesPage() {
 					   title:"<b>Remove Kasa Devices from Hubitat</b>",
 					   nextPage: startPage,
 					   install: false) {
-		section("Select Devices to Remove from Hubitat, Version ${appVersion()}") {
+		section("Select Devices to Remove from Hubitat") {
 			input ("selectedRemoveDevices", "enum",
 				   required: false,
 				   multiple: true,
@@ -805,19 +808,16 @@ def listDevicesByIp() {
 	deviceList.sort()
 	def theListTitle = "<b>Total Kasa devices: ${deviceList.size() ?: 0}</b>\n"
 	theListTitle +=  "<b>[Ip:Port: [testResults, RSSI, Alias, Driver Version, Installed?</b>]\n"
+	theListTitle +=  "(Alias may not match the name on the device.)\n"
 	def theList = ""
 	deviceList.each {
 		theList += "${it}\n"
 	}
 	return dynamicPage(name:"listDevicesByIp",
-					   title: "List Kasa Devices by IP with Lan Test Results, Version ${appVersion()}",
+					   title: "List Kasa Devices by IP with Lan Test Results",
 					   nextPage: startPage,
 					   install: false) {
 	 	section() {
-			input "missingDevHelp", "bool",
-				title: "<b>Failed Device Help</b>",
-				submitOnChange: true,
-				defaultalue: false
 			paragraph theListTitle
 			paragraph "<p style='font-size:14px'>${theList}</p>"
 		}
@@ -830,19 +830,16 @@ def listDevicesByName() {
 	deviceList.sort()
 	def theListTitle = "<b>Total Kasa devices: ${deviceList.size() ?: 0}</b>\n"
 	theListTitle += "<b>Alias: [testResults, RSSI, Ip:Port, Driver Version, Installed?]</b>\n"
+	theListTitle +=  "(Alias may not match the name on the device.)\n"
 	def theList = ""
 	deviceList.each {
 		theList += "${it}\n"
 	}
 	return dynamicPage(name:"listDevicesByName",
-					   title: "List Kasa Devices by Name with Lan Test Results, Version ${appVersion()}",
+					   title: "List Kasa Devices by Name with Lan Test Results",
 					   nextPage: startPage,
 					   install: false) {
 	 	section() {
-			input "missingDevHelp", "bool",
-				title: "<b>Failed Device Help</b>",
-				submitOnChange: true,
-				defaultalue: false
 			paragraph theListTitle
 			paragraph "<p style='font-size:14px'>${theList}</p>"
 		}
@@ -937,24 +934,35 @@ def lanTestResult(cmdResp, ip) {
 	} catch (e) {
 		logWarn("lanTestParse: LAN device with ip = ${ip} is not in devices database.")
 	}
-	if (cmdResp.children) {
-		dni = dni.substring(0,12)
-		def childPlugs = cmdResp.children
-		childPlugs.each {
-			def plugNo = it.id.substring(it.id.length() - 2)
-			def childDni = "${dni}${plugNo}"
-			lanTest << ["${childDni}": ["PASSED", "${cmdResp.rssi}"]]
+	
+	if (dni != "") {
+		if (cmdResp.children) {
+			dni = dni.substring(0,12)
+			def childPlugs = cmdResp.children
+			childPlugs.each {
+				def plugNo = it.id.substring(it.id.length() - 2)
+				def childDni = "${dni}${plugNo}"
+				lanTest << ["${childDni}": ["PASSED", "${cmdResp.rssi}"]]
+			}
+		} else if (cmdResp.toString().contains("HS300")) {
+			dni = dni.substring(0,12)
+			for(int i = 0; i < 6; i++) {
+				plugNo = "0${i.toString()}"
+				def childDni = "${dni}${plugNo}"
+				lanTest << ["${childDni}": ["PASSED", "${cmdResp.rssi}"]]
+			}
+		} else {
+			lanTest << ["${dni}": ["PASSED", "${cmdResp.rssi}"]]
 		}
-	} else {
-		lanTest << ["${dni}": ["PASSED", "${cmdResp.rssi}"]]
 	}
+		
 	state.lanTest = lanTest
 }
 
 def commsTest() {
 	logInfo("commsTest")
 	return dynamicPage(name:"commsTest",
-					   title: "IP Communications Test, Version ${appVersion()}",
+					   title: "IP Communications Test",
 					   nextPage: startPage,
 					   install: false) {
 	 	section() {
@@ -1018,7 +1026,7 @@ def commsTestDisplay() {
 		pingList += "${it}\n"
 	}
 	return dynamicPage(name:"commsTestDisplay",
-					   title: "Ping Testing Result, Version ${appVersion()}",
+					   title: "Ping Testing Result",
 					   nextPage: commsTest,
 					   install: false) {
 		section() {
@@ -1121,6 +1129,13 @@ def updateChildren() {
 	}
 }
 
+def updateAlias(devNI, name) {	
+	logDebug("updateAlias: [dni: ${devNI}, name: ${name}]")
+	def device = state.devices.find{ it.key == devNI }
+	def devData = device.value
+	devData["alias"] = name
+}
+
 def syncBulbPresets(bulbPresets) {
 	logDebug("syncBulbPresets")
 	def devices = state.devices
@@ -1173,7 +1188,7 @@ def coordinate(cType, coordData, deviceId, plugNo) {
 			def child = getChildDevice(it.value.dni)
 			if (child) {
 				child.coordUpdate(cType, coordData)
-				pauseExecution(700)
+				pauseExecution(200)
 			}
 		}
 	}
@@ -1197,21 +1212,26 @@ private sendLanCmd(ip, port, command, action, commsTo = 5) {
 }
 
 def parseLanData(response) {
-	def lanData
 	def resp = parseLanMessage(response.description)
 	if (resp.type == "LAN_TYPE_UDPCLIENT") {
 		def ip = convertHexToIP(resp.ip)
 		def port = convertHexToInt(resp.port)
 		def clearResp = inputXOR(resp.payload)
 		if (clearResp.length() > 1022) {
-			clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
+			if (clearResp.contains("children")) {
+				clearResp = clearResp.substring(0,clearResp.indexOf("children")-2) + "}}}"
+			} else if (clearResp.contains("preferred")) {
+				clearResp = clearResp.substring(0,clearResp.indexOf("preferred")-2) + "}}}"
+			} else {
+				logWarn("parseLanData: [error: msg too long, data: ${clearResp}]")
+				return [error: "error", reason: "message to long"]
+			}
 		}
 		def cmdResp = new JsonSlurper().parseText(clearResp).system.get_sysinfo
-		lanData = [cmdResp: cmdResp, ip: ip, port: port]
+		return [cmdResp: cmdResp, ip: ip, port: port]
 	} else {
-		lanData = [error: "error"]
+		return [error: "error", reason: "not LAN_TYPE_UDPCLIENT", respType: resp.type]
 	}
-	return lanData
 }
 
 private outputXOR(command) {
@@ -1278,12 +1298,9 @@ private Integer convertHexToInt(hex) { Integer.parseInt(hex,16) }
 
 def debugOff() { app.updateSetting("debugLog", false) }
 
-def logTrace(msg) { log.trace "[KasaInt: ${appVersion()}]: ${msg}" }
-
+def logTrace(msg) { log.trace "KasaInt: ${msg}" }
 def logDebug(msg){
-	if(debugLog == true) { log.debug "[KasaInt: ${appVersion()}]: ${msg}" }
+	if(debugLog == true) { log.debug "KasaInt: ${msg}" }
 }
-
-def logInfo(msg) { log.info "[KasaInt: ${appVersion()}]: ${msg}" }
-
-def logWarn(msg) { log.warn "[KasaInt: ${appVersion()}]: ${msg}" }
+def logInfo(msg) { log.info "KasaInt: ${msg}" }
+def logWarn(msg) { log.warn "KasaInt: ${msg}" }
