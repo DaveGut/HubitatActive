@@ -45,7 +45,8 @@ metadata {
 }
 
 preferences {
-    input name: "delayBetweenMessages", type: "number", title: "Delay between messages", defaultValue: 3
+    input name: "delayBetweenMessages", type: "number", title: "Delay between spoken messages (seconds)", defaultValue: 3
+    input name: "nonSpeechDelay", type: "number", title: "Delay between non-speech commands (ms)", defaultValue: 100
 	input name: "debugMode", type: "bool", title: "Display debug messages?", defaultValue: false
 }
 
@@ -77,7 +78,7 @@ void uninstalled() {
 //	===== Queuing Messages and send to App =====
 def speak(text) {
 	log.info "TEXT = ${text}"
-	def duration = textToSpeech(text).duration + delayBetweenMessages
+	def duration = textToSpeech(text).duration + (delayBetweenMessages == null ? 3 : delayBetweenMessages)
 	addToQueue(text, duration)
 }
 
@@ -137,6 +138,7 @@ def clearQueue() {
 
 void process(nextTTS) {
     def realSpeaker = getDataValue("realSpeaker")
+    Object currentDelay = nonSpeechDelay
     switch (nextTTS[0]) {
         case SET_VOLUME:
             parent.setVolume(nextTTS[1], realSpeaker)
@@ -164,21 +166,27 @@ void process(nextTTS) {
         
         case INITIALIZE:
             parent.initialize(realSpeaker)
-            runInMillis(100, processQueue)
-            return
+            if (nonSpeechDelay == null)
+                currentDelay = 100
+            else
+                currentDelay += 100
+            break
         
         case WAKEUP:
             parent.wakeUpChromecastDevice(realSpeaker)
-            runIn(1, processQueue)
-            return
+            currentDelay = 1
+            break
         
         default:
             parent.playTTS(nextTTS[0], realSpeaker)
-            runIn(nextTTS[1], processQueue)
-            return
+            currentDelay = nextTTS[1] * 1000
+            break
     }
     
-    processQueue()
+    if (currentDelay != null && currentDelay > 0)
+        runInMillis(currentDelay, processQueue)
+    else
+        processQueue()
 }
 
 //	===== Logging =====
