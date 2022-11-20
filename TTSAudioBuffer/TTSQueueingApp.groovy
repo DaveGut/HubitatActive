@@ -19,6 +19,7 @@ is specific to the speaker driver, it is not guaranteed to work with other devic
 03.05.19	0.6.01	Updated to support multiple devices.  Removed all "Audio Notification" commands limiting the app
 					and driver to the speak(text) command.
 06.15.19	1.0.01	First production release
+11.19.22    1.0.03  Restored support for AudioVolume capability
 */
 def appVersion() { return "1.0.01" }
 def appName() { return "TTS Queuing" }
@@ -49,12 +50,40 @@ def mainPage() {
 	}
 }
 
-def setLevel(level) { speaker.setLevel(level) }
-
 def playTTS(playItem, realSpeaker) {
 	logDebug("playTTS: playint: ${playItem}, volume = ${volume}, method = ${method}, realSpeaker = ${realSpeaker}")
 	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
 	thisSpeaker.speak(playItem)
+}
+
+def setVolume(volume, realSpeaker) {
+    logDebug("setVolume: volume = ${volume}, realSpeaker = ${realSpeaker}")
+	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+	thisSpeaker.setVolume(volume)
+}
+
+def volumeUp(realSpeaker) {
+    logDebug("volumeUp: realSpeaker = ${realSpeaker}")
+	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+	thisSpeaker.volumeUp()
+}
+
+def volumeDown(realSpeaker) {
+    logDebug("volumeDown: realSpeaker = ${realSpeaker}")
+	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+	thisSpeaker.volumeDown()
+}
+
+def mute(realSpeaker) {
+    logDebug("mute: realSpeaker = ${realSpeaker}")
+	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+	thisSpeaker.mute()
+}
+
+def unmute(realSpeaker) {
+    logDebug("unmute: realSpeaker = ${realSpeaker}")
+	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+	thisSpeaker.unmute()
 }
 
 def addDevices() {
