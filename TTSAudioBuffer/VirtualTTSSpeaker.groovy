@@ -77,7 +77,7 @@ void uninstalled() {
 
 //	===== Queuing Messages and send to App =====
 def speak(text) {
-	log.info "TEXT = ${text}"
+	log.debug "TEXT = ${text}"
 	def duration = textToSpeech(text).duration + (delayBetweenMessages == null ? 3 : delayBetweenMessages)
 	addToQueue(text, duration)
 }
