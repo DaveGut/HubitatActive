@@ -47,6 +47,7 @@ metadata {
 preferences {
     input name: "delayBetweenMessages", type: "number", title: "Delay between spoken messages (seconds)", defaultValue: 3
     input name: "nonSpeechDelay", type: "number", title: "Delay between non-speech commands (ms)", defaultValue: 100
+    input name: "wakeUpDelay", type: "number", title: "Wake-up delay (ms)", defaultValue: 1000
 	input name: "debugMode", type: "bool", title: "Display debug messages?", defaultValue: false
 }
 
@@ -118,7 +119,7 @@ void addToQueue(command, duration=null, process=true) {
 }
 
 def processQueue() {
-	logDebug("processQueue: TTSQueue = ${state.TTSQueue}")
+    logDebug("processQueue: TTSQueue = ${state.TTSQueue}, playing = ${state.playingTTS}")
 	state.playingTTS = true
 	def TTSQueue = state.TTSQueue
 	if (TTSQueue.size() == 0) {
@@ -174,7 +175,7 @@ void process(nextTTS) {
         
         case WAKEUP:
             parent.wakeUpChromecastDevice(realSpeaker)
-            currentDelay = 1
+            currentDelay = (wakeUpDelay ?: 1000)
             break
         
         default:
@@ -183,6 +184,7 @@ void process(nextTTS) {
             break
     }
     
+    logDebug("process: processed nextTTS = ${nextTTS}, currentDelay = ${currentDelay}")
     if (currentDelay != null && currentDelay > 0)
         runInMillis(currentDelay, processQueue)
     else
