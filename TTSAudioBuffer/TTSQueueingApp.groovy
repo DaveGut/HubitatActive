@@ -48,7 +48,7 @@ def mainPage() {
 }
 
 def wakeUpChromecastDevice(realSpeaker) {
-    playTTS("    ", realSpeaker)
+    playTTS(". .", realSpeaker)
 }
 
 def initialize(realSpeaker) {
