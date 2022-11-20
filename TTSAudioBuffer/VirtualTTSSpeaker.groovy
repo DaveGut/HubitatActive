@@ -15,7 +15,16 @@ speaker.
 03.05.19	0.6.01	Updated to support multi-device app.  Also limited commands to setLevel and speak.
 06.15.19	1.0.01	First production release
 07.17.19	1.0.02	Minor error correction causing failure.
+11.19.22    1.0.03  Restored support for AudioVolume capability
 */
+
+import groovy.transform.Field
+
+@Field static final String SET_VOLUME = "@@setVolume"
+@Field static final String MUTE = "@@mute"
+@Field static final String UNMUTE = "@@unmute"
+@Field static final String VOLUME_UP = "@@volumeUp"
+@Field static final String VOLUME_DOWN = "@@volumeDown"
 
 def driverVer() {return "1.0.01" }
 metadata {
@@ -25,12 +34,14 @@ metadata {
 			   	importUrl: "https://github.com/DaveGut/Hubitat-TTS-Audio-Buffer/blob/master/VirtualTTSSpeaker.groovy")
 	{
 		capability "Speech Synthesis"
+        capability "AudioVolume"
 		command "clearQueue"
 	}
 }
 
 preferences {
-	input name: "debugMode", type: "bool", title: "Display debug messages?", default: false
+    input name: "delayBetweenMessages", type: "number", title: "Delay between messages", defaultValue: 3
+	input name: "debugMode", type: "bool", title: "Display debug messages?", defaultValue: false
 }
 
 //	===== Install / Uninstall =====
@@ -61,9 +72,33 @@ void uninstalled() {
 //	===== Queuing Messages and send to App =====
 def speak(text) {
 	log.info "TEXT = ${text}"
-	def duration = textToSpeech(text).duration + 3
-	def TTSQueue = state.TTSQueue
-	TTSQueue << [text, duration]
+	def duration = textToSpeech(text).duration + delayBetweenMessages
+	addToQueue(text, duration)
+}
+
+def setVolume(volume) {
+    addToQueue(SET_VOLUME, volume)
+}
+
+def mute() {
+    addToQueue(MUTE)
+}
+
+def unmute() {
+    addToQueue(UNMUTE)
+}
+
+def volumeUp() {
+    addToQueue(VOLUME_UP)
+}
+
+def volumeDown() {
+    addToQueue(VOLUME_DOWN)
+}
+
+void addToQueue(command, duration=null) {
+    def TTSQueue = state.TTSQueue
+	TTSQueue << [command, duration]
 	if (state.playingTTS == false) { runInMillis(100, processQueue) }
 }
 
@@ -75,17 +110,47 @@ def processQueue() {
 		state.playingTTS = false
 		return
 	}
-	def realSpeaker = getDataValue("realSpeaker")
 	def nextTTS = TTSQueue[0]
 	TTSQueue.remove(0)
-	parent.playTTS(nextTTS[0], realSpeaker)
-	runIn(nextTTS[1], processQueue)
+	process(nextTTS)
 }
 
 def clearQueue() {
 	state.TTSQueue = []
 	state.playingTTS = false
 	logDebug("clearQueue:  TTSQueue = ${state.TTSQueue}")
+}
+
+void process(nextTTS) {
+    def realSpeaker = getDataValue("realSpeaker")
+    switch (nextTTS[0]) {
+        case SET_VOLUME:
+            parent.setVolume(nextTTS[1], realSpeaker)
+            break
+        
+        case MUTE:
+            parent.mute(realSpeaker)
+            break
+        
+        case UNMUTE:
+            parent.unmute(realSpeaker)
+            break
+        
+        case VOLUME_UP:
+            parent.volumeUp(realSpeaker)
+            break
+        
+        case VOLUME_DOWN:
+            parent.volumeDown(realSpeaker)
+            break
+        
+        default:
+            parent.playTTS(nextTTS[0], realSpeaker)
+            runIn(nextTTS[1], processQueue)
+            return
+    }
+    
+    processQueue()
 }
 
 //	===== Logging =====
