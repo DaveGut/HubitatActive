@@ -60,6 +60,12 @@ def initialize(realSpeaker) {
     thisSpeaker.initialize()
 }
 
+def stop(realSpeaker) {
+    logDebug("initialize: realSpeaker = ${realSpeaker}")
+    def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+    thisSpeaker.stop()
+}
+
 def playTTS(playItem, realSpeaker) {
 	logDebug("playTTS: playint: ${playItem}, volume = ${volume}, method = ${method}, realSpeaker = ${realSpeaker}")
 	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
