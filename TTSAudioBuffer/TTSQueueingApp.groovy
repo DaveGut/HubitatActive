@@ -42,9 +42,6 @@ preferences {
 def mainPage() {
 	dynamicPage(name: "mainPage") {
 		section {
-			paragraph "You may only select a single real device in this application"
-		}
-		section {
 			input "speaker", "capability.speechSynthesis", title: "On this real Speech Synthesis capable Speaker player", multiple: true, required: false
         }
 	}
