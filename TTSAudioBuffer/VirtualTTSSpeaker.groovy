@@ -100,13 +100,14 @@ def volumeDown() {
 }
 
 def wakeUpChromecastDevice() {
-    addToQueue(WAKEUP)
+    addToQueue(WAKEUP, null, false)
+    addToQueue(INITIALIZE)
 }
 
-void addToQueue(command, duration=null) {
+void addToQueue(command, duration=null, process=true) {
     def TTSQueue = state.TTSQueue
 	TTSQueue << [command, duration]
-	if (state.playingTTS == false) { runInMillis(100, processQueue) }
+	if (process && state.playingTTS == false) { runInMillis(100, processQueue) }
 }
 
 def processQueue() {
@@ -153,11 +154,11 @@ void process(nextTTS) {
         
         case INITIALIZE:
             parent.initialize(realSpeaker)
-            break
+            runIn(1, processQueue)
+            return
         
         case WAKEUP:
             parent.wakeUpChromecastDevice(realSpeaker)
-            addToQueue(INITIALIZE)
             runIn(1, processQueue)
             return
         
