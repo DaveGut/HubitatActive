@@ -50,6 +50,16 @@ def mainPage() {
 	}
 }
 
+def wakeUpChromecastDevice(realSpeaker) {
+    playTTS("    ", realSpeaker)
+}
+
+def initialize(realSpeaker) {
+    logDebug("initialize: realSpeaker = ${realSpeaker}")
+    def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+    thisSpeaker.initialize()
+}
+
 def playTTS(playItem, realSpeaker) {
 	logDebug("playTTS: playint: ${playItem}, volume = ${volume}, method = ${method}, realSpeaker = ${realSpeaker}")
 	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
