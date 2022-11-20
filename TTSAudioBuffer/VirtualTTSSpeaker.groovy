@@ -25,6 +25,8 @@ import groovy.transform.Field
 @Field static final String UNMUTE = "@@unmute"
 @Field static final String VOLUME_UP = "@@volumeUp"
 @Field static final String VOLUME_DOWN = "@@volumeDown"
+@Field static final String WAKEUP = "@@wakeup"
+@Field static final String INITIALIZE = "@@initialize"
 
 def driverVer() {return "1.0.01" }
 metadata {
@@ -36,6 +38,7 @@ metadata {
 		capability "Speech Synthesis"
         capability "AudioVolume"
 		command "clearQueue"
+        command "wakeUpChromecastDevice"
 	}
 }
 
@@ -96,6 +99,10 @@ def volumeDown() {
     addToQueue(VOLUME_DOWN)
 }
 
+def wakeUpChromecastDevice() {
+    addToQueue(WAKEUP)
+}
+
 void addToQueue(command, duration=null) {
     def TTSQueue = state.TTSQueue
 	TTSQueue << [command, duration]
@@ -143,6 +150,16 @@ void process(nextTTS) {
         case VOLUME_DOWN:
             parent.volumeDown(realSpeaker)
             break
+        
+        case INITIALIZE:
+            parent.initialize(realSpeaker)
+            break
+        
+        case WAKEUP:
+            parent.wakeUpChromecastDevice(realSpeaker)
+            addToQueue(INITIALIZE)
+            runIn(1, processQueue)
+            return
         
         default:
             parent.playTTS(nextTTS[0], realSpeaker)
