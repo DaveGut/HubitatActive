@@ -43,7 +43,7 @@ def initialize() {
 	unschedule()
 	app?.updateSetting("pollEnabled", [type:"bool", value: true])
 	if (selectedAddDevices) { addDevices() }
-	state.devices - [:]
+	state.devices = [:]
 }
 
 //	=====	Main Page	=====
