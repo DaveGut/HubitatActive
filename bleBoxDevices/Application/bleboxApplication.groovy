@@ -8,13 +8,10 @@ Unless required by applicable law or agreed to in writing,software distributed u
 License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
 either express or implied. See the License for the specific language governing permissions 
 and limitations under the License.
-V2.0.0
-Initial updates to accommodate multiple API Levels.  Currently uses deprecated
-command to capture all devices.
-Growth:
-a.	Add driver name to metadata for each device.  If no driver, All caps NO DRIVER.
+V2.1.0
+Updated comms from hubAction to asyncHttpPost to accommodate changes in hub environment.
 =============================================================================================*/
-def appVersion() { return "2.0.0" }
+def appVersion() { return "2.1.0" }
 import groovy.json.JsonSlurper
 definition(
 	name: "bleBox Integration",
@@ -45,8 +42,8 @@ def initialize() {
 	logDebug("initialize")
 	unschedule()
 	app?.updateSetting("pollEnabled", [type:"bool", value: true])
-	if (state.deviceIps) { state.remove("deviceIps") }
 	if (selectedAddDevices) { addDevices() }
+	state.devices - [:]
 }
 
 //	=====	Main Page	=====
@@ -83,7 +80,6 @@ def mainPage() {
 
 //	=====	Add Devices	=====
 def addDevicesPage() {
-	state.devices = [:]
 	findDevices(25, "parseDeviceData")
 	runIn(10, updateChildren)
 	def devices = state.devices
@@ -109,12 +105,11 @@ def addDevicesPage() {
 	}
 }
 
-def parseDeviceData(response) {
+def parseDeviceData(response, data) {
 	def cmdResponse = parseResponse(response)
-	logDebug("parseDeviceData: <b>${cmdResponse}")
 	if (cmdResponse == "error") { return }
+	logDebug("parseDeviceData: ${cmdResponse}")
 	if (cmdResponse.device) { cmdResponse = cmdResponse.device }
-	else { logWarn("parseDeviceData: invalid return data") }
 	def dni = cmdResponse.id.toUpperCase()
 	def ip = cmdResponse.ip
 	def apiLevel = 20000000
@@ -123,6 +118,7 @@ def parseDeviceData(response) {
 	if (type == "multiSensor" && cmdResponse.product == "windRainSensor") {
 		type = "windRainSensor"
 	}
+	def devices = state.devices
 	if (type != "switchBoxD") {
 		def devData = [:]
 		devData["ip"] = ip
@@ -207,8 +203,7 @@ def addDevices() {
 //	=====	Update Device IPs	=====
 def listDevicesPage() {
 	logDebug("listDevicesPage")
-	state.devices = [:]
-	findDevices(25, "parseDeviceData")
+	def findDev = findDevices(25, "parseDeviceData")
 	pauseExecution(5000)
 	def devices = state.devices
 	def foundDevices = "<b>Found Devices (Installed / DNI / IP / Alias):</b>"
@@ -242,41 +237,46 @@ def findDevices(pollInterval, action) {
 	def hubIpArray = hub.localIP.split('\\.')
 	def networkPrefix = [hubIpArray[0],hubIpArray[1],hubIpArray[2]].join(".")
 	logInfo("findDevices: IP Segment = ${networkPrefix}")
-	for(int i = 2; i < 254; i++) {
-		def deviceIP = "${networkPrefix}.${i.toString()}"
-		sendGetCmd("/info", action, deviceIP)
-		pauseExecution(pollInterval)
-	}
-	pauseExecution(5000)
-	
+//	for(int i = 2; i < 254; i++) {
+//		def deviceIP = "${networkPrefix}.${i.toString()}"
+//		sendGetCmd("/info", action, deviceIP)
+//		pauseExecution(pollInterval)
+//	}
+
 	for(int i = 2; i < 254; i++) {
 		def deviceIP = "${networkPrefix}.${i.toString()}"
 		sendGetCmd("/api/device/state", action, deviceIP)
 		pauseExecution(pollInterval)
 	}
+	pauseExecution(5000)
+	return
 }
 
 private sendGetCmd(command, action, ip){
 	logDebug("sendGetCmd: ${command} / ${action} / ${ip}")
-	sendHubCommand(new hubitat.device.HubAction("GET ${command} HTTP/1.1\r\nHost: ${ip}\r\n\r\n",
-				   hubitat.device.Protocol.LAN, null,[callback: action]))
+	def respData = [:]
+	def sendCmdParams = [
+		uri: "http://${ip}:80${command}",
+		timeout: 3]
+	try {
+		asynchttpGet(action, sendCmdParams, [reason: "none"])
+	} catch (error) {
+			logWarn("asyncGet: [status: FAILED, errorMsg: ${error}]")
+	}
 }
 
 def parseResponse(response) {
 	def cmdResponse
 	if(response.status != 200) {
-		logWarn("parseInput: Error - ${convertHexToIP(response.ip)} // ${response.status}")
 		cmdResponse = "error"
-	} else if (response.body == null){
-		logWarn("parseInput: ${convertHexToIP(response.ip)} // no data in command response.")
+	} else if (response.data == null){
 		cmdResponse = "error"
 	} else {
 		def jsonSlurper = new groovy.json.JsonSlurper()
         try {
-        	cmdResponse = jsonSlurper.parseText(response.body)
+        	cmdResponse = jsonSlurper.parseText(response.data)
         } catch (error) {
         	cmdResponse = "error"
-        	logWarn("parseInput: error parsing body = ${response.body}")
         }
 	}
 	return cmdResponse
