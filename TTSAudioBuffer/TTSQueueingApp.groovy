@@ -48,7 +48,11 @@ def mainPage() {
 }
 
 def wakeUpChromecastDevice(realSpeaker) {
-    playTTS(". .", realSpeaker)
+    def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+    try {
+        thisSpeaker.playTrack("")
+    }
+    catch (IllegalArgumentException e) {}
 }
 
 def initialize(realSpeaker) {
@@ -67,6 +71,12 @@ def playTTS(playItem, realSpeaker) {
 	logDebug("playTTS: playint: ${playItem}, volume = ${volume}, method = ${method}, realSpeaker = ${realSpeaker}")
 	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
 	thisSpeaker.speak(playItem)
+}
+
+def playTrack(playItem, realSpeaker) {
+	logDebug("playTrack: playint: ${playItem}, volume = ${volume}, method = ${method}, realSpeaker = ${realSpeaker}")
+	def thisSpeaker = speaker.find{ it.toString() == realSpeaker }
+	thisSpeaker.playTrack(playItem)
 }
 
 def setVolume(volume, realSpeaker) {
