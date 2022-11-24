@@ -79,8 +79,9 @@ void uninstalled() {
 //	===== Queuing Messages and send to App =====
 def speak(text) {
 	log.debug "TEXT = ${text}"
-	def duration = textToSpeech(text).duration + (delayBetweenMessages == null ? 3 : delayBetweenMessages)
-	addToQueue(text, duration)
+    Map tts = textToSpeech(text)
+	def duration = tts.duration + (delayBetweenMessages == null ? 3 : delayBetweenMessages)
+	addToQueue(tts.uri, duration)
 }
 
 def setVolume(volume) {
@@ -179,7 +180,7 @@ void process(nextTTS) {
             break
         
         default:
-            parent.playTTS(nextTTS[0], realSpeaker)
+            parent.playTrack(nextTTS[0], realSpeaker)
             currentDelay = nextTTS[1] * 1000
             break
     }
