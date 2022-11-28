@@ -14,23 +14,18 @@ and limitations under the  License.
 		THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
 		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
 ===== History =============================================================================
-04.30.21	3.3.6	a.	Change sendSyncCommand timeout to 5 seconds.
-					b.	Added on-line check / attribute.  if off-line, will not buffer
-						TTS messages.
-			3.3.7	a.	On now starts a check-connect that verifies connection for TTS.
-						Off turns off this function and sets to not-connected.
-					b.	Added check for all sendEvents to not send the event unless there
-						is a change in the attribute.
-					b.	Fixed null error in scheduling trace description.
-			3.3.8	Added DLNA (playlist) playback support
-					a.	Create using presetCreate with added parameter "Name"
-					b.	Play using presetPlay with added parameter "ShuffleMode"
-					c.	Recovers to beginning of current track after TTS messages.
+4.0 Changes
+a.  Speak Command: Updated input to match current capability Speech Synthesis definition.
+b.	Logging:  Added descriptionText logging to preferences.  Change logical names to match
+	other Hubitat implementations.
+c.	Updated On and Off paradigm.  Switch now reflects is the device is on the LAN.  For
+	cmd on, will run a check.  For cmd off, will run stopAllActivity then run a check.
+d.	Switch checked every 1 minute.  Refresh and TTS functions will work only when switch = on.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
-def driverVer() { return "3.3.8" }
+def driverVer() { return "4.0" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -102,17 +97,17 @@ metadata {
 	preferences {
 		def refreshRate = ["1" : "Refresh every 1 minute",
 						   "5" : "Refresh every 5 minutes",
-						   "15" : "Refresh every 15 minutes",
-						   "30" : "Refresh every 30 minutes - RECOMMENDED"]
+						   "15" : "Refresh every 15 minutes"]
 		def positions = ["fl": "stereo left",
 						 "fr": "stereo right",
 						 "front": "surround soundbar",  
 						 "rl": "surround left",
 						 "rr": "surround right"]
 		input ("notificationVolume", "num", title: "Notification volume increase in percent", defaultValue: 10)
-		input ("refresh_Rate","enum", title: "Device Refresh Interval", options: refreshRate, defaultValue: "30")
-		input ("debug", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
-		input ("descriptionText", "bool",  title: "Enable description text logging", defaultValue: true)
+		input ("refresh_Rate","enum", title: "Device Refresh Interval", options: refreshRate, defaultValue: "15")
+		
+		input ("textEnable", "bool", title: "Enable descriptionText logging", defaultValue: true)
+		input ("logEnable", "bool", title: "Enable debug logging", defaultValue: false)
 		input ("spkGroupLoc", "enum", title: "Surround/Stereo Speaker Location", options: positions)
 		if (getDataValue("hwType") == "Soundbar") {
 			def ttsLanguages = ["en-au":"English (Australia)","en-ca":"English (Canada)", "en-gb":"English (Great Britain)",
@@ -135,7 +130,18 @@ def installed() {
 }
 
 def updated() {
-	log.info "Updating .."
+	def logData = [status: "updating"]
+	if (getDataValue("appVersion") != driverVer()) {
+		updateDataValue("appVersion", driverVer())
+		state.remove("trackData")
+		pauseExecution(500)
+		state.remove("trackThumbnail")
+		pauseExecution(500)
+		state.remove("trackTimeLength")
+		pauseExecution(500)
+		state.remove("recoveryData")
+		logData << [ appVersion: driverVer()]
+	}
 	unschedule()
 	sendEvent(name: "numberOfButtons", value: "29")
 	state.triggered = false
@@ -148,16 +154,12 @@ def updated() {
 	state.trackIcon = ""
 	state.remove("playQueue")
 	state.playQueue = []
-	if (state.recoveryData) { state.remove("recoveryData") }
 
 	if (debug == true) { runIn(1800, debugLogOff) }
-	logInfo("Debug logging is: ${debug}.")
-	logInfo("Description text logging is ${descriptionText}.")
+	logData << [infoLog: descriptionText, debugLog: logEnable]
 	clearQueue()
-	sendEvent(name: "isConnected", value: "yes")
-	checkConnected()
-	runEvery1Minute(checkConnected)
-	switch(rate) {
+	sendEvent(name: "switch", value: "on")
+	switch(refresh_Rate) {
 		case "1" :
 			runEvery1Minute(refresh)
 			break
@@ -168,38 +170,42 @@ def updated() {
 			runEvery15Minutes(refresh)
 			break
 		default:
-			runEvery30Minutes(refresh)
+			runEvery5Minutes(refresh)
 	}
-	refresh()
-}
-
-def checkConnected() {
-	logDebug("checkConnected")
-	def isConnected
-	try{
-		httpGet([uri: "http://${getDataValue("deviceIP")}:8001/api/v2/", timeout: 1]) { resp ->
-			isConnected = "yes"
-		}
-	} catch (error) {
-			isConnected = "no"
-	}
-	setEvent("isConnected", isConnected)
+	logData << [refreshInt: refresh]
+	log.info "updated: ${logData}"
+	runIn(5, refresh)
 }
 
 //	===== Capability Switch for Amazon Integration =====
 def on() {
-	//	Requires Rule Machine to be of use.
-	setEvent("switch", "on")
-	sendEvent(name: "isConnected", value: "yes")
-	runEvery1Minute(checkConnected)
-	checkConnected()
+	def onOff = "on"
+	def isConnected = refresh()
+	if (isConnected == "no") {
+		onOff = "off"
+	}
+	if (device.currentValue("switch") != onOff) {
+		if (isConnected == "no") {
+			logWarn("on: [switch: off, reason: device not connected to LAN]")
+		}
+		setEvent("switch", onOff)
+		logDebug("on: [switch: ${onOff}]")
+	}
 }
-			 
 def off() {
-	//	Requires Rule Machine to be of use.
+	stopAllActivity()
+}
+def stopAllActivity() {
+	if (state.spkType == "Main") {
+		groupStop()
+		pauseExecution(1000)
+	}
+	stop()
+	inputSource("bt")
+	pauseExecution(3000)
+	inputSource("wifi")
 	setEvent("switch", "off")
-	unschedule(checkConnected)
-	sendEvent(name: "isConnected", value: "off")
+	logDebug("stopAllActivity: [switch: off]")
 }
 
 //	========== Capability Music Player ==========
@@ -227,7 +233,7 @@ def stop() {
 }
 
 def playbackControl(cmd) {
-	logDebug("playbackControl: command = ${cmd}, source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
+	logDebug("playbackControl: [command: ${cmd}, source: ${device.currentValue("inputSource")}, submode: ${device.currentValue("subMode")}]")
 	if (device.currentValue("subMode") == "cp") {
 		sendCmd("/CPM?cmd=%3Cname%3ESetPlaybackControl%3C/name%3E" +
 				"%3Cp%20type=%22str%22%20name=%22playbackcontrol%22%20val=%22${cmd}%22/%3E")
@@ -239,51 +245,53 @@ def playbackControl(cmd) {
 }
 
 def previousTrack() {
-	logDebug("previousTrack: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
+	def retData = [:]
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
-		logWarn("previousTrack does not work for input source")
-		return
-	}
-	if (device.currentValue("subMode") == "cp") {
-		sendSyncCmd("/CPM?cmd=%3Cname%3ESetPreviousTrack%3C/name%3E")
-		sendSyncCmd("/CPM?cmd=%3Cname%3ESetPreviousTrack%3C/name%3E")
+		retData << [status: "aborted", reason: "input soruce not wifi nor bt"]
 	} else if (state.urlPlayback == true) {
-		logInfo("nextTrack command does not work during URL Playback.")
-		return
+		retData << [status: "aborted", reason: "invalid during URL Playback"]
 	} else {
-		sendSyncCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
-				"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22previous%22/%3E")
-		sendSyncCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
-				"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22previous%22/%3E")
+		def cmd
+		if (device.currentValue("subMode") == "cp") {
+			retData << [status: "aborted", reason: "not Implemented for content player"]
+		} else {
+			cmd = sendSyncCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
+							  "%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22previous%22/%3E")
+			sendCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
+					"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22previous%22/%3E")
+			retData << [status: "ok"]
+			getPlayStatus()
+			runIn(4, setTrackDescription)
+		}
 	}
-	runIn(1, getPlayStatus)
-	runIn(4, setTrackDescription)
+	retData << [source: device.currentValue("inputSource"), submode: device.currentValue("subMode")]
+	logDebug("previousTrack: ${retData}")
 }
 
 def nextTrack() {
-	logDebug("nextTrack: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
+	def retData = [:]
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
-		logWarn("nextTrack does not work for input source")
-		return
-	}
-	if (device.currentValue("subMode") == "cp") {
-		sendCmd("/CPM?cmd=%3Cname%3ESetSkipCurrentTrack%3C/name%3E")
+		retData << [status: "aborted", reason: "input soruce not wifi nor bt"]
 	} else if (state.urlPlayback == true) {
-		logInfo("previousTrack command does not work during URL Playback.")
-		return
+		retData << [status: "aborted", reason: "invalid during URL Playback"]
 	} else {
-		sendCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
-				"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22next%22/%3E")
+		if (device.currentValue("subMode") == "cp") {
+			retData << [status: "aborted", reason: "not Implemented for content player"]
+		} else {
+			sendCmd("/UIC?cmd=%3Cname%3ESetTrickMode%3C/name%3E" +
+					"%3Cp%20type=%22str%22%20name=%22trickmode%22%20val=%22next%22/%3E")
+			retData << [status: "ok"]
+			runIn(2, getPlayStatus)
+			runIn(6, setTrackDescription)
+		}
 	}
-	runIn(2, getPlayStatus)
-	runIn(6, setTrackDescription)
+	retData << [source: device.currentValue("inputSource"), submode: device.currentValue("subMode")]
+	logDebug("nextTrack: ${retData}")
 }
 
 def setTrack(trackUri) { logWarn("restoreTrack: Not implemented.") }
 
-def restoreTrack(trackUri) {
-	resumeTrack(trackUri)
-}
+def restoreTrack(trackUri) { resumeTrack(trackUri) }
 
 def resumeTrack(trackUri) {
 	logDebug("resumeTrack: Restarting Stream ${trackUri}")
@@ -291,91 +299,109 @@ def resumeTrack(trackUri) {
 }
 
 def playText(text, volume=null) {
-	logDebug("playText: Text = ${text}, Volume = ${volume}")
 	playTextAndResume(text, volume)
 }
 
 def playTrack(trackData, volume = null) {
-	logDebug("playTrack: trackData = ${trackData}, Volume = ${volume}")
 	if (volume == null) { volume = device.currentValue("volume") }
-
 	if (trackData.toString()[0] != "[") {
 		trackData = [url: trackData, name: trackData]
 	}
 	setEvent("trackDescription", trackData.name)
+	trackData = new JSONObject(trackData)
 	setEvent("trackData", trackData)
 	setEvent("status", "playing")
 	state.urlPlayback = true
 	logDebug("playTrack: attempting to start play of ${trackData.url}")
+	setVolume(volume.toInteger())
 	execPlay(trackData.url, 0)
+	logDebug("playTrack: [status: ok, trackData: ${trackData}, volume: ${volume}]")
 }
 
 def getPlayStatus() {
-	logDebug("getPlayStatus: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
+	def resp
 	if (device.currentValue("subMode") == "cp") {
-		sendSyncCmd("/CPM?cmd=%3Cname%3EGetPlayStatus%3C/name%3E")
+		resp = sendSyncCmd("/CPM?cmd=%3Cname%3EGetPlayStatus%3C/name%3E")
 	} else {
-		sendSyncCmd("/UIC?cmd=%3Cname%3EGetPlayStatus%3C/name%3E")
+		resp = sendSyncCmd("/UIC?cmd=%3Cname%3EGetPlayStatus%3C/name%3E")
 	}
+	logDebug("getPlayStatus: [source: ${device.currentValue("inputSource")}, submode: ${device.currentValue("subMode")}]")
+	return resp
 }
 
 def setTrackDescription() {
 	unschedule("schedSetTrackDescription")
+	def logData = [:]
+	def trackData = device.currentValue("trackData")
 	if (state.urlPlayback == true) {
-		logDebug("setTrackDescription command does not work during URL Playback.")
-		trackData = "urlPlayback active"
-		return
-	}
-	def source = getSource()
-	def inputSource = source.inputSource
-	def subMode = source.subMode
-	logDebug("setTrackDescription: source = ${inputSource}, subMode = ${subMode}")
-	state.updateTrackDescription = true
-	def trackData
-	if (subMode == "cp") {
-		def respData = sendSyncCmd("/CPM?cmd=%3Cname%3EGetRadioInfo%3C/name%3E")
-		trackData = parseRadioInfo(respData)
+		logData << [status: "aborted", reason: "urlPlayback active"]
 	} else {
-		def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetMusicInfo%3C/name%3E")
-		trackData = parseMusicInfo(respData)
+		def subMode = device.currentValue("subMode")
+		def source = getSource()
+		if (source.data) {
+			subMode = source.data.submode
+		}
+		logData << [subMode: subMode]
+		state.updateTrackDescription = true
+		if (subMode == "cp") {
+			def respData = sendSyncCmd("/CPM?cmd=%3Cname%3EGetRadioInfo%3C/name%3E")
+			if (respData.data) {
+				trackData = parseRadioInfo(respData.data)
+			}
+		} else {
+			def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetMusicInfo%3C/name%3E")
+			if (respData.data) {
+				trackData = parseMusicInfo(respData.data)
+			}
+		}
+		try{
+			trackData = new JSONObject(trackData)
+		} catch (error) {
+			trackData = new JSONObject("{title: unknown, album: unknown, artist: unknown, type: unknown, error: data parse}")
+		}
+		trackDescription = "${trackData.artist}: ${trackData.title}"
+		setEvent("trackDescription", trackDescription)
+		setEvent("trackData", trackData)
+		schedSetTrackDescription()
 	}
-	try{
-		trackData = new JSONObject(trackData)
-	} catch (error) {
-		trackData = new JSONObject("{title: unknown, album: unknown, artist: unknown, type: unknown, error: data parse}")
-	}
-	trackDescription = "${trackData.artist}: ${trackData.title}"
-	setEvent("trackDescription", trackDescription)
-	setEvent("trackData", trackData)
-	schedSetTrackDescription()
+	logData << [trackData: trackData]
+	logDebug("setTrackDescription: ${logData}")
+	
 	return trackData
 }
 
 def schedSetTrackDescription() {
-	logDebug("schedSetTrackDescription: update = ${state.updateTrackDescription}")
-	if (device.currentValue("subMode") != "dlna" && device.currentValue("subMode") != "cp") {
-		return
-	}
-	if(state.updateTrackDescription == false) { return }
-	def trackData = parseJson(device.currentValue("trackData"))
-	def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentPlayTime%3C/name%3E")
-	def timelength
-	if (trackData.title == "Commercial") {
-		timelength = trackData.trackLength.toInteger()
-	} else if (respData.timelength) {
-		timelength = respData.timelength.toInteger()
+	def logData = [updateTrackDescription: state.updateTrackDescription]
+	if (state.updateTrackDescription == false) {
+		logData << [status: "aborted", reason: "updateTrackDescription is false"]
+	} else if (device.currentValue("subMode") == "dlna"|| device.currentValue("subMode") == "cp") {
+		def trackData = parseJson(device.currentValue("trackData"))
+		def timelength = 0
+		def playtime = 0
+		def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentPlayTime%3C/name%3E")
+		if (trackData.title == "Commercial") {
+			timelength = trackData.trackLength.toInteger()
+		} else if (respData.data) {
+			try {
+				timelength = respData.data.timelength.toInteger()
+				playtime = respData.data.playtime.toInteger()
+			} catch (e) {}
+		} else {
+			timelength = 60
+		}
+		if (timelength == 1 && playtime == 0) { timelength = 0 }
+		if (timelength == null || timelength == 0) {
+			state.updateTrackDescription = false
+			logData << [status: "notScheduled", reason: "null or 0 timelength"]
+		} else {
+			def nextUpdate = timelength - playtime + 10
+			runIn(nextUpdate, setTrackDescription)
+			logData << [status: "scheduled", delay: nextUpdate]
+		}
 	} else {
-		timelength = 60
+		logData << [status: "aborted", reason: "subMode not dlna nor cp"]
 	}
-	def playtime = respData.playtime.toInteger()
-	if (timelength == 1 && playtime == 0) { timelength = 0 }
-	if (timelength == null || timelength == 0) {
-		state.updateTrackDescription = false
-		return
-	} else {
-		def nextUpdate = timelength - playtime + 10
-		runIn(nextUpdate, setTrackDescription)
-	}
+	logDebug("scheduleSetTrackDescription: ${logData}")
 }
 
 def parseMusicInfo(respData) {
@@ -399,14 +425,11 @@ def parseMusicInfo(respData) {
 			timeLength = 60 * timeSplit[1].toInteger() + timeSplit[2].toInteger()
 		}
 		def parentId = respData.parentid
-//		def folderData = getFolderData(respData.objectid.toString(), deviceUdn)
-//		if (getDataValue("hwType") == "Soundbar") { parentId = folderData[0] }		def source = getSource()
 		def subMode = source.subMode
 		trackData = "{"
 		trackData += "title: ${title}, album: ${album}, artist: ${artist}, "
 		trackData += "playerType: ${respData.playertype}, "
-		trackData += "parentId: ${folderData[0]}, "
-//		trackData += "folderName: ${folderData[1]}, "
+//		trackData += "parentId: ${folderData[0]}, "
 		trackData += "deviceUdn: ${deviceUdn}, "
 		trackData += "playIndex: ${respData.playindex}, "
 		trackData += "objectId: ${respData.objectid}, "
@@ -415,9 +438,6 @@ def parseMusicInfo(respData) {
 		trackData += "type: ${subMode}"
 		trackData += "}"
 	}
-	state.trackTimeLength = "${respData.timelength}"
-	state.trackThumbnail = "${respData.thumbnail}"
-	state.trackData = trackData
 	return trackData
 }
 
@@ -475,7 +495,7 @@ def dirCmd(deviceUdn, objId) {
 							  "%3Cp%20type=%22str%22%20name=%22parentid%22%20val=%22${objId}%22/%3E" +
 							  "%3Cp%20type=%22dec%22%20name=%22liststartindex%22%20val=%220%22/%3E" +
 							  "%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%2210%22/%3E")
-	return dirData
+	return dirData.data
 }
 
 def parseRadioInfo(respData) {
@@ -528,8 +548,7 @@ def parseRadioInfo(respData) {
 				break
 		}
 	}
-	def source = getSource()
-	def subMode = source.subMode
+	def subMode = device.currentValue("subMode")
 	def trackData = "{title: ${title}, artist: ${artist}, album: ${album}, " +
 		"station: ${station}, player: ${player}, playerNo: ${playerNo}, " +
 		"path: ${path}, trackLength: ${trackLength}, type: ${subMode}}"
@@ -538,23 +557,30 @@ def parseRadioInfo(respData) {
 }
 
 //	========== Capability Audio Volume ==========
-def setVolume(volumelevel) {
-	logDebug("setVolume: volumelevel = ${volumelevel}, spkType = ${state.spkType}")
+def setVolume(newVolume) {
 	def curVol = device.currentValue("volume")
-	def volScale = 30
-	if (getDataValue("hwType") == "Soundbar") { volScale = 100 }
-	if (volumelevel < 1 || volumelevel > 100) { return }
-	def deviceVolume = Math.round(volScale*volumelevel/100).toInteger()
-	def volume = sendSyncCmd("/UIC?cmd=%3Cname%3ESetVolume%3C/name%3E" +
-			"%3Cp%20type=%22dec%22%20name=%22volume%22%20val=%22${deviceVolume}%22/%3E")
-
-	if (state.spkType == "Main") { groupVolume(volumelevel, curVol) }	//Grouped Speakers
-	return volume
+	def volume = curVol
+	def logData = [curVolume: curVol, newVolume: newVolume]
+	if (newVolume < 1 || newVolume > 100) {
+		logData << [status: "aborted", reason: "newVolume out-of-range"]
+	} else {
+		if (getDataValue("hwType") != "Soundbar") {
+			newVolume = Math.round(30 * newVolume/100).toInteger()
+		}
+		if (newVolume != curVol) {
+			 sendCmd("/UIC?cmd=%3Cname%3ESetVolume%3C/name%3E" +
+					 "%3Cp%20type=%22dec%22%20name=%22volume%22%20val=%22${newVolume}%22/%3E")
+			if (state.spkType == "Main") { groupVolume(newVolume, curVol) }	//Grouped Speakers
+		}
+	}
+	logData << [setVolume: volume]
+	logDebug("setVolume: ${logData}")
 }
 
 def getVolume() {
 	logDebug("getVolume")
-	sendCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
+	def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
+	return respData
 }
 
 def muteUnmute() {
@@ -600,37 +626,52 @@ def volumeDown() {
 }
 
 //	========== Capability Speech Synthesis ==========
-def speak(text) {
-	logDebug("speak: text = ${text}")
-	playTextAndResume(text)
+def speak(text, volume=null, voice=null) {
+	def logData = [:]
+	if (state.spkType == "Sub") {
+		logData << [status: "sentToParent", text: text, volume: volume, voice: voice]
+		parent.sendCmdToSpeaker(state.mainSpkDNI, "speak", text, volume, voice)
+	} else {
+		if (getDataValue("hwType") == "Speaker" && voice != null) {
+			voice = ttsLang
+		}
+		def track = convertToTrack(text, voice)
+		logData << [status: "addToQueue", text: text, volume: volume, voice: voice]
+		addToQueue(track.uri, track.duration, volume, true)
+	}
+	logDebug("speak: ${logData}")
 }
 
 //	========== Capability Audio Notification ==========
 def playTextAndRestore(text, volume=null) {
+	def logData = [:]
 	if (state.spkType == "Sub") {
-		logDebug("playTextAndRestore: sending command to ${state.mainSpkDNI}.")
+		logData << [status: "sentToParent", text: text, volume: volume]
 		parent.sendCmdToSpeaker(state.mainSpkDNI, "playTextAndRestore", text, volume)
-		return
+	} else {
+		def track = convertToTrack(text)
+		logData << [status: "addToQueue", text: text, volume: volume]
+		addToQueue(track.uri, track.duration, volume, false)
 	}
-	logDebug("playTextAndRestore: Text = ${text}, Volume = ${volume}")
-	def track = convertToTrack(text)
-	addToQueue(track.uri, track.duration, volume, false)
+	logDebug("playTextAndRestore: ${logData}")
 }
 
 def playTextAndResume(text, volume=null) {
+	def logData = [:]
 	if (state.spkType == "Sub") {
-		logDebug ("playTextAndResume: sending command to ${state.mainSpkDNI}.")
+		logData << [status: "sentToParent", text: text, volume: volume]
 		parent.sendCmdToSpeaker(state.mainSpkDNI, "playTextAndResume", text, volume)
-		return
+	} else {
+		def track = convertToTrack(text)
+		logData << [status: "addToQueue", text: text, volume: volume]
+		addToQueue(track.uri, track.duration, volume, true)
 	}
-	logInfo("playTextAndResume: Text = ${text}, Volume = ${volume}")
-	def track = convertToTrack(text)
-	addToQueue(track.uri, track.duration, volume, true)
+	logDebug("playTextAndResume: ${logData}")
 }
 
-def convertToTrack(text) {
+def convertToTrack(text, voice = null) {
 	if (getDataValue("hwType") == "Speaker") {		//	Speaker
-		def track = textToSpeech(text)
+		def track = textToSpeech(text, voice)
 		return track
 	} else {										//	Soundbar
 		def uriText = URLEncoder.encode(text, "UTF-8").replaceAll(/\+/, "%20")
@@ -647,102 +688,116 @@ def convertToTrack(text) {
 
 def playTrackAndRestore(trackData, volume=null) {
 	if (state.spkType == "Sub") {
-		logDebug("playTrackAndRestore: sending command to ${state.mainSpkDNI}.")
+		logData << [status: "sentToParent", trackData: trackData, volume: volume]
 		parent.sendCmdToSpeaker(state.mainSpkDNI, "playTrackAndRestore", trackData, volume)
-		return
-	}
-	logDebug("playTrackAndResore: Volume = ${volume}, trackData = ${trackData}")
-	def trackUri
-	def duration
-	if (trackData[0] == "[") {
-		logWarn("playTrackAndResume: Track data must be formated as {uri: , duration: }")
-	} else if (trackData[0] == "{") {
-		trackData = new JSONObject(trackData)
-		trackUri = trackData.uri
-		duration = trackData.duration
 	} else {
-		trackUri = trackData
-		duration = 15
+		def trackUri
+		def duration
+		if (trackData[0] == "[") {
+			logData << [status: "aborted", reason: "trackData not formated as {uri: , duration: }"]
+		} else {
+			if (trackData[0] == "{") {
+				trackData = new JSONObject(trackData)
+				trackUri = trackData.uri
+				duration = trackData.duration
+			} else {
+				trackUri = trackData
+				duration = 15
+			}
+			logData << [status: "addToQueue", trackData: trackData, volume: volume]
+			addToQueue(trackUri, duration, volume, false)
+		}
 	}
-	addToQueue(trackUri, duration, volume, false)
+	logDebug("playTrackAndRestore: ${logData}")
 }
 
 def playTrackAndResume(trackData, volume=null) {
 	if (state.spkType == "Sub") {
+		logData << [status: "sentToParent", trackData: trackData, volume: volume]
 		parent.sendCmdToSpeaker(state.mainSpkDNI, "playTrackAndResume", trackData, volume)
-		return
-	}
-	logDebug("playTrackAndResume: Volume = ${volume}, trackData = ${trackData}")
-	def trackUri
-	def duration
-	if (trackData[0] == "[") {
-		logWarn("playTrackAndResume: Track data must be formated as {uri: , duration: }")
-	} else if (trackData[0] == "{") {
-		trackData = new JSONObject(trackData)
-		trackUri = trackData.uri
-		duration = trackData.duration
 	} else {
-		trackUri = trackData
-		duration = 15
+		def trackUri
+		def duration
+		if (trackData[0] == "[") {
+			logData << [status: "aborted", reason: "trackData not formated as {uri: , duration: }"]
+		} else {
+			if (trackData[0] == "{") {
+				trackData = new JSONObject(trackData)
+				trackUri = trackData.uri
+				duration = trackData.duration
+			} else {
+				trackUri = trackData
+				duration = 15
+			}
+			logData << [status: "addToQueue", trackData: trackData, volume: volume]
+			addToQueue(trackUri, duration, volume, true)
+		}
 	}
-	addToQueue(trackUri, duration, volume, true)
+	logDebug("playTrackAndResume: ${logData}")
 }
 
 //	========== Play Queue Execution ==========
 def addToQueue(trackUri, duration, volume, resumePlay){
-	logDebug("addToQueue: ${trackUri},${duration},${volume},${resumePlay}")
-	if (device.currentValue("isConnected") == "no") { return }
-	duration = duration + 3
-	playData = ["trackUri": trackUri, 
-				"duration": duration,
-				"requestVolume": volume]
-	state.playQueue.add(playData)
+	def logData = [:]
+	if (device.currentValue("isConnected") == "yes") {
+		if (volume == null) { volume = device.currentValue("volume").toInteger() }
+		logData << [status: "addedToQueue", uri: trackUri, duration: duration, volume: volume, resume: resumePlay]
+		duration = duration + 3
+		playData = ["trackUri": trackUri, 
+					"duration": duration,
+					"requestVolume": volume]
+		state.playQueue.add(playData)	
 
-	if (state.playingNotification == false) {
-		state.playingNotification = true
-		runInMillis(100, startPlayViaQueue, [data: resumePlay])
+		if (state.playingNotification == false) {
+//			state.playingNotification = true							//	4.0
+			runInMillis(100, startPlayViaQueue, [data: resumePlay])		//	4.0
+		}
+	} else {
+		logData << [status: "aborted", reason: "Speaker not on LAN"]
+		logWarn("addToQueue: ${logData}")
 	}
+	logDebug("addToQueue: ${logData}")
 }
 
 def startPlayViaQueue(resumePlay) {
-	logDebug("startPlayViaQueue: queueSize = ${state.playQueue.size()}, resumePlay = ${resumePlay}")
+	logDebug("startPlayViaQueue: [queueSize: ${state.playQueue.size()}, resumePlay: ${resumePlay}]")
 	if (state.playQueue.size() == 0) { return }
-	getSource()
-	setTrackDescription()
-	pauseExecution(1000)
-	unschedule(setTrackDescription)
 	state.recoveryVolume = device.currentValue("volume")
+	unschedule(setTrackDescription)
 	if (getDataValue("hwType") == "Speaker") {
 		def blankTrack = convertToTrack("     ")
 		execPlay(blankTrack.uri, true)
 	}
-	pause()
-	runIn(1, playViaQueue, [data: resumePlay])
+	state.playingNotification = true						//	4.0
+//	pause()													//	4.0
+//	runIn(1, playViaQueue, [data: resumePlay])				//	4.0
+	runInMillis(100, playViaQueue, [data: resumePlay])
 }
 
 def playViaQueue(resumePlay) {
-	logDebug("playViaQueue: queueSize = ${state.playQueue.size()}, resumePlay = ${resumePlay}")
+	def logData = [:]
 	if (state.playQueue.size() == 0) {
 		resumePlayer(resumePlay)
-		return
+		logData << [status: "resumingPlayer", reason: "Zero Queue", resumePlay: resumePlay]
+	} else {
+		def playData = state.playQueue.get(0)
+		state.playQueue.remove(0)
+
+		recVolume = state.recoveryVolume.toInteger()
+		def playVolume = playData.requestVolume
+		if (!playVolume) {
+			def multFactor = 1 + notificationVolume.toInteger()/100
+			playVolume = (multFactor * recVolume).toInteger()
+		}
+		if (playVolume > 100) { playVolume = 100 }
+
+		def vol = setVolume(playVolume)
+		execPlay(playData.trackUri, resumePlay)
+		runIn(playData.duration, resumePlayer, [data: resumePlay])
+		runIn(30, kickStartQueue, [data: resumePlay])
+		logData << [playData: playData, recoveryVolume: recVolume]
 	}
-	def playData = state.playQueue.get(0)
-	state.playQueue.remove(0)
-
-	logDebug("playViaQueue: playData = ${playData}, recoveryVolume = ${state.recoveryVolume}")
-
-	recVolume = state.recoveryVolume.toInteger()
-	def playVolume = playData.requestVolume
-	if (!playVolume) {
-		def multFactor = 1 + notificationVolume.toInteger()/100
-		playVolume = (multFactor * recVolume).toInteger()
-	}
-	if (playVolume > 100) { playVolume = 100 }
-
-	def vol = setVolume(playVolume)
-	execPlay(playData.trackUri, resumePlay)
-	runIn(playData.duration, resumePlayer, [data: resumePlay])
-	runIn(30, kickStartQueue, [data: resumePlay])
+	logDebug("playViaQueue: ${logData}")
 }
 
 def execPlay(trackUri, resumePlay) {
@@ -770,42 +825,51 @@ def execPlay(trackUri, resumePlay) {
 }
 
 def resumePlayer(resumePlay) {
+	def logData = [resume: resumePlay]
 	if (state.playQueue.size() > 0) {
+		logData << [status: "aborted", reason: "playQueue not 0"]
 		playViaQueue(resumePlay)
-		return
-	}
-	logDebug("resumePlayer: resumePlay = ${resumePlay}")
-	state.playingNotification = false
-	setVolume(state.recoveryVolume)
-	if (resumePlay == false) {return}
-
-	def trackData = new JSONObject(device.currentValue("trackData"))
-	def subMode = device.currentValue("subMode")
-	logDebug("resumePlayer: restoring play, track data = ${trackData}")
-
-	if (state.urlPlayback == true) {
-		playTrack([url: trackData.url, name: trackData.name])
-	} else if (subMode == "cp" && trackData.player != "Unknown") {
-		switch(trackData.player) {
-			case "Amazon":
-			case "AmazonPrime":
-				nextTrack()
-				break
-			default:
-				def id = sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
-					"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${trackData.player}%22/%3E" +
-					"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${trackData.path}%22/%3E")
+	} else {
+		state.playingNotification = false
+		setVolume(state.recoveryVolume)
+		def source = device.currentValue("inputSource")
+		if (source == "wifi") {
+			if (!resumePlay || device.currentValue("status") != "playing") {
+				logData << [status: "noResume", reason: "status not playing or resume false"]
+			} else {
+				def trackData = new JSONObject(device.currentValue("trackData"))
+				def subMode = device.currentValue("subMode")
+				logData << [status: "resuming", trackData: trackData, 
+							subMode: subMode, urlPlayback: state.urlPlayback]
+				if (state.urlPlayback == true) {
+					playTrack([url: trackData.url, name: trackData.name])
+				} else if (subMode == "cp" && trackData.player != "Unknown") {
+					switch(trackData.player) {
+						case "Amazon":
+						case "AmazonPrime":
+							nextTrack()
+							break
+						default:
+							sendCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
+									"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${trackData.player}%22/%3E" +
+									"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${trackData.path}%22/%3E")
+					}
+					pauseExecution(1000)
+					play()
+				} else if (subMode == "dlna") {
+					playDlna(trackData)
+					runIn(10, refresh)
+				}
+			}
+		} else {
+			inputSource(source)
 		}
-		pauseExecution(1000)
-		play()
-	} else if (subMode == "dlna") {
-		playDlna(trackData)
-		runIn(10, refresh)
 	}
+	logDebug("resumePlayer: ${logData}")
 }
 
 def kickStartQueue(resumePlay = true) {
-	logInfo("kickStartQueue: resumePlay = ${resumePlay}.")
+	logInfo("kickStartQueue: [resumePlay: ${resumePlay}, size: ${state.playQueue.size()}]")
 	if (state.playQueue.size() > 0) {
 		resumePlayer(resumePlay)
 	} else {
@@ -815,8 +879,8 @@ def kickStartQueue(resumePlay = true) {
 
 def clearQueue() {
 	logDebug("clearQueue")
-	state.remove("playQueue")
-	pauseExecution(5000)
+//	state.remove("playQueue")	//	4.0
+//	pauseExecution(5000)		//	4.0
 	state.playQueue = []
 	state.playingNotification = false
 }
@@ -905,41 +969,45 @@ def unTrigger() { state.triggered = false }
 
 //	========== Capability Refresh ==========
 def refresh() {
-	if (device.currentValue("isConnected") == "no") { return }
-	if (state.playingNotification == true) {
-		logDebug("refresh: ignored while playing notifications")
+	if (getDataValue("appVersion") != driverVer()) {
+		updated()
 		return
 	}
-	logDebug("refresh")
-	getVolume()
-	def status = getPlayStatus()
-	setTrackDescription()
-	pauseExecution(2000)
-	sendCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
-	if (state.activeGroupNo == "" && device.currentValue("activeGroup")) {
-		sendEvent(name: "activeGroup", value: "none")
+	def sendCmdParams = [
+		uri: "http://${getDataValue("deviceIP")}:8001/api/v2/",
+		timeout: 2
+	]
+	asynchttpGet("refreshParse", sendCmdParams)
+}
+def refreshParse(resp, data) {
+	def logData = [:]
+	def isConnected = "no"
+	if (resp.status == 200) {
+		isConnected = "yes"
 	}
+	logData << [isConnected: isConnected]
+	unschedule(setTrackDescription)
+	if (isConnected == "yes") {
+		if (state.playingNotification == false) {
+			if (state.activeGroupNo == "" && device.currentValue("activeGroup")) {
+				sendEvent(name: "activeGroup", value: "none")
+			}
+			sendCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
+			sendCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
+			getPlayStatus()
+			sendCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+			runIn(2, setTrackDescription)
+		} else {
+			logData << [status: "notUpdated", reason: "playing Notification"]
+		}
+	} else {
+		logData << [status: "notUpdated", reason: "not Connected to LAN"]
+	}
+//	logDebug("refreshParse: ${logData}")
+logTrace("refreshParse: ${logData}")
 }
 
 //	========== Samsung-specific Speaker Control ==========
-def stopAllActivity() {
-	logInfo("stopAllActivity: Disconect any streaming service.")
-	if (state.spkType == "Main") {
-		groupStop()
-		pauseExecution(1000)
-	}
-	stop()
-	if (getDataValue("hwType") == "Soundbar") {
-		pauseExecution(3000)
-		sendSyncCmd("/UIC?cmd=%3Cname%3ESetPowerStatus%3C/name%3E" +
-					"%3Cp%20type=%22dec%22%20name=%22powerstatus%22%20val=%220%22/%3E")
-		return
-	}
-	inputSource("bt")
-	pauseExecution(3000)
-	inputSource("wifi")
-}
-
 def repeat() {
 	logDebug("repeat: source = ${device.currentValue("inputSource")}, submode = ${device.currentValue("subMode")}")
 	if (device.currentValue("inputSource") != "wifi" && device.currentValue("inputSource") != "bt") {
@@ -954,13 +1022,13 @@ def repeat() {
 		def repeatMode = "0"
 		if (repeat == "0") { repeatMode = "1" }
 		else if (repeat == "1") { repeatMode = "2" }
-	 	sendSyncCmd("/CPM?cmd=%3Cname%3ESetRepeatMode%3C/name%3E" +
-					"%3Cp%20type=%22dec%22%20name=%22mode%22%20val=%22${repeatMode}%22/%3E")
+	 	sendCmd("/CPM?cmd=%3Cname%3ESetRepeatMode%3C/name%3E" +
+				"%3Cp%20type=%22dec%22%20name=%22mode%22%20val=%22${repeatMode}%22/%3E")
 	} else {
 		def repeatMode = "off"
 		if (repeat == "0") { repeatMode = "on" }
-		sendSyncCmd("/UIC?cmd=%3Cname%3ESetRepeatMode%3C/name%3E" +
-					"%3Cp%20type=%22str%22%20name=%22repeatmode%22%20val=%22${repeatMode}%22/%3E")
+		sendCmd("/UIC?cmd=%3Cname%3ESetRepeatMode%3C/name%3E" +
+				"%3Cp%20type=%22str%22%20name=%22repeatmode%22%20val=%22${repeatMode}%22/%3E")
 	}
 }
 
@@ -980,8 +1048,7 @@ def shuffle() {
 
 def setShuffle(shuffleMode) {
 	logDebug("setShuffle: shuffleMode = ${shuffleMode}")
-	def source = getSource()
-	def subMode = source.subMode
+	def subMode = device.currentValue("subMode")
 	if (subMode == "cp") {
 		def shuffleNo = "1"
 		if (shuffleMode == "off") { shuffleNo = "0" }
@@ -996,19 +1063,26 @@ def setShuffle(shuffleMode) {
 def equalPreset() {
 	logDebug("equalPreset")
 	def newEqPreset = ""
+	def totalPresets = 0
 	def respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGet7BandEQList%3C/name%3E")
-	def totalPresets = respData.listcount.toInteger() - 1
+	if (respData.data) {
+		totalPresets = respData.data.listcount.toInteger() - 1
+	}
+	def currentEqPreset = 0
 	respData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentEQMode%3C/name%3E")
-	def currentEqPreset = respData.presetindex.toInteger()
+
+	if (respData.data) {
+		currentEqPreset = respData.data.presetindex.toInteger()
+	}
 
 	if(currentEqPreset >= totalPresets) {
 		newEqPreset = 0
 	} else {
 		newEqPreset = currentEqPreset + 1
 	}
-	sendSyncCmd("/UIC?cmd=%3Cname%3ESet7bandEQMode%3C/name%3E" +
-				"%3Cp%20type=%22dec%22%20name=%22presetindex%22%20val=%22${newEqPreset}%22/%3E")
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetCurrentEQMode%3C/name%3E")
+	resp = sendSyncCmd("/UIC?cmd=%3Cname%3ESet7bandEQMode%3C/name%3E" +
+			 "%3Cp%20type=%22dec%22%20name=%22presetindex%22%20val=%22${newEqPreset}%22/%3E")
+	sendCmd("/UIC?cmd=%3Cname%3EGetCurrentEQMode%3C/name%3E")
 }
 
 def inputSource(source = null) {
@@ -1030,16 +1104,14 @@ def inputSource(source = null) {
 		}
 	}
 	state.urlPlayback = false
-	sendSyncCmd("/UIC?cmd=%3Cname%3ESetFunc%3C/name%3E" +
-				"%3Cp%20type=%22str%22%20name=%22function%22%20val=%22${source}%22/%3E")
-	runIn(4, getSource)
+	sendCmd("/UIC?cmd=%3Cname%3ESetFunc%3C/name%3E" +
+			"%3Cp%20type=%22str%22%20name=%22function%22%20val=%22${source}%22/%3E")
 	runIn(8, setTrackDescription)
 }
 
 def getSource() {
-	logDebug("getSource")
-	def source = sendSyncCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
-	return source
+	def cmd = sendSyncCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
+	return cmd
 }
 
 //	========== Samsung Player Preset Capability ==========
@@ -1061,15 +1133,14 @@ def presetCreate(preset, name = "NotSet") {
 					"%3Cp%20type=%22str%22%20name=%22parentid%22%20val=%22${trackData.parentId}%22/%3E" +
 					"%3Cp%20type=%22dec%22%20name=%22liststartindex%22%20val=%220%22/%3E" +
 					"%3Cp%20type=%22dec%22%20name=%22listcount%22%20val=%221%22/%3E")
-		if (!resp.musiclist) {
+		if (!resp.data) {
 			logWarn("createPreset: Not created.  No Music List from device")
 		} else {
 			presetData["type"] = trackData.type
 			presetData["name"] = name
 			presetData["deviceUdn"] = trackData.deviceUdn
-//			presetData["playerType"] = trackData.playerType
 			presetData["parentId"] = trackData.parentId
-			presetData["objectId"] = resp.musiclist.music.@object_id.toString()
+			presetData["objectId"] = resp.data.musiclist.music.@object_id.toString()
 			presetData["playTime"] = "0"
 			presetData["playIndex"] = "0"
 			state."Preset_${preset}_Data" = presetData
@@ -1103,20 +1174,19 @@ def presetPlay(preset, shuffle = "on") {
 		logWarn("presetPlay: Preset Not Set!")
 		return
 	}
+	def cmd
 	if (psData.type == "cp") {
 		stop()
 		if (psData.playerNo != "99") {
-			def service = sendSyncCmd("/CPM?cmd=%3Cname%3ESetCpService%3C/name%3E" +
-					"%3Cp%20type=%22dec%22%20name=%22cpservice_id%22%20val=%22${psData.playerNo}%22/%3E")
+			cmd = sendSyncCmd("/CPM?cmd=%3Cname%3ESetCpService%3C/name%3E" +
+							  "%3Cp%20type=%22dec%22%20name=%22cpservice_id%22%20val=%22${psData.playerNo}%22/%3E")
 		}
-		def id = sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
-				"%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${psData.player}%22/%3E" +
-				"%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${psData.path}%22/%3E")
-		pauseExecution(500)		
+		cmd = sendSyncCmd("/CPM?cmd=%3Cname%3EPlayById%3C/name%3E" +
+						  "%3Cp%20type=%22str%22%20name=%22cpname%22%20val=%22${psData.player}%22/%3E" +
+						  "%3Cp%20type=%22str%22%20name=%22mediaid%22%20val=%22${psData.path}%22/%3E")
 		play()
 	} else if (psData.type == "dlna") {
-		def startDlna = playDlna(psData)
-		pauseExecution(2000)
+		cmd = playDlna(psData)
 		setShuffle(shuffle)
 	} else {
 		logWarn("presetPlay: can't play preset. trackData = ${trackData}")
@@ -1133,7 +1203,7 @@ def playDlna(trackData) {
 	if (playTime != "0") { 
 		playTime = (playTime.toInteger() / 1000).toInteger()
 	}
-	sendCmd("/UIC?cmd=%3Cname%3ESetFolderPlaybackControl%3C/name%3E" +
+	def cmd = sendSyncCmd("/UIC?cmd=%3Cname%3ESetFolderPlaybackControl%3C/name%3E" +
 			"%3Cp%20type=%22str%22%20name=%22device_udn%22%20val=%22uuid:${trackData.deviceUdn}%22/%3E" +
 			"%3Cp%20type=%22str%22%20name=%22playbackcontol%22%20val=%22play%22/%3E" +
 			"%3Cp%20type=%22str%22%20name=%22playertype%22%20val=%22${trackData.playerType}%22/%3E" +
@@ -1144,7 +1214,7 @@ def playDlna(trackData) {
 			"%3Cp%20type=%22dec%22%20name=%22playtime%22%20val=%22${playTime}%22/%3E" +
 			"%3Cp%20type=%22str%22%20name=%22objectid%22%20val=%22${trackData.objectId}%22/%3E" +
 			"")
-	return
+	return cmd
 }
 
 def presetDelete(preset) {
@@ -1210,33 +1280,41 @@ def groupCreate(groupNo) {
 		return
 	}
 	def acmData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
-	if (state.spkType != "Main") {
-		logWarn("groupCreate: Not currently a Main Speaker")
-		return
+	if (acmData.data && acmData.data.spkType == "Main") {
+		def groupName = deviceCurrentValue("Group_${groupNo}")
+		def nameData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetGroupName%3C/name%3E")
+		if (nameData.data) {
+			groupName = nameData.data
+		}
+		def mainSpeakerData = generateSpeakerData()
+		def groupData = [:]
+		groupData["groupName"] = "${groupName}"
+		groupData["groupType"] = "${acmData.groupType}"
+		groupData["Main"] = mainSpeakerData
+
+		def groupSpeakerData = parent.requestSubSpeakerData(groupData, device.deviceNetworkId)
+		logDebug("groupCreate: returned speakerData = #{speakerData}")
+		state.activeGroupNo = groupNo
+		state.mainSpkDNI = "${device.deviceNetworkId}"
+		state.spkType = "Main"
+		sendEvent(name: "Group_${groupNo}", value: "${groupName}")
+		sendEvent(name: "activeGroup", value: "${groupName}")
+		state."group_${groupNo}_Data" = groupSpeakerData
+		logInfo("groupCreated: groupNo = ${groupNo}")
+	} else {
+		if (!acmData.data) {
+			logWarn("groupCreate: ${acmData}")
+		} else {
+			logInfo("groupCreate: Speaker is the Main Speaker")
+		}
 	}
-
-	def groupName = sendSyncCmd("/UIC?cmd=%3Cname%3EGetGroupName%3C/name%3E")
-	def mainSpeakerData = generateSpeakerData()
-	def groupData = [:]
-	groupData["groupName"] = "${groupName}"
-	groupData["groupType"] = "${state.groupType}"
-	groupData["Main"] = mainSpeakerData
-
-	def groupSpeakerData = parent.requestSubSpeakerData(groupData, device.deviceNetworkId)
-	logDebug("groupCreate: returned speakerData = #{speakerData}")
-	state.activeGroupNo = groupNo
-	state.mainSpkDNI = "${device.deviceNetworkId}"
-	state.spkType = "Main"
-	sendEvent(name: "Group_${groupNo}", value: "${groupName}")
-	sendEvent(name: "activeGroup", value: "${groupName}")
-	state."group_${groupNo}_Data" = groupSpeakerData
-	logInfo("groupCreated: groupNo = ${groupNo}")
 }
 
 def generateSpeakerData() {
 	logDebug("generateSpeakerData")
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetChVolMultich%3C/name%3E")
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
+	def cmd = sendSyncCmd("/UIC?cmd=%3Cname%3EGetChVolMultich%3C/name%3E")
+	cmd = getVolume()
+	pauseExecution(1000)
 	def speakerData = [:]
 	speakerData["spkName"] = "${device.label}"
 	speakerData["spkDNI"] = "${device.deviceNetworkId}"
@@ -1251,81 +1329,85 @@ def getSubSpeakerData() {
 	logDebug("getSubSpeakerData")
 	def acmData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 	def subSpkData = "not Sub"
-	if (acmData == "commsError") {
-		subSpkData = "commsError"
-	} else if (state.spkType == "Sub") {
+	if (!acmData.data) {
+		subSpkData = "error"
+	} else if (acmData.data.spkType == "Sub") {
 		subSpkData = generateSpeakerData()
 	}
 	return subSpkData
 }
 
 def groupStart(groupNo) {
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+	def spkType = "ukn"
+	def acmData = sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+	if (acmData.data) {
+		spkType = acmData.data.spkType
+	}
 	def groupData = state."group_${groupNo}_Data"
 	logDebug("groupStart: groupNo = ${groupNo}, groupData = ${groupData}")
 	if (groupNo < 1 || groupNo > 3) {
 		logWarn "groupStart: Group Number out of range (1-3)!"
-		return
 	} else if (device.currentValue("Group_${groupNo}") == "group${groupNo}") {
 		logWarn "groupStart: Group is not defined!"
-		return
-	} else if (state.spkType != "Solo") {
+	} else if (spkType != "Solo") {
 		logWarn("groupStart: The speaker is already in a group.")
-		return
-	}
-
+	} else {
 //	Create command string group and main speaker string
-	def groupName = groupData.groupName.replaceAll(' ','%20')
-	def mainSpkName = groupData.Main.spkName.replaceAll(' ','%20')
-	def spksInGrp = groupData.noSubSpks.toInteger() + 1
-	def spkMethod = "SetMultispkGroup"
-	if (groupData.groupType == "Surround") { spkMethod = "SetMultichGroup" }
-	def groupCmd = "/UIC?cmd=%3Cname%3E${spkMethod}%3C/name%3E"
-		groupCmd += "%3Cp%20type=%20%22cdata%22%20name=%20%22name%22%20val=%20%22empty%22%3E%3C![CDATA[${groupName}]]%3E%3C/p%3E"
-		groupCmd += "%3Cp%20type=%20%22dec%22%20name=%20%22index%22%20val=%20%221%22/%3E"
-		groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22type%22%20val=%20%22main%22/%3E"
-		groupCmd += "%3Cp%20type=%20%22dec%22%20name=%20%22spknum%22%20val=%20%22${spksInGrp}%22/%3E"
-		groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22audiosourcemacaddr%22%20val=%20%22${groupData.Main.spkMAC}%22/%3E"
-		groupCmd += "%3Cp%20type=%20%22cdata%22%20name=%20%22audiosourcename%22%20val=%20%22empty%22%3E%3C![CDATA[${mainSpkName}]]%3E"
-		groupCmd += "%3C/p%3E%3Cp%20type=%20%22str%22%20name=%20%22audiosourcetype%22%20val=%20%22speaker%22/%3E"
-	if (groupData.groupType == "Surround") {
-		groupCmd += "%3Cp%20type=%22str%22%20name=%22channeltype%22%20val=%22${groupData.Main.spkLoc}%22/%3E"
-		groupCmd += "%3Cp%20type=%22dec%22%20name=%22channelvolume%22%20val=%22${groupData.Main.spkChVol}%22/%3E"
-	}
+		def groupName = groupData.groupName.replaceAll(' ','%20')
+		def mainSpkName = groupData.Main.spkName.replaceAll(' ','%20')
+		def spksInGrp = groupData.noSubSpks.toInteger() + 1
+		def spkMethod = "SetMultispkGroup"
+		if (groupData.groupType == "Surround") { spkMethod = "SetMultichGroup" }
+		def groupCmd = "/UIC?cmd=%3Cname%3E${spkMethod}%3C/name%3E"
+			groupCmd += "%3Cp%20type=%20%22cdata%22%20name=%20%22name%22%20val=%20%22empty%22%3E%3C![CDATA[${groupName}]]%3E%3C/p%3E"
+			groupCmd += "%3Cp%20type=%20%22dec%22%20name=%20%22index%22%20val=%20%221%22/%3E"
+			groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22type%22%20val=%20%22main%22/%3E"
+			groupCmd += "%3Cp%20type=%20%22dec%22%20name=%20%22spknum%22%20val=%20%22${spksInGrp}%22/%3E"
+			groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22audiosourcemacaddr%22%20val=%20%22${groupData.Main.spkMAC}%22/%3E"
+			groupCmd += "%3Cp%20type=%20%22cdata%22%20name=%20%22audiosourcename%22%20val=%20%22empty%22%3E%3C![CDATA[${mainSpkName}]]%3E"
+			groupCmd += "%3C/p%3E%3Cp%20type=%20%22str%22%20name=%20%22audiosourcetype%22%20val=%20%22speaker%22/%3E"
+		if (groupData.groupType == "Surround") {
+			groupCmd += "%3Cp%20type=%22str%22%20name=%22channeltype%22%20val=%22${groupData.Main.spkLoc}%22/%3E"
+			groupCmd += "%3Cp%20type=%22dec%22%20name=%22channelvolume%22%20val=%22${groupData.Main.spkChVol}%22/%3E"
+		}
 
 //	Add subspeaker strings and update subspeaker data
-	def i = 1
-	while (i < groupData.noSubSpks.toInteger() + 1) {
-		def spkData = groupData."Sub_${i}"
-		def subSpkIP = parent.getIP(spkData.spkDNI)
-		groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22subspkip%22%20val=%20%22${subSpkIP}%22/%3E"
-		groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22subspkmacaddr%22%20val=%20%22${spkData.spkMAC}%22/%3E"
-		if (groupData.groupType == "Surround") {
-			groupCmd += "%3Cp%20type=%22str%22%20name=%22subchanneltype%22%20val=%22${spkData.spkLoc}%22/%3E"
+		def i = 1
+		while (i < groupData.noSubSpks.toInteger() + 1) {
+			def spkData = groupData."Sub_${i}"
+			def subSpkIP = parent.getIP(spkData.spkDNI)
+			groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22subspkip%22%20val=%20%22${subSpkIP}%22/%3E"
+			groupCmd += "%3Cp%20type=%20%22str%22%20name=%20%22subspkmacaddr%22%20val=%20%22${spkData.spkMAC}%22/%3E"
+			if (groupData.groupType == "Surround") {
+				groupCmd += "%3Cp%20type=%22str%22%20name=%22subchanneltype%22%20val=%22${spkData.spkLoc}%22/%3E"
+			}
+			parent.sendCmdToSpeaker(spkData.spkDNI, "startSubSpeaker", spkData.spkDefVol)
+			i = i + 1
 		}
-		parent.sendCmdToSpeaker(spkData.spkDNI, "startSubSpeaker", spkData.spkDefVol)
-		i = i + 1
-	}
 
 //	Send group command and update main speaker data
-	setVolume(groupData.Main.spkDefVol.toInteger())
-	if (groupData.groupType == "Surround") {
-		sendSyncCmd("/UIC?cmd=%3Cname%3ESetEqualizeVolMultich%3C/name%3E" +
-				"%3Cp%20type=%22str%22%20name=%22groupspkvol%22%20val=%22equalize%22/%3E")
+		def cmd
+		if (groupData.groupType == "Surround") {
+			cmd = sendSyncCmd("/UIC?cmd=%3Cname%3ESetEqualizeVolMultich%3C/name%3E" +
+							  "%3Cp%20type=%22str%22%20name=%22groupspkvol%22%20val=%22equalize%22/%3E")
+		}
+		cmd = sendSyncCmd(groupCmd)
+		cmd = sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+		setVolume(groupData.Main.spkDefVol.toInteger())
+
+		state.activeGroupNo = groupNo
+		state.spkType = "Main"
+		sendEvent(name: "activeGroup", value: "${groupData.groupName}")
+		logInfo("groupStart: Group ${groupData.groupName} started.")
 	}
-	sendSyncCmd(groupCmd)
-	state.activeGroupNo = groupNo
-	state.spkType = "Main"
-	sendEvent(name: "activeGroup", value: "${groupData.groupName}")
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
-	logInfo("groupStart: Group ${groupData.groupName} started.")
 }
 
 def startSubSpeaker(spkVolume) {
 	logDebug("startSubSpeaker: speaker volume = ${spkVolume}, mainSpkDni = %{mainSpkDNI}")
 	pauseExecution(10000)
+	def cmds = []
+	def cmd = sendCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 	setVolume(spkVolume.toInteger())
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 }
 
 def groupVolume(groupVolume, curVol) {
@@ -1364,13 +1446,12 @@ def groupStop() {
 	def groupData = state."group_${groupNo}_Data"
 	logDebug("groupStop: groupNo = ${groupNo}, groupData = ${groupData}")
 
-	sendSyncCmd("/UIC?cmd=%3Cname%3ESetUngroup%3C/name%3E")
-	sendEvent(name: "activeGroup", value: "none")
-	sendCmd("/UIC?cmd=%3Cname%3ESetChVolMultich%3C%2Fname%3E" +
-			"%3Cp%20type%3D%22dec%22%20name%3D%22chvol%22%20val%3D%220%22%2F%3E")
-	pauseExecution(1000)
-	setVolume(groupData.Main.spkDefVol.toInteger())
-
+	def cmd = sendSyncCmd("/UIC?cmd=%3Cname%3ESetUngroup%3C/name%3E")
+	cmds = sendSyncCmd("/UIC?cmd=%3Cname%3ESetChVolMultich%3C%2Fname%3E" +
+					   "%3Cp%20type%3D%22dec%22%20name%3D%22chvol%22%20val%3D%220%22%2F%3E")
+	cmd = sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+	cmd = setVolume(groupData.Main.spkDefVol.toInteger())
+	
 	def spksInGroup = groupData.noSubSpks.toInteger() + 1
 	def i = 1
 	while (i < spksInGroup) {
@@ -1379,21 +1460,20 @@ def groupStop() {
 		def subSpkDNI = spkData.spkDNI
 		parent.sendCmdToSpeaker(subSpkDNI, "stopSubSpeaker", spkData.spkDefVol)
 	}
-
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+	sendEvent(name: "activeGroup", value: "none")
 	logInfo("groupStop: Active Group Stopped.")
 }
 
 def stopSubSpeaker(defVol) {
 	logDebug("stopSubSpeaker: default volume = ${defVol}")
-	sendSyncCmd("/UIC?cmd=%3Cname%3ESetUngroup%3C/name%3E")
+	def cmd = sendSyncCmd("/UIC?cmd=%3Cname%3ESetUngroup%3C/name%3E")
+	cmd = sendSyncCmd("/UIC?cmd=%3Cname%3ESetChVolMultich%3C%2Fname%3E" +
+					  "%3Cp%20type%3D%22dec%22%20name%3D%22chvol%22%20val%3D%220%22%2F%3E")
+	cmd = sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
+	cmd = sendSyncCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
+	cmd = getPlayStatus()
 	setVolume(defVol.toInteger())
-	sendSyncCmd("/UIC?cmd=%3Cname%3ESetChVolMultich%3C%2Fname%3E" +
-			"%3Cp%20type%3D%22dec%22%20name%3D%22chvol%22%20val%3D%220%22%2F%3E")
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
-	sendSyncCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
-	getPlayStatus()
-	runIn(3, setTrackDescription)
+	runIn(5, setTrackDescription)
 }
 
 def groupDelete(groupNo) {
@@ -1416,6 +1496,9 @@ def groupDelete(groupNo) {
 def execAppCommand(command, param1, param2, param3) {
 	logDebug("execAppCommand: command = ${command}, params = ${param1} // ${param2}")
 	switch(command) {
+		case "speak":
+			speak(param1, param2, param3)
+			break
 		case "playTextAndRestore":
 			playTextAndRestore(param1, param2)
 			break
@@ -1481,7 +1564,7 @@ private sendSpeakCmd(String action, Map body){
 
 private sendCmd(command){
 	def host = "${getDataValue("deviceIP")}:55001"
-	logDebug("sendCmd: Command= ${command}, host = ${host}")
+	logDebug("sendCmd: [command: ${command}, host: ${host}]")
 	try {
 		sendHubCommand(new hubitat.device.HubAction("""GET ${command} HTTP/1.1\r\nHOST: ${host}\r\n\r\n""",
 													hubitat.device.Protocol.LAN, host))
@@ -1510,26 +1593,31 @@ def parse(resp) {
 }
 
 private sendSyncCmd(command){
+	def logData = [:]
+	def retData
 	def host = "http://${getDataValue("deviceIP")}:55001"
-	logDebug("sendSyncCmd: Command= ${command}, host = ${host}")
+	logData << [cmd: command, host: host]
 	try {
-		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 5]) { resp ->
+		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 2]) { resp ->
 			if(resp.status != 200) {
-				logDebug("sendSyncCmd, Command ${command}: Error return: ${resp.status}")
-				return
+				logData << [status: "httpStatus", status: resp.status]
+				retData = [status: "error"]
 			} else if (resp.data == null){
-				logDebug("sendSyncCmd, Command ${command}: No data in command response.")
-				return
+				logData << [status: "nullResponse"]
+				retData = [status: "error"]
 			}
 			def respMethod = resp.data.method
 			def respData = resp.data.response
 			extractData(respMethod, respData)
+			logData << [method: respMethod, data: respData]
+			retData = [status: "ok", method: respMethod, data: respData]
 		}
-	} catch (error) {
-		if (command == "/UIC?cmd=%3Cname%3EGetPlayStatus%3C/name%3E") { return }
-		logWarn("sendSyncCmd, Command ${command}: No response received.  Error = ${error}")
-		return "commsError"
+	} catch (err) {
+		logData << [status: "responseTimeout", error: err]
+		retData = [status: "error"]
 	}
+	logDebug("sendSyncCmd: ${logData}")
+	return retData
 }
 
 def extractData(respMethod, respData) {
@@ -1552,35 +1640,32 @@ def extractData(respMethod, respData) {
 		case "MediaBufferEndEvent":
  		case "PausePlaybackEvent":
 		case "StopPlaybackEvent":
-			if (state.urlPlayback == true) { return }
-			setEvent("status", "paused")
-			state.updateTrackDescription = false
+			if (state.urlPlayback == false) {
+				setEvent("status", "paused")
+				state.updateTrackDescription = false
+			}
 			break
 		case "PlayStatus":
 		case "PlaybackStatus":
-			if (respData.playstatus == "playing") {  setEvent("status", "paused") }
+			if (respData.playstatus == "play") {  setEvent("status", "playing") }
 			else if (respData.playstatus == "pause") { setEvent("status", "paused") }
 			else if (respData.playstatus == "stop") { setEvent("status", "stopped") }
-			return respData.playstatus
 			break
 		case "MusicInfo":
-			return respData
 			break
 		case "RadioInfo":
-			return respData
 			break
 		case "MusicPlayTime":
-			return respData
 			break
 //	Audio Volume Response Methods
 		case "VolumeLevel":
 			def volume = respData.volume.toInteger()
 			def volScale = 30
-			if (getDataValue("hwType") == "Soundbar") { volScale = 100 }
-			volume = Math.round(100*volume/volScale).toInteger()
+			if (getDataValue("hwType") != "Soundbar") {
+				volume = Math.round(100*volume/volScale).toInteger()
+			}
 			setEvent("level", volume)
 			setEvent("volume", volume)
-			return volume
 			break
 		case "MuteStatus":
 			if (respData.mute == "on") { setEvent("mute", "muted")
@@ -1593,15 +1678,12 @@ def extractData(respMethod, respData) {
 			if (inputSource != "wifi") { subMode = "none" }
 			setEvent("inputSource", inputSource)
 			setEvent("subMode", subMode)
-			return [inputSource: inputSource, subMode: subMode]
 			break
 		case "7BandEQList":
-			return respData
 			break
 		case "7bandEQMode":
 		case "CurrentEQMode":
 			setEvent("eqPreset", "${respData.presetname}")
-			return respData
 			break
 		case "RepeatMode":
 			def subMode = device.currentValue("subMode")
@@ -1648,10 +1730,8 @@ def extractData(respMethod, respData) {
 			state.groupType = groupType
 			break
 		case "GroupName":
-			return respData.groupname
 			break
 		case "MusicList":
-			return respData
 			break
 		//	Ignored Response Methods
 		case "QueueList":
@@ -1669,12 +1749,12 @@ def extractData(respMethod, respData) {
 		case "RadioPlayList":
 		case "DmsList":
 		case "SpeakerStatus":
+		case "AvSourceAddedEvent":
 			break
 		default:
 			logWarn("extractData_${respMethod}: Method ignored. Data = ${respData}")
 			break
 	}
-	return respMethod
 }
 
 def setEvent(evtName, newValue) {
@@ -1685,20 +1765,21 @@ def setEvent(evtName, newValue) {
 
 //	===== Utility Methods =====
 def logTrace(msg) {
-	if (descriptionText == true) { log.trace "${device.label} ${driverVer()} ${msg}" }
+	log.trace "${device.label} ${driverVer()} ${msg}"
 }
 
 def logInfo(msg) {
-	if (descriptionText == true) { log.info "${device.label} ${driverVer()} ${msg}" }
+	if (textEnable || descriptionText) { log.info "${device.label} ${driverVer()} ${msg}" }
 }
 
 def debugLogOff() {
 	device.updateSetting("debug", [type:"bool", value: false])
+	device.updateSetting("logEnable", [type:"bool", value: false])
 	logInfo("Debug logging is false.")
 }
 
 def logDebug(msg){
-	if(debug == true) { log.debug "${device.label} ${driverVer()} ${msg}" }
+	if(logEnable || debug) { log.debug "${device.label} ${driverVer()} ${msg}" }
 }
 
 def logWarn(msg){ log.warn "${device.label} ${driverVer()} ${msg}" }

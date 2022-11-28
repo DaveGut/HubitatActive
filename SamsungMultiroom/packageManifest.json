@@ -1,10 +1,10 @@
 {
   "packageName": "Samsung MultiRoom Speakers",
   "author": "Dave Gutheinz",
-  "version": "3.3.8",
+  "version": "4.0",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2021-10-14",
-  "releaseNotes": "Added DLNA Player Support!",
+  "dateReleased": "2022-11-28",
+  "releaseNotes": "Continue fixing queue hang issues.",
   "apps": [
     {
       "id": "5cce274d-6d84-4a56-8533-6e4a61691242",

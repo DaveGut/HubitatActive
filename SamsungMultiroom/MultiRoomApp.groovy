@@ -14,17 +14,18 @@ and limitations under the  License.
 		THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
 		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
 ===== History =============================================================================
-04.30.21	3.3.6	Change discovery periodic to daily vice hourly.  Updates IPs at this
-					time or when app is run.
+4.0 Changes
+a.	Streamlined discovery to eliminate two run requirement to find devices.
+b.	Updated addDevices for deprecated command format.
 
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 
 import org.json.JSONObject
-def appVersion() { return "3.3.6" }
+def appVersion() { return "4.0" }
 def appName() { return "Samsung Speakers Integration" }
 
 definition(
-	name: "Samsung Speakers Integration",
+	name: "${appName()}",
 	namespace: "davegut",
 	author: "Dave Gutheinz",
 	description: "This is a Service Manager for Samsung WiFi speakers and soundbars.",
@@ -44,11 +45,12 @@ preferences {
 def mainPage() {
 	setInitialStates()
 	ssdpSubscribe()
-	def intro = "This Service Manager installs and manages Samsung WiFi Speakers. Additionally," +
-				"services are provided to the speakers during the grouping process.\n\n" +
+	def intro = "This Service Manager installs and manages Samsung WiFi Speakers. The app provides: \n\t" +
+				"1.\tUpdate device IPs every three hours.\n\t" +
+				"2.\tCoordination between grouped speakers.\n" +
 				"PROBLEMS OR ISSUES WITH THIS CODE SHOULD BE COORDINATED ON " +
 				"https://community.hubitat.com/ AT THE APPROPRIATE THREAD.\n\n\n"
-	def page1 = "Press 'Next' to install Speakers.  Select '<< App List' to return.  There are no" +
+	def page1 = "Press 'Next' to install Speakers.  Select '<< App List' to return.  There are no " +
 	 			"other options available."
 	return dynamicPage(
 		name: "mainPage",
@@ -70,7 +72,6 @@ def speakerDiscovery() {
 		options["${key}"] = value
 	}
 	ssdpDiscover()
-	runIn(4, verifySpeakers)
 	def text2 = "Please wait while we discover your Samsung Speakers. Discovery can take "+
 				"several minutes\n\r\n\r" +
 				"If no speakers are discovered after several minutes, press DONE.  This " +
@@ -112,12 +113,12 @@ def initialize() {
 	if (selectedSpeakers) {
 		addSpeakers()
 	}
-	runEvery1Hour(ssdpDiscover)
+	runEvery3Hours(ssdpDiscover)
 }
 
 def uninstalled() {
 	def children = getAllChildDevices()
-	logDebug("uninstalled: children = ${children}")
+	logInfo("uninstalled: children = ${children}")
 	children.each {
 		deleteChildDevice(it.deviceNetworkId)
 	}
@@ -125,7 +126,7 @@ def uninstalled() {
 
 //	===== Device Discovery =====
 void ssdpSubscribe() {
-	logDebug("ssdpSubscribe: location = ${location}")
+	logInfo("ssdpSubscribe: location = ${location}")
 	unsubscribe()
 	subscribe(location, "ssdpTerm.urn:dial-multiscreen-org:device:dialreceiver:1", ssdpHandler)
 	pauseExecution(2000)
@@ -133,14 +134,15 @@ void ssdpSubscribe() {
 }
 
 void ssdpDiscover() {
-	logDebug("ssdpDiscover")
+	logInfo("ssdpDiscover")
 	sendHubCommand(new hubitat.device.HubAction("lan discovery urn:dial-multiscreen-org:device:dialreceiver:1", hubitat.device.Protocol.LAN))
+	pauseExecution(2000)
 	sendHubCommand(new hubitat.device.HubAction("lan discovery urn:schemas-upnp-org:device:MediaRenderer:1", hubitat.device.Protocol.LAN))
 }
 
 def ssdpHandler(evt) {
 	def parsedEvent = parseLanMessage(evt.description)
-	logDebug("ssdpHandler:  parsedEvent = ${parsedEvent}")
+	logInfo("ssdpHandler:  parsedEvent = ${parsedEvent}")
 	def ip = convertHexToIP(parsedEvent.networkAddress)
 	def dni = parsedEvent.mac
 	def uuid = parsedEvent.ssdpUSN.replaceAll(/uuid:/, "").take(36)
@@ -151,7 +153,7 @@ def ssdpHandler(evt) {
 		if (child) {
 			if (speaker.ip != ip) {
 				speaker.ip = ip
-					logDebug("ssdpHandler: updating child data")
+					logInfo("ssdpHandler: updating child data")
 					child.updateDataValue("deviceIP", "${ip}")
 					child.updateDataValue("appVersion", "${appVersion()}")
 			}
@@ -164,21 +166,19 @@ def ssdpHandler(evt) {
 		speaker["ssdpPort"] = convertHexToInt(parsedEvent.deviceAddress)
 		speaker["ssdpPath"] = parsedEvent.ssdpPath
 		speakers << ["${uuid}": speaker]
-		logDebug("ssdpHandler:  speaker = ${speaker}")
+		logInfo("ssdpHandler:  speaker = ${speaker}")
+		verifySpeaker(speaker)
 	}
 }
 
-def verifySpeakers() {
-	logDebug("verifySpeakers")
-	def speakers = state.speakers.findAll { !it?.value?.model }
-	speakers.each {
-	 	sendCmd(it.value.ssdpPath, it.value.ip, it.value.ssdpPort, "verifySpeakerHandler")
-	}
+def verifySpeaker(speaker) {
+	logInfo("verifySpeaker: ${speaker}")
+	sendCmd(speaker.ssdpPath, speaker.ip, speaker.ssdpPort, "verifySpeakerHandler")
 }
 
 void verifySpeakerHandler(hubResponse) {
 	def respBody = new XmlSlurper().parseText(hubResponse.body)
-	logDebug("verifySpeakerHandler: respBody = ${respBody}")
+	logInfo("verifySpeakerHandler: respBody = ${respBody}")
 	def uuid = respBody?.device?.UDN?.text()
 	uuid = uuid.replaceAll(/uuid:/, "")
 	def speakers = state.speakers
@@ -198,9 +198,7 @@ void verifySpeakerHandler(hubResponse) {
 }
 
 def addSpeakers() {
-	logDebug("addSpeakers: selectedSpeakers: ${selectedSpeakers}")
-	def hub = location.hubs[0]
-	def hubId = hub.id
+	logInfo("addSpeakers: selectedSpeakers: ${selectedSpeakers}")
 	selectedSpeakers.each { dni ->
 		def selectedSpeaker = state.speakers.find { it.value.dni == dni }
 
@@ -211,7 +209,7 @@ def addSpeakers() {
 		if (!child) {
 			def inputSources = getInputSources(selectedSpeaker.value.model)
 
-			addChildDevice("davegut", "Samsung Wifi Speaker", selectedSpeaker.value?.dni, hubId, [
+			addChildDevice("davegut", "Samsung Wifi Speaker", selectedSpeaker.value?.dni, [
 				"label": "${selectedSpeaker.value.name}",
 				"name": "${selectedSpeaker.value.model}",
 				"data": [
@@ -230,7 +228,7 @@ def addSpeakers() {
 }
 
 def getInputSources(model) {
-	logDebug("soundbarInputSources: model = ${model}")
+	logInfo("soundbarInputSources: model = ${model}")
 	def sources
 	switch(model) {
 		case "HW-MS650":
@@ -258,7 +256,7 @@ def getInputSources(model) {
 
 //	===== Send commands to the Device =====
 private sendCmd(command, deviceIP, devicePort, action){
-	logDebug("sendCmd: IP = ${deviceIP} / Port = ${devicePort} / Command = ${command} / action = ${action}")
+	logInfo("sendCmd: IP = ${deviceIP} / Port = ${devicePort} / Command = ${command} / action = ${action}")
     def host = "${deviceIP}:${devicePort}"
     def sendCmd =sendHubCommand(new hubitat.device.HubAction("""GET ${command} HTTP/1.1\r\nHOST: ${host}\r\n\r\n""",
 															 hubitat.device.Protocol.LAN, host, [callback: action]))
@@ -266,7 +264,7 @@ private sendCmd(command, deviceIP, devicePort, action){
 
 private sendSyncCmd(command, ip){
 	def host = "http://${ip}:55001"
-	logDebug("sendSyncCmd: Command= ${command}, host = ${host}")
+	logInfo("sendSyncCmd: Command= ${command}, host = ${host}")
 	try {
 		httpGet([uri: "${host}${command}", contentType: "text/xml", timeout: 5]) { resp ->
 			return resp.data.response
@@ -279,14 +277,14 @@ private sendSyncCmd(command, ip){
 
 //	===== Support to child device handler =====
 def requestSubSpeakerData(groupData, mainSpkDni) {
-	logDebug("requestSubSpeakerData: groupData = ${groupData}, mainSpkDni = ${mainSpkDni}")
+	logInfo("requestSubSpeakerData: groupData = ${groupData}, mainSpkDni = ${mainSpkDni}")
 	def subSpkCount = 0
 	selectedSpeakers.each { dni ->
 		def selectedSpeaker = state.speakers.find { it.value.dni == dni }
 		if (selectedSpeaker.value.dni != mainSpkDNI) {
 			def child = getChildDevice(selectedSpeaker.value.dni)
 			def subSpeakerData = child.getSubSpeakerData()
-			if (subSpeakerData != "not Sub" && subSpeakerData != "commsError") {
+			if (subSpeakerData != "not Sub" && subSpeakerData != "error") {
 				subSpkCount += 1
 				groupData["Sub_${subSpkCount}"] = subSpeakerData
 			}
@@ -297,7 +295,7 @@ def requestSubSpeakerData(groupData, mainSpkDni) {
 }
 
 def getIP(spkDNI) {
-	logDebug("getIP: spkDNI = ${spkDNI}")
+	logInfo("getIP: spkDNI = ${spkDNI}")
 	def selectedSpeaker = state.speakers.find { it.value.dni == spkDNI }
 	def spkIP = selectedSpeaker.value.ip
 	return spkIP
@@ -308,8 +306,8 @@ def sendCmdToSpeaker(spkDNI, command, param1, param2 = null, param3 = null) {
 	child.execAppCommand(command, param1, param2, param3)
 }
 
-def logDebug(message) {
-	log.debug "${appName()} ${appVersion()}: ${message}"
+def logInfo(message) {
+	log.info "${appName()} ${appVersion()}: ${message}"
 }
 
 //	----- Utility Functions  SHOULD DISAPPEAR-----
