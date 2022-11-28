@@ -1003,8 +1003,7 @@ def refreshParse(resp, data) {
 	} else {
 		logData << [status: "notUpdated", reason: "not Connected to LAN"]
 	}
-//	logDebug("refreshParse: ${logData}")
-logTrace("refreshParse: ${logData}")
+	logDebug("refreshParse: ${logData}")
 }
 
 //	========== Samsung-specific Speaker Control ==========
