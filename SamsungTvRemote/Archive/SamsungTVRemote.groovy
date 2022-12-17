@@ -7,14 +7,8 @@ Complete documentation is available at:
 	https://github.com/DaveGut/HubitatActive/tree/master/SamsungTvRemote/Docs
 A Version 4.0 change description is contained at:
 	https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Docs/V4_0%20Notes.pdf
-A list (not comprehensive) of Samsung Smart TV Apps and their codes is contained at:
-	https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Docs/SamsungAppList.pdf
-
--1	a.  Fixed issue with smartThings volume not parsing.  (created event on enabling smartThings).
-	b.	Modified device data setup to not set data until any potential error has cleared.
-		Moved setting values outside the try clause.
 ===========================================================================================*/
-def driverVer() { return "4.0-1" }
+def driverVer() { return "4.0" }
 import groovy.json.JsonOutput
 def stConnect() { return connectST }
 
@@ -199,35 +193,33 @@ def getDeviceData() {
 	if (getDataValue("uuid")) {
 		respData << [status: "already run"]
 	} else {
-		def tvData
 		try{
 			httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
-				respData = resp.data
-				runIn(1, getArtModeStatus)
+				def wifiMac = resp.data.device.wifiMac
+				updateDataValue("deviceMac", wifiMac)
+				def alternateWolMac = wifiMac.replaceAll(":", "").toUpperCase()
+				updateDataValue("alternateWolMac", alternateWolMac)
+				device.setDeviceNetworkId(alternateWolMac)
+				def modelYear = "20" + resp.data.device.model[0..1]
+				updateDataValue("modelYear", modelYear)
+				def frameTv = "false"
+				if (resp.data.device.FrameTVSupport) {
+					frameTv = resp.data.device.FrameTVSupport
+				}
+				updateDataValue("frameTv", frameTv)
+				if (resp.data.device.TokenAuthSupport) {
+					tokenSupport = resp.data.device.TokenAuthSupport
+					updateDataValue("tokenSupport", tokenSupport)
+				}
+				def uuid = resp.data.device.duid.substring(5)
+				updateDataValue("uuid", uuid)
+				respData << [status: "OK", dni: alternateWolMac, modelYear: modelYear,
+							 frameTv: frameTv, tokenSupport: tokenSupport]
+				getArtModeStatus()
 			}
 		} catch (error) {
-			tvData << [status: "ERROR", reason: error]
+			respData << [status: "ERROR", reason: error]
 		}
-		def wifiMac = tvData.device.wifiMac
-		updateDataValue("deviceMac", wifiMac)
-		def alternateWolMac = wifiMac.replaceAll(":", "").toUpperCase()
-		updateDataValue("alternateWolMac", alternateWolMac)
-		device.setDeviceNetworkId(alternateWolMac)
-		def modelYear = "20" + tvData.device.model[0..1]
-		updateDataValue("modelYear", modelYear)
-		def frameTv = "false"
-		if (tvData.device.FrameTVSupport) {
-			frameTv = tvData.device.FrameTVSupport
-		}
-		updateDataValue("frameTv", frameTv)
-		if (tvData.device.TokenAuthSupport) {
-			tokenSupport = tvData.device.TokenAuthSupport
-			updateDataValue("tokenSupport", tokenSupport)
-		}
-		def uuid = tvData.device.duid.substring(5)
-		updateDataValue("uuid", uuid)
-		respData << [status: "OK", dni: alternateWolMac, modelYear: modelYear,
-					 frameTv: frameTv, tokenSupport: tokenSupport]
 	}
 	return respData
 }
@@ -243,7 +235,6 @@ def stUpdate() {
 		logWarn("\n\n\t\t<b>Enter the deviceId from the Log List and Save Preferences</b>\n\n")
 		stData << [status: "ERROR", date: "no stDeviceId"]
 	} else {
-		sendEvent(name: "volume", value: 0)
 		def pollInterval = stPollInterval
 		if (pollInterval == null) { 
 			pollInterval = "15"
@@ -570,6 +561,120 @@ def findNextApp() {
 	}
 }
 
+def XXXAPLIST() {
+/*	These are known apps as of June 2022.  The apps beginning
+with "3" are the newer apps.  You can tell their Samsung
+deployment year by the four digits after the "3".  This can be
+used to start apps not captured in method getAppList using the
+code.  If successful, the app list will be updated for future use.
+		3201704012147: "10 play",
+		3201803015934: "7plus",
+		3201607010031: "9Now",
+		3201812017479: "ABC iview",
+		111299002148: "All 4",
+		AQKO41xyKP.AmazonAlexa: "Amazon Alexa",
+		3202004020626: "Amazon Alexa",
+		3201710014874: "Amazon Music",
+		3201611011005: "AntenaPlay.ro",
+		3201908019041: "Apple Music",
+		3201807016597: "Apple TV",
+		3202011022316: "ARTE",
+		3201910019420: "B.tv",
+		3201601007670: "BBC iPlayer",
+		3201602007865: "BBC News",
+		3202003020365: "BBC Sounds",
+		3202007021336: "Benshi",
+		3202010022098: "BINGE",
+		3201909019175: "BritBox",
+		3201803015869: "Canaal Digitaal",
+		3201606009910: "CANAL+",
+		3201506003488: "Crave",
+		3201506003486: "CTV",
+		3201806016390: "DAZN",
+		3201608010191: "Deezer",
+		3201907018786: "DIRECTV GO",
+		3201803015944: "Discovery+",
+		MCmYXNxgcu.DisneyPlus: "Disney+",
+		3201901017640: "Disney+",
+		3201608010385: "EduPedia",
+		"vYmY3ACVaa.emby": "Emby",
+		3201703012079: "Eurosport Player",
+		3202004020674: "Explore Google Assistant",
+		11091000000: "Facebook Watch",
+		3201906018693: "Focus Sat",
+		3201910019449: "Foxtel",
+		3202103023232: "france.tv",
+		3201710015037: "Gallery",
+		3201908019022: "globoplay",
+		3202008021439: "Google Duo",
+		3201806016381: "hayu",
+		3201706012478: "HBO GO",
+		cj37Ni3qXM.HBONow: "HBO Max",
+		3201601007230: "HBO Max",
+		LBUAQX1exg.Hulu: "Hulu",
+		3201601007625: "Hulu",
+		3201907018784: "Internet",
+		"org.tizen.browser": "Internet",
+		121299000089: "ITV Hub",
+		3201910019354: "Kayo Sports",
+		3201910019457: "Kidoodle.TV FREE, KidSafe Videos",
+		3201901017768: "Kijk",
+		3201703012065: "Love Nature 4K",
+		3201612011418: "McAfee Security",
+		3201603008210: "MLB",
+		3201611011210: "Molotov",
+		121299000612: "My5",
+		11101200001: "Netflix",
+		3201907018807: "Netflix",
+		3202012022421: "NL Ziet",
+		3202011022131: "NOW PlayTV",
+		3201603008746: "NOW TV",
+		3201706014250: "NPO",
+		3201703012029: "OCS",
+		3202103023185: "OQEE by Free",
+		3201710014866: "Orange TV Go",
+		3201506003175: "Pathe Thuis",
+		gzcc4LRFBF.Peacock: "Peacock TV"
+		3201810017091: "Playzer",
+		3201512006963: "Plex",
+		3201512006785: "Prime Video",
+		3201910019365: "Prime Video",
+		3201909019271: "PrivacyChoices",
+		3201711015226: "Radio UK",
+		3202012022468: "Radio WOW",
+		111399002034: "RaiPlay",
+		3201511006428: "Rakuten TV",
+		3201704012212: "RMC Sport",
+		3201510005981: "SBS On Demand",
+		3202009021877: "Security Center",
+		111399002220: "SiriusXM",
+		ZmmGjO6VKO.slingtv: "Sling TV",
+		3201710015016: "SmartThings",
+		3201910019378: "SmartThings",
+		3201606009684: "Spotify",
+		3201606009798: "Stan",
+		3201702011851: "Steam Link",
+		3201604009182: "Telecine",
+		3202008021462: "Telefoot",
+		11101000407: "Telstra TV Box Office",
+		111399000741: "The Weather Network",
+		3201805016367: "TIDAL",
+		3202008021577: "TikTok",
+		3KA0pm7a7V.TubiTV: "Tubi Free Movies & TV",
+		3201504001965: "Tubi Free Movies & TV",
+		121299000101: "TuneIn",
+		3201806016432: "UKTV Play",
+		3201710015067: "Universal Guide",
+		3201810017074: "Videoland",
+		111299000769: "VOYO.RO",
+		kk8MbItQ0H.VUDU" "VUDU",
+		111012010001: "VUDU",
+		111299001912: "YouTube",
+		3201611010983: "YouTube Kids",
+		3201707014489: "YouTube TV",
+		PvWgqxV3Xa.YouTubeTV: "YouTube TV"
+*/
+}
 def appIdList() {
 	def appList = [
 		"kk8MbItQ0H.VUDU",
@@ -583,8 +688,6 @@ def appIdList() {
 		"cj37Ni3qXM.HBONow",
 		"gzcc4LRFBF.Peacock",
 		"9Ur5IzDKqV.TizenYouTube",
-		"BjyffU0l9h.Stream",
-		"3202203026841",
 		"3202103023232",
 		"3202103023185",
 		"3202012022468",
