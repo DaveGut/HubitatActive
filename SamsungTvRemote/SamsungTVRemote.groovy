@@ -202,7 +202,7 @@ def getDeviceData() {
 		def tvData
 		try{
 			httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 5]) { resp ->
-				respData = resp.data
+				tvData = resp.data
 				runIn(1, getArtModeStatus)
 			}
 		} catch (error) {
