@@ -243,7 +243,9 @@ def stUpdate() {
 		logWarn("\n\n\t\t<b>Enter the deviceId from the Log List and Save Preferences</b>\n\n")
 		stData << [status: "ERROR", date: "no stDeviceId"]
 	} else {
-		sendEvent(name: "volume", value: 0)
+		if (device.currentValue("volume") == null) {
+			sendEvent(name: "volume", value: 0)
+		}
 		def pollInterval = stPollInterval
 		if (pollInterval == null) { 
 			pollInterval = "15"
