@@ -61,7 +61,6 @@ metadata {
 		command "channelUp"
 		command "channelDown"
 		command "previousChannel"
-		command "nextChannel"
 		//	Playing Navigation Commands
 		command "exit"
 		command "Return"
