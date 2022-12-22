@@ -984,78 +984,96 @@ def deviceSetupParse(mainData) { // library marker davegut.samsungTV-ST, line 10
 
 def statusParse(mainData) { // library marker davegut.samsungTV-ST, line 126
 	def stData = [:] // library marker davegut.samsungTV-ST, line 127
-	if (device.currentValue("switch") == "on") { // library marker davegut.samsungTV-ST, line 128
-		def volume = mainData.audioVolume.volume.value.toInteger() // library marker davegut.samsungTV-ST, line 129
-		if (device.currentValue("volume").toInteger() != volume) { // library marker davegut.samsungTV-ST, line 130
-			sendEvent(name: "volume", value: volume) // library marker davegut.samsungTV-ST, line 131
-			stData << [volume: volume] // library marker davegut.samsungTV-ST, line 132
-		} // library marker davegut.samsungTV-ST, line 133
+	if (logEnable) { // library marker davegut.samsungTV-ST, line 128
+		def quickLog = [:] // library marker davegut.samsungTV-ST, line 129
+		try { // library marker davegut.samsungTV-ST, line 130
+			quickLog << [ // library marker davegut.samsungTV-ST, line 131
+				switch: device.currentValue("switch"), // library marker davegut.samsungTV-ST, line 132
+				volume: mainData.audioVolume.volume.value, // library marker davegut.samsungTV-ST, line 133
+				mute: mainData.audioMute.mute.value, // library marker davegut.samsungTV-ST, line 134
+				input: mainData.mediaInputSource.inputSource.value, // library marker davegut.samsungTV-ST, line 135
+				channel: mainData.tvChannel.tvChannel.value, // library marker davegut.samsungTV-ST, line 136
+				channelName: mainData.tvChannel.tvChannelName.value, // library marker davegut.samsungTV-ST, line 137
+				pictureMode: mainData["custom.picturemode"].pictureMode.value, // library marker davegut.samsungTV-ST, line 138
+				soundMode: mainData["custom.soundmode"].soundMode.value, // library marker davegut.samsungTV-ST, line 139
+				transportStatus: mainData.mediaPlayback.playbackStatus.value] // library marker davegut.samsungTV-ST, line 140
+		} catch (err) { // library marker davegut.samsungTV-ST, line 141
+			quickLog << [error: ${err}, data: mainData] // library marker davegut.samsungTV-ST, line 142
+		} // library marker davegut.samsungTV-ST, line 143
+		logDebug("statusParse: [quickLog: ${quickLog}]") // library marker davegut.samsungTV-ST, line 144
+	} // library marker davegut.samsungTV-ST, line 145
+	if (device.currentValue("switch") == "on") { // library marker davegut.samsungTV-ST, line 146
+		def volume = mainData.audioVolume.volume.value.toInteger() // library marker davegut.samsungTV-ST, line 147
+		if (device.currentValue("volume").toInteger() != volume) { // library marker davegut.samsungTV-ST, line 148
+			sendEvent(name: "volume", value: volume) // library marker davegut.samsungTV-ST, line 149
+			stData << [volume: volume] // library marker davegut.samsungTV-ST, line 150
+		} // library marker davegut.samsungTV-ST, line 151
 
-		def mute = mainData.audioMute.mute.value // library marker davegut.samsungTV-ST, line 135
-		if (device.currentValue("mute") != mute) { // library marker davegut.samsungTV-ST, line 136
-			sendEvent(name: "mute", value: mute) // library marker davegut.samsungTV-ST, line 137
-			stData << [mute: mute] // library marker davegut.samsungTV-ST, line 138
-		} // library marker davegut.samsungTV-ST, line 139
+		def mute = mainData.audioMute.mute.value // library marker davegut.samsungTV-ST, line 153
+		if (device.currentValue("mute") != mute) { // library marker davegut.samsungTV-ST, line 154
+			sendEvent(name: "mute", value: mute) // library marker davegut.samsungTV-ST, line 155
+			stData << [mute: mute] // library marker davegut.samsungTV-ST, line 156
+		} // library marker davegut.samsungTV-ST, line 157
 
-		def inputSource = mainData.mediaInputSource.inputSource.value // library marker davegut.samsungTV-ST, line 141
-		if (device.currentValue("inputSource") != inputSource) { // library marker davegut.samsungTV-ST, line 142
-			sendEvent(name: "inputSource", value: inputSource)		 // library marker davegut.samsungTV-ST, line 143
-			stData << [inputSource: inputSource] // library marker davegut.samsungTV-ST, line 144
-		} // library marker davegut.samsungTV-ST, line 145
+		def inputSource = mainData.mediaInputSource.inputSource.value // library marker davegut.samsungTV-ST, line 159
+		if (device.currentValue("inputSource") != inputSource) { // library marker davegut.samsungTV-ST, line 160
+			sendEvent(name: "inputSource", value: inputSource)		 // library marker davegut.samsungTV-ST, line 161
+			stData << [inputSource: inputSource] // library marker davegut.samsungTV-ST, line 162
+		} // library marker davegut.samsungTV-ST, line 163
 
-		def tvChannel = mainData.tvChannel.tvChannel.value // library marker davegut.samsungTV-ST, line 147
-		if (tvChannel == "") { tvChannel = " " } // library marker davegut.samsungTV-ST, line 148
-		def tvChannelName = mainData.tvChannel.tvChannelName.value // library marker davegut.samsungTV-ST, line 149
-		if (tvChannelName == "") { tvChannelName = " " } // library marker davegut.samsungTV-ST, line 150
-		if (device.currentValue("tvChannelName") != tvChannelName) { // library marker davegut.samsungTV-ST, line 151
-			sendEvent(name: "tvChannel", value: tvChannel) // library marker davegut.samsungTV-ST, line 152
-			sendEvent(name: "tvChannelName", value: tvChannelName) // library marker davegut.samsungTV-ST, line 153
-			if (tvChannelName.contains(".")) { // library marker davegut.samsungTV-ST, line 154
-				getAppData(tvChannelName) // library marker davegut.samsungTV-ST, line 155
-			} else { // library marker davegut.samsungTV-ST, line 156
-				sendEvent(name: "currentApp", value: " ") // library marker davegut.samsungTV-ST, line 157
-			} // library marker davegut.samsungTV-ST, line 158
-			stData << [tvChannel: tvChannel, tvChannelName: tvChannelName] // library marker davegut.samsungTV-ST, line 159
-			if (getDataValue("frameTv") == "true" && !state.artModeWs) { // library marker davegut.samsungTV-ST, line 160
-				def artMode = "off" // library marker davegut.samsungTV-ST, line 161
-				if (tvChannelName == "art") { artMode = "on" } // library marker davegut.samsungTV-ST, line 162
-				sendEvent(name: "artModeStatus", value: artMode) // library marker davegut.samsungTV-ST, line 163
-			} // library marker davegut.samsungTV-ST, line 164
-		} // library marker davegut.samsungTV-ST, line 165
+		def tvChannel = mainData.tvChannel.tvChannel.value // library marker davegut.samsungTV-ST, line 165
+		if (tvChannel == "") { tvChannel = " " } // library marker davegut.samsungTV-ST, line 166
+		def tvChannelName = mainData.tvChannel.tvChannelName.value // library marker davegut.samsungTV-ST, line 167
+		if (tvChannelName == "") { tvChannelName = " " } // library marker davegut.samsungTV-ST, line 168
+		if (device.currentValue("tvChannelName") != tvChannelName) { // library marker davegut.samsungTV-ST, line 169
+			sendEvent(name: "tvChannel", value: tvChannel) // library marker davegut.samsungTV-ST, line 170
+			sendEvent(name: "tvChannelName", value: tvChannelName) // library marker davegut.samsungTV-ST, line 171
+			if (tvChannelName.contains(".")) { // library marker davegut.samsungTV-ST, line 172
+				getAppData(tvChannelName) // library marker davegut.samsungTV-ST, line 173
+			} else { // library marker davegut.samsungTV-ST, line 174
+				sendEvent(name: "currentApp", value: " ") // library marker davegut.samsungTV-ST, line 175
+			} // library marker davegut.samsungTV-ST, line 176
+			stData << [tvChannel: tvChannel, tvChannelName: tvChannelName] // library marker davegut.samsungTV-ST, line 177
+			if (getDataValue("frameTv") == "true" && !state.artModeWs) { // library marker davegut.samsungTV-ST, line 178
+				def artMode = "off" // library marker davegut.samsungTV-ST, line 179
+				if (tvChannelName == "art") { artMode = "on" } // library marker davegut.samsungTV-ST, line 180
+				sendEvent(name: "artModeStatus", value: artMode) // library marker davegut.samsungTV-ST, line 181
+			} // library marker davegut.samsungTV-ST, line 182
+		} // library marker davegut.samsungTV-ST, line 183
 
-		def trackDesc = inputSource // library marker davegut.samsungTV-ST, line 167
-		if (tvChannelName != " ") { trackDesc = tvChannelName } // library marker davegut.samsungTV-ST, line 168
-		if (device.currentValue("trackDescription") != trackDesc) { // library marker davegut.samsungTV-ST, line 169
-			sendEvent(name: "trackDescription", value:trackDesc) // library marker davegut.samsungTV-ST, line 170
-			stData << [trackDescription: trackDesc] // library marker davegut.samsungTV-ST, line 171
-		} // library marker davegut.samsungTV-ST, line 172
+		def trackDesc = inputSource // library marker davegut.samsungTV-ST, line 185
+		if (tvChannelName != " ") { trackDesc = tvChannelName } // library marker davegut.samsungTV-ST, line 186
+		if (device.currentValue("trackDescription") != trackDesc) { // library marker davegut.samsungTV-ST, line 187
+			sendEvent(name: "trackDescription", value:trackDesc) // library marker davegut.samsungTV-ST, line 188
+			stData << [trackDescription: trackDesc] // library marker davegut.samsungTV-ST, line 189
+		} // library marker davegut.samsungTV-ST, line 190
 
-		def pictureMode = mainData["custom.picturemode"].pictureMode.value // library marker davegut.samsungTV-ST, line 174
-		if (device.currentValue("pictureMode") != pictureMode) { // library marker davegut.samsungTV-ST, line 175
-			sendEvent(name: "pictureMode",value: pictureMode) // library marker davegut.samsungTV-ST, line 176
-			stData << [pictureMode: pictureMode] // library marker davegut.samsungTV-ST, line 177
-		} // library marker davegut.samsungTV-ST, line 178
+		def pictureMode = mainData["custom.picturemode"].pictureMode.value // library marker davegut.samsungTV-ST, line 192
+		if (device.currentValue("pictureMode") != pictureMode) { // library marker davegut.samsungTV-ST, line 193
+			sendEvent(name: "pictureMode",value: pictureMode) // library marker davegut.samsungTV-ST, line 194
+			stData << [pictureMode: pictureMode] // library marker davegut.samsungTV-ST, line 195
+		} // library marker davegut.samsungTV-ST, line 196
 
-		def soundMode = mainData["custom.soundmode"].soundMode.value // library marker davegut.samsungTV-ST, line 180
-		if (device.currentValue("soundMode") != soundMode) { // library marker davegut.samsungTV-ST, line 181
-			sendEvent(name: "soundMode",value: soundMode) // library marker davegut.samsungTV-ST, line 182
-			stData << [soundMode: soundMode] // library marker davegut.samsungTV-ST, line 183
-		} // library marker davegut.samsungTV-ST, line 184
+		def soundMode = mainData["custom.soundmode"].soundMode.value // library marker davegut.samsungTV-ST, line 198
+		if (device.currentValue("soundMode") != soundMode) { // library marker davegut.samsungTV-ST, line 199
+			sendEvent(name: "soundMode",value: soundMode) // library marker davegut.samsungTV-ST, line 200
+			stData << [soundMode: soundMode] // library marker davegut.samsungTV-ST, line 201
+		} // library marker davegut.samsungTV-ST, line 202
 
-		def transportStatus = mainData.mediaPlayback.playbackStatus.value // library marker davegut.samsungTV-ST, line 186
-		if (transportStatus == null || transportStatus == "") { // library marker davegut.samsungTV-ST, line 187
-			transportStatus = "stopped" // library marker davegut.samsungTV-ST, line 188
-		} // library marker davegut.samsungTV-ST, line 189
-		if (device.currentValue("transportStatus") != transportStatus) { // library marker davegut.samsungTV-ST, line 190
-			sendEvent(name: "transportStatus", value: transportStatus) // library marker davegut.samsungTV-ST, line 191
-			stData << [transportStatus: transportStatus] // library marker davegut.samsungTV-ST, line 192
-		} // library marker davegut.samsungTV-ST, line 193
-	} // library marker davegut.samsungTV-ST, line 194
+		def transportStatus = mainData.mediaPlayback.playbackStatus.value // library marker davegut.samsungTV-ST, line 204
+		if (transportStatus == null || transportStatus == "") { // library marker davegut.samsungTV-ST, line 205
+			transportStatus = "stopped" // library marker davegut.samsungTV-ST, line 206
+		} // library marker davegut.samsungTV-ST, line 207
+		if (device.currentValue("transportStatus") != transportStatus) { // library marker davegut.samsungTV-ST, line 208
+			sendEvent(name: "transportStatus", value: transportStatus) // library marker davegut.samsungTV-ST, line 209
+			stData << [transportStatus: transportStatus] // library marker davegut.samsungTV-ST, line 210
+		} // library marker davegut.samsungTV-ST, line 211
+	} // library marker davegut.samsungTV-ST, line 212
 
-	if (stData != [:]) { // library marker davegut.samsungTV-ST, line 196
-		logInfo("statusParse: ${stData}") // library marker davegut.samsungTV-ST, line 197
-	} // library marker davegut.samsungTV-ST, line 198
-} // library marker davegut.samsungTV-ST, line 199
+	if (stData != [:]) { // library marker davegut.samsungTV-ST, line 214
+		logInfo("statusParse: ${stData}") // library marker davegut.samsungTV-ST, line 215
+	} // library marker davegut.samsungTV-ST, line 216
+} // library marker davegut.samsungTV-ST, line 217
 
 // ~~~~~ end include (1215) davegut.samsungTV-ST ~~~~~
 
