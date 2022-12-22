@@ -295,7 +295,7 @@ def onPollParse(resp, data) {
 	}
 	if (powerState == "on") {
 		state.standbyTest = false
-		getArtModeStatus()
+//		getArtModeStatus()
 		if (!state.configured) {
 			logInfo("Auto Configuring changes to this TV.")
 			updated()
