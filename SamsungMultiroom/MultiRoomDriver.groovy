@@ -969,8 +969,11 @@ def refresh() {
 				sendEvent(name: "activeGroup", value: "none")
 			}
 			sendCmd("/UIC?cmd=%3Cname%3EGetFunc%3C/name%3E")
+			pauseExecution(500)
 			sendCmd("/UIC?cmd=%3Cname%3EGetVolume%3C/name%3E")
+			pauseExecution(500)
 			getPlayStatus()
+			pauseExecution(500)
 			sendCmd("/UIC?cmd=%3Cname%3EGetAcmMode%3C/name%3E")
 			runIn(2, setTrackDescription)
 		} else {
