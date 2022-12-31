@@ -1,31 +1,20 @@
 /*	===== HUBITAT INTEGRATION VERSION =====================================================
 Samsung WiFi Speaker Hubitat Driver
-		Copyright 2018 Dave Gutheinz
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this  file
-except in compliance with the License. You may obtain a copy of the License at:
-		http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the
-License is distributed on an  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-either express or implied. See the License for the specific language governing permissions
-and limitations under the  License.
+		Copyright 2022 Dave Gutheinz
+License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/License.md
 ===== DISCLAIMERS==========================================================================
 		THE AUTHOR OF THIS INTEGRATION IS NOT ASSOCIATED WITH SAMSUNG. THIS CODE USES
-		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND AS PERSONAL INVESTIGATION.
+		TECHNICAL DATA DERIVED FROM GITHUB SOURCES AND PERSONAL INVESTIGATION.
 ===== History =============================================================================
-4.0 Changes
-a.  Speak Command: Updated input to match current capability Speech Synthesis definition.
-b.	Logging:  Added descriptionText logging to preferences.  Change logical names to match
-	other Hubitat implementations.
-c.	Updated On and Off paradigm.  Switch now reflects is the device is on the LAN.  For
-	cmd on, will run a check.  For cmd off, will run stopAllActivity then run a check.
-d.	Switch checked every 1 minute.  Refresh and TTS functions will work only when switch = on.
+4.1 Updates
+a.	Fixed TTS not playing issue.
+b.	Converted preference name for information logging to a common format.
+c.	Added listAttributes() to display devices data when SavePreferences is run.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
-def driverVer() { return "4.0" }
+def driverVer() { return "4.1" }
 
 metadata {
 	definition (name: "Samsung Wifi Speaker",
@@ -53,7 +42,7 @@ metadata {
 		command "repeat"
 		command "shuffle"
 		command "stopAllActivity"
-		attribute "isConnected", "string"
+//		attribute "isConnected", "bool"
 		//	===== Samsung Player Preset Capability =====
 		attribute "Preset_1", "string"
 		attribute "Preset_2", "string"
@@ -106,7 +95,7 @@ metadata {
 		input ("notificationVolume", "num", title: "Notification volume increase in percent", defaultValue: 10)
 		input ("refresh_Rate","enum", title: "Device Refresh Interval", options: refreshRate, defaultValue: "15")
 		
-		input ("textEnable", "bool", title: "Enable descriptionText logging", defaultValue: true)
+		input ("infoLog", "bool", title: "Enable descriptionText logging", defaultValue: true)
 		input ("logEnable", "bool", title: "Enable debug logging", defaultValue: false)
 		input ("spkGroupLoc", "enum", title: "Surround/Stereo Speaker Location", options: positions)
 		if (getDataValue("hwType") == "Soundbar") {
@@ -156,7 +145,7 @@ def updated() {
 	state.playQueue = []
 
 	if (debug == true) { runIn(1800, debugLogOff) }
-	logData << [infoLog: descriptionText, debugLog: logEnable]
+	logData << [infoLog: infoLog, debugLog: logEnable]
 	clearQueue()
 	sendEvent(name: "switch", value: "on")
 	switch(refresh_Rate) {
@@ -174,18 +163,19 @@ def updated() {
 	}
 	logData << [refreshInt: refresh]
 	log.info "updated: ${logData}"
-	runIn(5, refresh)
+	runIn(3,refresh)
+	runIn(7, listAttributes)
 }
 
 //	===== Capability Switch for Amazon Integration =====
 def on() {
 	def onOff = "on"
-	def isConnected = refresh()
-	if (isConnected == "no") {
+	def connected = checkConnect()
+	if (connected == false) {
 		onOff = "off"
 	}
 	if (device.currentValue("switch") != onOff) {
-		if (isConnected == "no") {
+		if (connected == false) {
 			logWarn("on: [switch: off, reason: device not connected to LAN]")
 		}
 		setEvent("switch", onOff)
@@ -738,8 +728,9 @@ def playTrackAndResume(trackData, volume=null) {
 
 //	========== Play Queue Execution ==========
 def addToQueue(trackUri, duration, volume, resumePlay){
-	def logData = [:]
-	if (device.currentValue("isConnected") == "yes") {
+	def connected = checkConnect()
+	def logData = [connected: connected]
+	if (connected == true) {
 		if (volume == null) { volume = device.currentValue("volume").toInteger() }
 		logData << [status: "addedToQueue", uri: trackUri, duration: duration, volume: volume, resume: resumePlay]
 		duration = duration + 3
@@ -749,11 +740,10 @@ def addToQueue(trackUri, duration, volume, resumePlay){
 		state.playQueue.add(playData)	
 
 		if (state.playingNotification == false) {
-//			state.playingNotification = true							//	4.0
-			runInMillis(100, startPlayViaQueue, [data: resumePlay])		//	4.0
+			runInMillis(100, startPlayViaQueue, [data: resumePlay])
 		}
 	} else {
-		logData << [status: "aborted", reason: "Speaker not on LAN"]
+		logData << [status: "aborted"]
 		logWarn("addToQueue: ${logData}")
 	}
 	logDebug("addToQueue: ${logData}")
@@ -768,9 +758,7 @@ def startPlayViaQueue(resumePlay) {
 		def blankTrack = convertToTrack("     ")
 		execPlay(blankTrack.uri, true)
 	}
-	state.playingNotification = true						//	4.0
-//	pause()													//	4.0
-//	runIn(1, playViaQueue, [data: resumePlay])				//	4.0
+	state.playingNotification = true
 	runInMillis(100, playViaQueue, [data: resumePlay])
 }
 
@@ -879,8 +867,6 @@ def kickStartQueue(resumePlay = true) {
 
 def clearQueue() {
 	logDebug("clearQueue")
-//	state.remove("playQueue")	//	4.0
-//	pauseExecution(5000)		//	4.0
 	state.playQueue = []
 	state.playingNotification = false
 }
@@ -973,21 +959,11 @@ def refresh() {
 		updated()
 		return
 	}
-	def sendCmdParams = [
-		uri: "http://${getDataValue("deviceIP")}:8001/api/v2/",
-		timeout: 2
-	]
-	asynchttpGet("refreshParse", sendCmdParams)
-}
-def refreshParse(resp, data) {
 	def logData = [:]
-	def isConnected = "no"
-	if (resp.status == 200) {
-		isConnected = "yes"
-	}
-	logData << [isConnected: isConnected]
+	def connected = checkConnect()
+	logData << [connected: connected]
 	unschedule(setTrackDescription)
-	if (isConnected == "yes") {
+	if (connected == true) {
 		if (state.playingNotification == false) {
 			if (state.activeGroupNo == "" && device.currentValue("activeGroup")) {
 				sendEvent(name: "activeGroup", value: "none")
@@ -1003,7 +979,19 @@ def refreshParse(resp, data) {
 	} else {
 		logData << [status: "notUpdated", reason: "not Connected to LAN"]
 	}
-	logDebug("refreshParse: ${logData}")
+	logDebug("refresh: ${logData}")
+}
+
+def checkConnect() {
+	def connected
+	try{
+		httpGet([uri: "http://${getDataValue("deviceIP")}:8001/api/v2/", timeout: 5]) { resp ->
+			connected = true
+		}
+	} catch (error) {
+		connected= false
+	}
+	return connected
 }
 
 //	========== Samsung-specific Speaker Control ==========
@@ -1649,6 +1637,7 @@ def extractData(respMethod, respData) {
 			if (respData.playstatus == "play") {  setEvent("status", "playing") }
 			else if (respData.playstatus == "pause") { setEvent("status", "paused") }
 			else if (respData.playstatus == "stop") { setEvent("status", "stopped") }
+			else {setEvent("status", "unknown") }
 			break
 		case "MusicInfo":
 			break
@@ -1763,12 +1752,47 @@ def setEvent(evtName, newValue) {
 }
 
 //	===== Utility Methods =====
+def listAttributes() {
+	def attrs = device.getSupportedAttributes()
+	def attrList = [:]
+	attrs.each {
+		def val = device.currentValue("${it}")
+		attrList << ["${it}": val]
+	}
+	logInfo("Attributes: ${attrList}")
+	def dataValues = device.getData()
+	logInfo("DataValues: ${dataValues}")
+	def preferences = [
+		notificationVolume: notificationVolume,
+		refreshRate: refresh_Rate,
+		infoLog: infoLog,
+		debugLog: logEnable,
+		spkGroupLoc: spkGroupLoc,
+		ttsLang: ttsLang
+	]
+	logInfo("Preferences: ${preferences}")
+	def stateVars = [
+		mainSpkDNI : state.mainSpkDNI,
+		groupType : state.groupType,
+		triggered : state.triggered,
+		playingNotification : state.playingNotification,
+		activeGroupNo : state.activeGroupNo,
+		urlPresetData :  state.urlPresetData,
+		updateTrackDescription :  state.updateTrackDescription,
+		urlPlayback :  state.urlPlayback,
+		spkType :  state.spkType,
+		trackIcon :  state.trackIcon,
+		playQueue :  state.playQueue,
+	]
+	logInfo("StateVariables: ${stateVars}")
+}
+
 def logTrace(msg) {
 	log.trace "${device.label} ${driverVer()} ${msg}"
 }
 
 def logInfo(msg) {
-	if (textEnable || descriptionText) { log.info "${device.label} ${driverVer()} ${msg}" }
+	if (textEnable || descriptionText || infoLog) { log.info "${device.label} ${driverVer()} ${msg}" }
 }
 
 def debugLogOff() {
