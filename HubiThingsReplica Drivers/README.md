@@ -1,4 +1,4 @@
-# HubiThings Replica Drivers
+# HubiThings Replica Drivers MAY REQUIRE MOD TO APP
 
 This series of drivers is for HubiThings Replica.  It requires a HubiThings Replica version greater than 1.2.09.
 
