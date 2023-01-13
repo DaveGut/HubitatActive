@@ -6,7 +6,7 @@ Implements both SmartThings Cloud control plus LOCAL (LAN) control (Allows basic
   * Turn your TV set ON.
   * Assure your TV's IP is on the static list on your router.
   * Enter the TV's IP address in the preferences section of the Device's page and SAVE PREFERENCES
-### Note: If you want to use this for on/off detection only, DON'T".  Use the replica switch driver.
+            ### Note: If you want to use this for on/off detection only, DON'T".  Use the replica switch driver.
 
 ## Replica_Mono_Bulb.groovy: 
 Generic Monochromatic (White) bulb using SmartThings as the execution platform
