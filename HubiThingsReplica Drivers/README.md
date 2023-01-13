@@ -1,21 +1,21 @@
 # HubiThings Replica Drivers
 
-##Replica_Samsung_TV.groovy - REQUIRES YOU SET UP YOUR DEVICE_IP ON THE DEVICES PAGE AFTER INSTALLATION
+## Replica_Samsung_TV.groovy - REQUIRES YOU SET UP YOUR DEVICE_IP ON THE DEVICES PAGE AFTER INSTALLATION
 Implements bot SmartThings Cloud control plus LOCAL (LAN) control (allows basic remote operations if the SmartThings Cloud our your WAN is down.
-Special instruction:  After installation,
-* Assure your TV's IP is on the static list on your router.
-* Enter the TV's IP address in the preferences section of the Device's page and SAVE PREFERENCES
+* Special instruction:  After installation,
+  * Assure your TV's IP is on the static list on your router.
+  * Enter the TV's IP address in the preferences section of the Device's page and SAVE PREFERENCES
 
-##Replica_Mono_Bulb.groovy: 
+## Replica_Mono_Bulb.groovy: 
 Generic Monochromatic (White) bulb using SmartThings as the execution platform
 
-##Replica_Color_Bulb.groovy.groovy: 
+## Replica_Color_Bulb.groovy.groovy: 
 Generic Color Temperature bulb using SmartThings as the execution platform
 
-##Replica_CT_Bulb.groovyy: 
+## Replica_CT_Bulb.groovyy: 
 Generic Color bulb using SmartThings as the execution platform
 
-All drivers should be considered in early Beta state.  
+# All drivers should be considered in early Beta state.  
 
 
 ## Contributions
