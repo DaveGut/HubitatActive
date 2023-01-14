@@ -8,6 +8,12 @@ Implements both SmartThings Cloud control plus LOCAL (LAN) control (Allows basic
   * Enter the TV's IP address in the preferences section of the Device's page and SAVE PREFERENCES
   * ### Note: If you want to use this for on/off control and detection only, DON'T".  Use the replica switch driver.
 
+## Replica_Samsung_Soundbar.groovy:
+Implements the SmartThings functions related to a Samsung Soundbar.
+### Notes
+* If the SmartThings phone interface has the function "Go To Multiroom App", then this driver is very limited in functions.  Another driver is available at https://community.hubitat.com/t/release-samsung-multiroom-wifi-audio/1805.
+* NOT TESTED: Audio Notification and Input Source function.  My Multiroom soundbar does not support these through SmartThings.
+* Example audio test url's are in the comments at the top of the driver.
 
 ## Replica_Mono_Bulb.groovy: 
 Generic Monochromatic (White) bulb using SmartThings as the execution platform
