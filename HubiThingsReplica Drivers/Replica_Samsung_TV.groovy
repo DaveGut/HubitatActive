@@ -24,7 +24,7 @@ metadata {
 	definition (name: "Replica Samsung TV",
 				namespace: "replica",
 				author: "David Gutheinz",
-				importUrl: ""
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/HubiThingsReplica%20Drivers/Replica_Samsung_TV.groovy"
 			   ){
 		capability "Actuator"	//	new
 		capability "Configuration"
@@ -91,11 +91,8 @@ metadata {
 			input ("tvPwrOnMode", "enum", title: "TV Startup Display", 
 				   options: ["ART_MODE", "Ambient", "Tv", "HDMI1", 
 							 "HDMI2", "HDMI3", "HDMI4", "none"], defaultValue: "none")
-			input ("logEnable", "bool",  
-				   title: "Enable debug logging for 30 minutes", defaultValue: false)
-			input ("infoLog", "bool", 
-				   title: "Enable information logging",
-				   defaultValue: true)
+			input ("logEnable", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
+			input ("infoLog", "bool", title: "Enable information logging",defaultValue: true)
 			input ("traceLog", "bool", title: "Enable trace logging as directed by developer", defaultValue: false)
 			input ("findAppCodes", "bool", title: "Scan for App Codes (use rarely)", defaultValue: false)
 			input ("resetAppCodes", "bool", title: "Delete and Rescan for App Codes (use rarely)", defaultValue: false)
@@ -111,7 +108,6 @@ def installed() {
 	sendEvent(name: "numberOfButtone", value: 45)
 	sendEvent(name: "currentApp", value: " ")
 	state.appData = [:]
-	initialize()
 	runIn(5, updated)
 }
 
@@ -123,7 +119,6 @@ def updated() {
 		logWarn("\n\n\t\t<b>Enter the deviceIp and Save Preferences</b>\n\n")
 		updStatus << [status: "ERROR", data: "Device IP not set."]
 	} else {
-		logInfo("updated: ${updStatus}")
 		updStatus << [getDeviceData: configureLan()]
 		if (!getDataValue("driverVersion") || getDataValue("driverVersion") != driverVer()) {
 			updateDataValue("driverVersion", driverVer())
@@ -146,8 +141,9 @@ def updated() {
 	}
 	if (!state.soundModes) {
 		state.updateAvailableModes = true
-		refresh()
+		runIn(1, refresh)
 	}
+	logInfo("updated: ${updStatus}")
 }
 
 def initialize() {
@@ -506,8 +502,8 @@ def toggleInputSource() {
 }
 
 def setInputSource(inputSource) {
-	if (inputSource.contains("Tv")) {
-		inputSource = state.inputSources.find { it.contains("Tv") }
+	if (inputSource.contains(inputSource)) {
+		inputSource = state.inputSources.find { it.contains(inputSource) }
 	}
 	sendCommand("setInputSource", inputSource)
 }
