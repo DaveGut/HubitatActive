@@ -10,21 +10,21 @@ Implements both SmartThings Cloud control plus LOCAL (LAN) control (Allows basic
 
 ## Replica_Samsung_Soundbar.groovy:
 Implements the SmartThings functions related to a Samsung Soundbar.
-### Notes
-* If the SmartThings phone interface has the function "Go To Multiroom App", then this driver is very limited in functions.  Another driver is available at https://community.hubitat.com/t/release-samsung-multiroom-wifi-audio/1805.
-* NOT TESTED: Audio Notification and Input Source function.  My Multiroom soundbar does not support these through SmartThings.
-* Example audio test url's are in the comments at the top of the driver.
+* Notes
+  * If the SmartThings phone interface has the function "Go To Multiroom App", then this driver is very limited in functions.  Another driver is available at https://community.hubitat.com/t/release-samsung-multiroom-wifi-audio/1805.
+  * NOT TESTED: Audio Notification and Input Source function.  My Multiroom soundbar does not support these through SmartThings.
+  * Example audio test url's are in the comments at the top of the driver.
 
 ## Replica_Mono_Bulb.groovy: 
 Generic Monochromatic (White) bulb using SmartThings as the execution platform
 
 
 ## Replica_Color_Bulb.groovy.groovy: 
-Generic Color Temperature bulb using SmartThings as the execution platform
+    Generic Color Temperature bulb using SmartThings as the execution platform
 
 
 ## Replica_CT_Bulb.groovyy: 
-Generic Color bulb using SmartThings as the execution platform
+    Generic Color bulb using SmartThings as the execution platform
 
 
 # All drivers should be considered in early Beta state.  
