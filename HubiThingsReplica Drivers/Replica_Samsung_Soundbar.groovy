@@ -35,7 +35,7 @@ metadata {
 	definition (name: "Replica Samsung Soundbar",
 				namespace: "replica",
 				author: "David Gutheinz",
-				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Soundbar.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/HubiThingsReplica%20Drivers/Replica_Samsung_Soundbar.groovy"
 			   ){
 		capability "Switch"
 		capability "MediaInputSource"
