@@ -377,7 +377,6 @@ def onPollParse(resp, data) {
 def on() {
 	unschedule("onPoll")
 	runIn(60, setOnPollInterval)
-	sendKey("POWER")
 	def wolMac = getDataValue("alternateWolMac")
 	def cmd = "FFFFFFFFFFFF$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac"
 	wol = new hubitat.device.HubAction(
