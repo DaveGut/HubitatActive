@@ -5,7 +5,7 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== 2022 Version 4.0 ====================================================================
 Complete documentation is available at:
 	https://github.com/DaveGut/HubitatActive/tree/master/SamsungTvRemote/Docs
-A Version 4.0 change description is contained at:
+A Version change description is contained at:
 	https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Docs/V4_0%20Notes.pdf
 A list (not comprehensive) of Samsung Smart TV Apps and their codes is contained at:
 	https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/Docs/SamsungAppList.pdf
@@ -24,9 +24,17 @@ A list (not comprehensive) of Samsung Smart TV Apps and their codes is contained
 		sends key POWER to enable websocket.  If artModeStatus is not, includes alert that
 		the ST interface is required to assure functionality.
 	e.	Increased delay on TV Startup to set up start display.  Having timing issues.
+-3	Modified power on detection to use SmartThing power status if connectST is true.  Should
+	handle error where the device is returning a null powerState on the 8001 port.
+
+Known issues:
+a.	2022 Frame TVs without connectST enabled: when placed in art mode and motion 
+	detection/light detection enabled on the TV, the TV may drop out of artMode status.
+b.	Volume reporting zero.  Checks of several issues shows that this value is coming 
+	from SmartThings.
 
 ===========================================================================================*/
-def driverVer() { return "4.0-2g" }
+def driverVer() { return "4.0-3" }
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
@@ -121,8 +129,10 @@ metadata {
 			input ("infoLog", "bool", 
 				   title: "Enable information logging " + helpLogo(),
 				   defaultValue: true)
+			input ("traceLog", "bool", title: "Enable trace logging as directed by developer", defaultValue: false)
 			input ("connectST", "bool", title: "Connect to SmartThings for added functions", defaultValue: false)
 		}
+		def onPollMethod = "local"
 		if (connectST) {
 			input ("stApiKey", "string", title: "SmartThings API Key", defaultValue: "")
 			if (stApiKey) {
@@ -131,8 +141,10 @@ metadata {
 			input ("stPollInterval", "enum", title: "SmartThings Poll Interval (minutes)",
 				   options: ["off", "1", "5", "15", "30"], defaultValue: "15")
 			input ("stTestData", "bool", title: "Get ST data dump for developer", defaultValue: false)
-				
+			onPollMethod = "st"
 		}
+		input ("pollMethod", "enum", title: "Power Polling Method", defaultValue: onPollMethod,
+			   options: ["st": "SmartThings", "local": "Local", "off": "DISABLE"])
 		input ("pollInterval","enum", title: "Power Polling Interval (seconds)",
 			   options: ["off", "10", "15", "20", "30", "60"], defaultValue: "60")
 		input ("findAppCodes", "bool", title: "Scan for App Codes (use rarely)", defaultValue: false)
@@ -165,21 +177,22 @@ def updated() {
 		if (!getDataValue("driverVersion") || getDataValue("driverVersion") != driverVer()) {
 			updateDataValue("driverVersion", driverVer())
 			updStatus << [driverVer: driverVer()]
-			def cmds = []
-			cmds << state.remove("wsDeviceStatus")
-			cmds << state.remove("offCount")
-			cmds << state.remove("onCount")
-			cmds << state.remove("pollTimeOutCount")
-			cmds << state.remove("___2022_Model_Note___")
-			cmds << state.remove("configured")
-			cmds << state.remove("power")
-			cmds << state.remove("retry")
-			delayBetween(cmds, 1000)
 		}
 		if (logEnable) { runIn(1800, debugLogOff) }
-		updStatus << [logEnable: logEnable, infoLog: infoLog]
+		if (traceLog) { runIn(600, traceLogOff) }
+		updStatus << [logEnable: logEnable, infoLog: infoLog, traceLog: traceLog]
 		updStatus << [setOnPollInterval: setOnPollInterval()]
 		updStatus << [stUpdate: stUpdate()]
+		def newPollMethod = "local"
+		if (!pollMethod && connectST) {
+			newPollMethod = "st"
+		} else if (pollMethod == "st" && !connectST) {
+			newPollMethod = "local"
+		} else {
+			newPollMethod = pollMethod
+		}
+		device.updateSetting("pollMethod", [type:"enum", value: newPollMethod])
+		updStatus << [pollMethod: newPollMethod]
 	}
 	sendEvent(name: "volume", value: 0)
 	sendEvent(name: "level", value: 0)
@@ -196,17 +209,24 @@ def updated() {
 	}
 	pauseExecution(5000)
 	listAttributes(true)
+	logTrace("updated: onPollCount = $state.onPollCount")
+	state.onPollCount = 0
 }
 
 def setOnPollInterval() {
-	if (pollInterval == null) {
-		pollInterval = "60"
-		device.updateSetting("pollInterval", [type:"enum", value: "60"])
-	}
-	if (pollInterval == "60") {
-		runEvery1Minute(onPoll)
-	} else if (pollInterval != "off") {
-		schedule("0/${pollInterval} * * * * ?",  onPoll)
+	if (pollMethod == "off") {
+		pollInterval = "DISABLED"
+		device.updateSetting("pollInterval", [type:"enum", value: "ogg"])
+	} else {
+		if (pollInterval == null) {
+			pollInterval = "60"
+			device.updateSetting("pollInterval", [type:"enum", value: "60"])
+		}
+		if (pollInterval == "60") {
+			runEvery1Minute(onPoll)
+		} else if (pollInterval != "off") {
+			schedule("0/${pollInterval} * * * * ?",  onPoll)
+		}
 	}
 	return pollInterval
 }
@@ -257,28 +277,75 @@ def configure() {
 
 //	===== Polling/Refresh Capability =====
 def onPoll() {
-	def sendCmdParams = [
-		uri: "http://${deviceIp}:8001/api/v2/",
-		timeout: 3
-	]
-	asynchttpGet("onPollParse", sendCmdParams)
+	if (traceLog) { state.onPollCount += 1 }
+	if (pollMethod == "st") {
+		def sendData = [
+			path: "/devices/${stDeviceId.trim()}/status",
+			parse: "stPollParse"
+			]
+		asyncGet(sendData, "stPollParse")
+	} else if (pollMethod == "local") {
+		def sendCmdParams = [
+			uri: "http://${deviceIp}:8001/api/v2/",
+			timeout: 6
+		]
+		asynchttpGet("onPollParse", sendCmdParams)
+	} else {
+		logWarn("onPoll: Polling is disabled")
+	}
+	if (getDataValue("driverVersion") != driverVer()) {
+		logInfo("Auto Configuring changes to this TV.")
+		updated()
+		pauseExecution(3000)
+	}
+}
+
+def stPollParse(resp, data) {
+	def respLog = [:]
+	if (resp.status == 200) {
+		try {
+			def respData = new JsonSlurper().parseText(resp.data)
+			def onOff = respData.components.main.switch.switch.value
+			if (device.currentValue("switch") != onOff) {
+				logInfo("stPollParse: [switch: ${onOff}]")
+				sendEvent(name: "switch", value: onOff)
+				if (onOff == "on") {
+					getArtModeStatus()
+					runIn(4, setPowerOnMode)
+				}
+			}
+		} catch (err) {
+			respLog << [status: "ERROR",
+						errorMsg: err,
+						respData: resp.data]
+		}
+	} else {
+		respLog << [status: "ERROR",
+					httpCode: resp.status,
+					errorMsg: resp.errorMessage]
+	}
+	if (respLog != [:]) {
+		logWarn("stPollParse: ${respLog}")
+	}
 }
 
 def onPollParse(resp, data) {
 	def powerState
-	def onOff = "on"
 	if (resp.status == 200) {
-		powerState = new JsonSlurper().parseText(resp.data).device.PowerState
+		def tempPower = new JsonSlurper().parseText(resp.data).device.PowerState
+		if (tempPower == null) {
+			powerState = "on"
+		} else { 
+			powerState = tempPower
+		}
 	} else {
-		powerState = "notConnected"
+		logTrace("onPollParse: [state: error, status: $resp.status]")
+		powerState = "NC"
 	}
+	def onOff = "on"
 	if (powerState == "on") {
 		state.standbyTest = false
-		if (getDataValue("driverVersion") != driverVer()) {
-			logInfo("Auto Configuring changes to this TV.")
-			updated()
-			pauseExecution(3000)
-		}
+		onOff = "on"
 	} else {
 		if (device.currentValue("switch") == "on") {
 			//	If currently on, will need two non-"on" values to set switch off
@@ -294,8 +361,8 @@ def onPollParse(resp, data) {
 			//	as the tv powers down (takes 0.5 to 2 minutes to disconnect).
 			onOff = "off"
 		}
+		logTrace("onPollParse: [switch: ${device.currentValue("switch")}, onOff: ${onOff}, powerState: $powerState, stbyTest: $state.standbyTest]")
 	}
-		
 	if (device.currentValue("switch") != onOff) {
 		sendEvent(name: "switch", value: onOff)
 		if (onOff == "on") {
@@ -308,48 +375,25 @@ def onPollParse(resp, data) {
 
 //	===== Capability Switch =====
 def on() {
-	def powerState = getPowerState()
-	logInfo("on: [powerState = ${powerState}]")
 	unschedule("onPoll")
 	runIn(60, setOnPollInterval)
-	if (powerState == "standby") {
-		//	if power state is standby, WoL will not work, but power key will usually.
-		sendKey("POWER")
-	} else if (powerState == "notConnected") {
-		//	wolMac is that typically ised for Hubitat.
-		def wolMac = getDataValue("alternateWolMac")
-		def cmd = "FFFFFFFFFFFF$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac"
-		wol = new hubitat.device.HubAction(cmd,
-										   hubitat.device.Protocol.LAN,
-										   [type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
-											destinationAddress: "255.255.255.255:7",
-											encoding: hubitat.device.HubAction.Encoding.HEX_STRING])
-		sendHubCommand(wol)
-	} else {
-		//	If powerState is on, exit.  It is already on.
-		return
-	}
-	if (device.currentValue("switch") == "off") {
-		sendEvent(name: "switch", value: "on")
-	}
+	sendKey("POWER")
+	def wolMac = getDataValue("alternateWolMac")
+	def cmd = "FFFFFFFFFFFF$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac$wolMac"
+	wol = new hubitat.device.HubAction(
+		cmd,
+		hubitat.device.Protocol.LAN,
+		[type: hubitat.device.HubAction.Type.LAN_TYPE_UDPCLIENT,
+		 destinationAddress: "255.255.255.255:7",
+		 encoding: hubitat.device.HubAction.Encoding.HEX_STRING])
+	sendHubCommand(wol)
+	sendEvent(name: "switch", value: "on")
 	runIn(2, getArtModeStatus)
 	runIn(5, setPowerOnMode)
 }
 
-def getPowerState() {
-	def powerState
-	try {
-		httpGet([uri: "http://${deviceIp}:8001/api/v2/", timeout: 3]) { resp ->
-			powerState = resp.data.device.PowerState
-		}
-	} catch (error) {
-		powerState = "notConnected"
-	}
-	return powerState
-}
-
 def setPowerOnMode() {
-	logInfo("setPowerOnMode: [tvPwrOnMode: ${tvPwrOnMode}]")
+	logDebug("setPowerOnMode: [tvPwrOnMode: ${tvPwrOnMode}]")
 	if(tvPwrOnMode == "ART_MODE") {
 		artMode()
 	} else if (tvPwrOnMode == "Ambient") {
@@ -540,6 +584,7 @@ def sendKey(key, cmd = "Click") {
 def sendMessage(funct, data) {
 	def wsStat = device.currentValue("wsStatus")
 	logDebug("sendMessage: [wsStatus: ${wsStat}, function: ${funct}, data: ${data}, connectType: ${state.currentFunction}")
+	logTrace("sendMessage: [wsStatus: ${wsStat}, function: ${funct}, data: ${data}, connectType: ${state.currentFunction}")
 	if (wsStat != "open" || state.currentFunction != funct) {
 		connect(funct)
 		pauseExecution(600)
@@ -1074,6 +1119,7 @@ def setTvChannel(newChannel) {
 }
 
 def deviceCommand(cmdData) {
+	logTrace("deviceCommand: $cmdData")
 	def respData = [:]
 	if (!stDeviceId || stDeviceId.trim() == "") {
 		respData << [status: "FAILED", data: "no stDeviceId"]
@@ -1103,11 +1149,11 @@ def statusParse(mainData) {
 		log.warn mainData
 	}
 	def stData = [:]
-	if (logEnable) {
+	if (logEnable || traceLog) {
 		def quickLog = [:]
 		try {
 			quickLog << [
-				switch: device.currentValue("switch"),
+				switch: [device.currentValue("switch"), mainData.switch.switch.value],
 				volume: [device.currentValue("volume"), mainData.audioVolume.volume.value.toInteger()],
 				mute: [device.currentValue("mute"), mainData.audioMute.mute.value],
 				input: [device.currentValue("inputSource"), mainData.mediaInputSource.inputSource.value],
@@ -1120,11 +1166,12 @@ def statusParse(mainData) {
 			quickLog << [error: ${err}, data: mainData]
 		}
 		logDebug("statusParse: [quickLog: ${quickLog}]")
+		logTrace("statusParse: [quickLog: ${quickLog}]")
 	}
 
 	if (device.currentValue("switch") == "on") {
 		Integer volume = mainData.audioVolume.volume.value.toInteger()
-		if (device.currentValue("volume").toInteger() != volume) {
+		if (device.currentValue("volume").toInteger() != volume.toInteger()) {
 			sendEvent(name: "volume", value: volume)
 			sendEvent(name: "level", value: volume)
 			stData << [volume: volume]
@@ -1357,58 +1404,52 @@ def push(pushed) {
 	}
 }
 
-//	===== Library Integration =====
+//	===== LOGGING INTERFACE =====
+def listAttributes(trace = false) {
+	def attrs = device.getSupportedAttributes()
+	def attrList = [:]
+	attrs.each {
+		def val = device.currentValue("${it}")
+		attrList << ["${it}": val]
+	}
+	if (trace == true) {
+		logInfo("Attributes: ${attrList}")
+	} else {
+		logDebug("Attributes: ${attrList}")
+	}
+}
 
+def logTrace(msg){
+	if (traceLog) {
+		log.trace "${device.displayName}-${driverVer()}: ${msg}"
+	}
+}
 
-// ~~~~~ start include (1170) davegut.commonLogging ~~~~~
-library ( // library marker davegut.commonLogging, line 1
-	name: "commonLogging", // library marker davegut.commonLogging, line 2
-	namespace: "davegut", // library marker davegut.commonLogging, line 3
-	author: "Dave Gutheinz", // library marker davegut.commonLogging, line 4
-	description: "Common Logging Methods", // library marker davegut.commonLogging, line 5
-	category: "utilities", // library marker davegut.commonLogging, line 6
-	documentationLink: "" // library marker davegut.commonLogging, line 7
-) // library marker davegut.commonLogging, line 8
+def traceLogOff() {
+	if (traceLog) {
+		device.updateSetting("traceLog", [type:"bool", value: false])
+		state.onPollCount = 0
+		logInfo("traceLog off")
+	}
+}
 
-//	Logging during development // library marker davegut.commonLogging, line 10
-def listAttributes(trace = false) { // library marker davegut.commonLogging, line 11
-	def attrs = device.getSupportedAttributes() // library marker davegut.commonLogging, line 12
-	def attrList = [:] // library marker davegut.commonLogging, line 13
-	attrs.each { // library marker davegut.commonLogging, line 14
-		def val = device.currentValue("${it}") // library marker davegut.commonLogging, line 15
-		attrList << ["${it}": val] // library marker davegut.commonLogging, line 16
-	} // library marker davegut.commonLogging, line 17
-	if (trace == true) { // library marker davegut.commonLogging, line 18
-		logInfo("Attributes: ${attrList}") // library marker davegut.commonLogging, line 19
-	} else { // library marker davegut.commonLogging, line 20
-		logDebug("Attributes: ${attrList}") // library marker davegut.commonLogging, line 21
-	} // library marker davegut.commonLogging, line 22
-} // library marker davegut.commonLogging, line 23
+def logInfo(msg) {
+	if (textEnable || infoLog) {
+		log.info "${device.displayName}-${driverVer()}: ${msg}"
+	}
+}
 
-//	6.7.2 Change B.  Remove driverVer() // library marker davegut.commonLogging, line 25
-def logTrace(msg){ // library marker davegut.commonLogging, line 26
-	log.trace "${device.displayName}-${driverVer()}: ${msg}" // library marker davegut.commonLogging, line 27
-} // library marker davegut.commonLogging, line 28
+def debugLogOff() {
+	if (logEnable) {
+		device.updateSetting("logEnable", [type:"bool", value: false])
+		logInfo("debugLogOff")
+	}
+}
 
-def logInfo(msg) {  // library marker davegut.commonLogging, line 30
-	if (textEnable || infoLog) { // library marker davegut.commonLogging, line 31
-		log.info "${device.displayName}-${driverVer()}: ${msg}" // library marker davegut.commonLogging, line 32
-	} // library marker davegut.commonLogging, line 33
-} // library marker davegut.commonLogging, line 34
+def logDebug(msg) {
+	if (logEnable) {
+		log.debug "${device.displayName}-${driverVer()}: ${msg}"
+	}
+}
 
-def debugLogOff() { // library marker davegut.commonLogging, line 36
-	if (logEnable) { // library marker davegut.commonLogging, line 37
-		device.updateSetting("logEnable", [type:"bool", value: false]) // library marker davegut.commonLogging, line 38
-	} // library marker davegut.commonLogging, line 39
-	logInfo("debugLogOff") // library marker davegut.commonLogging, line 40
-} // library marker davegut.commonLogging, line 41
-
-def logDebug(msg) { // library marker davegut.commonLogging, line 43
-	if (logEnable) { // library marker davegut.commonLogging, line 44
-		log.debug "${device.displayName}-${driverVer()}: ${msg}" // library marker davegut.commonLogging, line 45
-	} // library marker davegut.commonLogging, line 46
-} // library marker davegut.commonLogging, line 47
-
-def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" } // library marker davegut.commonLogging, line 49
-
-// ~~~~~ end include (1170) davegut.commonLogging ~~~~~
+def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" }
