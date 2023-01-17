@@ -18,7 +18,7 @@ metadata {
 	definition (name: "Replica Color Bulb",
 				namespace: "replica",
 				author: "Dave Gutheinz",
-				importUrl: "https://github.com/DaveGut/HubitatActive/edit/master/HubiThingsReplica%20Drivers/Replica_Color_Bulb.groovy"
+				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/HubiThingsReplica%20Drivers/Replica_Color_Bulb.groovy"
 			   ) {
 		capability "Light"
 		capability "Switch"
