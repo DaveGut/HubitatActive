@@ -11,15 +11,8 @@
 *  for the specific language governing permissions and limitations under the License.
 *
 */
-@SuppressWarnings('unused')
 import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
-import groovy.transform.CompileStatic
-import groovy.transform.Field
-@Field volatile static Map<String,Long> g_mEventSendTime = [:]
-public static String driverVer() { return "0.1.1" }
-
-//	Beta Status:  Tested on Sengled and Kasa Bulbs integrated in SmartThings.
+public static String driverVer() { return "1.0" }
 
 metadata {
 	definition (name: "Replica Color Bulb",
@@ -65,7 +58,19 @@ def installed() {
 }
 
 def updated() {
-	initialize()	
+	unschedule()
+	def updStatus = [:]
+	initialize()
+	if (!getDataValue("driverVersion") || getDataValue("driverVersion") != driverVer()) {
+		updateDataValue("driverVersion", driverVer())
+		updStatus << [driverVer: driverVer()]
+	}
+	if (logEnable) { runIn(1800, debugLogOff) }
+	updStatus << [logEnable: logEnable, infoLog: infoLog]
+	runIn(5, refresh)
+	pauseExecution(5000)
+	listAttributes(true)
+	logInfo("updated: ${updStatus}")
 }
 
 def initialize() {
@@ -74,7 +79,7 @@ def initialize() {
 }
 
 def configure() {
-    logInfo "configure: configured default rules"
+	logInfo("configure: configured default rules")
     initialize()
     updateDataValue("rules", getReplicaRules())
 	sendCommand("configure")
@@ -154,7 +159,7 @@ def setLevelValue(level) {
 	sendEvent(name: "level", value: level, unit: "%")
 	//	Update attribute color if in color mode
 	if (device.currentValue("colorMode") == "COLOR") {
-		runIn(5, setColorValue)
+		runIn(3, setHslValue)
 	}
 	logDebug("setLevelValue: [level: ${level}%]")
 }
@@ -166,17 +171,21 @@ def setColorTemperature(colorTemp) {
 	else if (colorTemp < ctLow) { colorTemp = ctLow}
 	sendEvent(name: "colorMode", value: "CT")
 	sendCommand("setColorTemperature", colorTemp)
-}
-
-def setColorTemperatureValue(colorTemp) {
-	sendEvent(name: "colorTemperature", value: colorTemp, unit: "°K")
-	if (device.currentValue("colorMode") == "CT") {
-		def colorName = convertTemperatureToGenericColorName(colorTemp)
-		sendEvent(name: "colorName", value: colorName)
-		logDebug("setColorTemperatureValue: [colorTemperature: ${colorTemp}°K, colorName: ${colorName}]")
+	if(device.currentValue("colorTemperature") == colorTemp) {
+		setColorTemperatureValue(colorTemp)
 	}
 }
 
+def setColorTemperatureValue(colorTemp) {
+	def logData = [colorTemperature: "${colorTemp}°K"]
+	sendEvent(name: "colorTemperature", value: colorTemp, unit: "°K")
+	if (device.currentValue("colorMode") == "CT") {
+		def colorName = convertTemperatureToGenericColorName(colorTemp.toInteger())
+		sendEvent(name: "colorName", value: colorName, isChange: true)
+		logData << [colorName: colorName]
+	}
+	logDebug("setColorTemperatureValue: ${logData}")
+}
 
 //	Capability Color Control
 def setHue(hue) { 
@@ -193,98 +202,122 @@ def setSaturation(saturation) {
 	setColor([saturation: saturation])
 }
 
-def setColor(Map color) {
-	//	Design note.  SmartThings device do not set level via the setColor command
-	//	Added setLevel command if the color command has defined a new level.
+def setColor(color) {
+	log.trace color
 	if (color == null) {
 		LogWarn("setColor: Color map is null. Command not executed.")
 	} else {
 		def level = device.currentValue("level")
-		if (color.level) { level = color.level }
+		if (color.level != null) { level = color.level }
 		//	ST setColor does not always implement "level".  For Hubitat
 		//	compatibility reasons, do a separate setLevel (rate = 0).
 		setLevel(level, 0)
 		pauseExecution(200)
 		def hue = device.currentValue("hue")
-		if (color.hue) { hue = color.hue }
+		if (color.hue != null) { hue = color.hue }
 		def saturation = device.currentValue("saturation")
-		if (color.saturation) { saturation = color.saturation }
-		def newColor = """{"hue":${hue}, "saturation":${saturation}, "level":${level}}"""
+		if (color.saturation != null) { saturation = color.saturation }
+		//	create hex value of HSL
+		def rgbData = hubitat.helper.ColorUtils.hsvToRGB([hue, saturation, level])
+		def rgbHex = hubitat.helper.HexUtils.integerToHexString(rgbData[0], 1)
+		rgbHex += hubitat.helper.HexUtils.integerToHexString(rgbData[1], 1)
+		rgbHex += hubitat.helper.HexUtils.integerToHexString(rgbData[2], 1)
+		def newColor = """{"hue":${hue}, "saturation":${saturation}, "level":${level}, "hex": "${rgbHex}"}"""
 		sendEvent(name: "colorMode", value: "COLOR")
 		sendCommand("setColor", newColor)
-		logDebug("setColor: [color: ${color}, level: ${level}, setColor: ${newColor}]")
+		logDebug("setColor: [color: ${newColor}, colorMode: COLOR]")
 	}
 }
 
 def setHueValue(hue) {
+	def logData = [:]
 	hue = (hue + 0.5).toInteger()
 	sendEvent(name: "hue", value: hue, unit: "%")
-	runIn(3, setColorValue)
-	logDebug("setHueValue: [hue: ${hue}%]")
+	logData << [hue: "${hue}%"]
+	if (device.currentValue("colorMode") == "COLOR") {
+		def colorName = convertHueToGenericColorName(hue)
+		sendEvent(name: "colorName", value: colorName)
+		logData << [colorName: colorName]
+	}
+	runIn(3, setHslValue)
+	logDebug("setHueValue: ${logData}")
 }
 
 def setSaturationValue(saturation) {
 	saturation = (saturation + 0.5).toInteger()
 	sendEvent(name: "saturation", value: saturation, unit: "%")
-	runIn(3, setColorValue)
+	runIn(3, setHslValue)
 	logInfo("setSaturationValue: [saturation: ${saturation}%]")
 }
 
-def setColorValue() {
-	//	ST always returns null of color.  Recreate using
-	//	Hubitat attributes hue, saturation, level.
-	Map color = [hue: device.currentValue("hue"),
-				 saturation: device.currentValue("saturation"),
-				 level: device.currentValue("level")
-				 ]
-	sendEvent(name: "color", value: color)
-	if (device.currentValue("colorMode") == "COLOR") {
-		def colorName = convertHueToGenericColorName(color.hue)
-		sendEvent(name: "colorName", value: colorName)
-		logDebug("setColorValue: [color: ${color}, colorName: ${colorName}]")
+def setHslValue() {
+	String color = """{"hue": ${device.currentValue("hue")},"""
+	color += """"saturation": ${device.currentValue("saturation")},"""
+	color += """"level": ${device.currentValue("level")}}"""
+	setColorAttrs(color, true)
+}
+
+def setColorValue(color) {
+	setColorAttrs(color, false)
+}
+
+def setColorAttrs(color, internal) {
+	Map logData = [:]
+	logData << [color: color, internal: internal]
+	if (color != null) {
+		color = parseJson(color)
+		sendEvent(name: "color", value: color)
+		if (!internal) {
+			sendEvent(name: "colorMode", value: "COLOR")
+			sendEvent(name: "hue", value: color.hue)
+			sendEvent(name: "saturation", value: color.saturation)
+			sendEvent(name: "level", value: color.level)
+			def colorName = convertHueToGenericColorName(color.hue)
+			sendEvent(name: "colorName", value: colorName)
+			logData << [colorName: colorName, colorMode: "COLOR"]
+		}
+	} else {
+		logData << [staus: "ERROR", reason: "null data from SmartThings"]
 	}
+	logDebug("setColorValue: ${logData}")
 }
 
 def setHealthStatusValue(value) {    
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
-
 private def sendCommand(String name, def value=null, String unit=null, data=[:]) {
     parent?.deviceTriggerHandler(device, [name:name, value:value, unit:unit, data:data, now:now])
 }
-
 
 Map getReplicaCommands() {
 	Map replicaCommands = [ 
 		setSwitchValue:[[name:"switch*",type:"ENUM"]], 
 		setLevelValue:[[name:"level*",type:"NUMBER"]] ,
 		setColorTemperatureValue:[[name: "colorTemperature", type: "NUMBER"]],
-		setHueValue:[[name: "hue", type: "NUMBER"]],
-		setSaturationValue:[[name: "saturation", type: "NUMBER"]],
+		setHueValue:[[name: "hue*", type: "NUMBER"]],
+		setSaturationValue:[[name: "saturation*", type: "NUMBER"]],
+		setColorValue:[[name: "color*", type: "STRING"]],
 		setHealthStatusValue:[[name:"healthStatus*",type:"ENUM"]]]
 	return replicaCommands
 }
 
 Map getReplicaTriggers() {
 	def replicaTriggers = [
-		off:[],
-		on:[],
+		off:[], on:[], refresh:[],
 		setLevel: [
 			[name:"level*", type: "NUMBER"],
-			[name:"rate", type:"NUMBER",data:"rate"]],
+			[name:"rate", type:"NUMBER", data: "rate"]],
 		setColorTemperature: [
-			[name:"colorTemperature", type: "NUMBER"]],
+			[name:"colorTemperature*", type: "NUMBER"]],
 		setColor: [
-			[name: "color", type: "OBJECT"]],
-		refresh:[]]
+			[name: "color*", type: "string"]]]
 	return replicaTriggers
 }
 
 String getReplicaRules() {
-	return """{"version":1,"components":[{"trigger":{"name":"off","label":"command: off()","type":"command"},"command":{"name":"off","type":"command","capability":"switch","label":"command: off()"},"type":"hubitatTrigger"},{"trigger":{"name":"on","label":"command: on()","type":"command"},"command":{"name":"on","type":"command","capability":"switch","label":"command: on()"},"type":"hubitatTrigger"},{"trigger":{"name":"refresh","label":"command: refresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"},{"trigger":{"name":"setColor","label":"command: setColor(color)","type":"command","parameters":[{"name":"color","type":"object"}]},"command":{"name":"setColor","arguments":[{"name":"color","optional":false,"schema":{"title":"COLOR_MAP","type":"object","additionalProperties":false,"properties":{"hue":{"type":"number"},"saturation":{"type":"number"},"hex":{"type":"string","maxLength":7},"level":{"type":"integer"},"switch":{"type":"string","maxLength":3}}}}],"type":"command","capability":"colorControl","label":"command: setColor(color*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setColorTemperature","label":"command: setColorTemperature(colorTemperature)","type":"command","parameters":[{"name":"colorTemperature","type":"NUMBER"}]},"command":{"name":"setColorTemperature","arguments":[{"name":"temperature","optional":false,"schema":{"type":"integer","minimum":1,"maximum":30000}}],"type":"command","capability":"colorTemperature","label":"command: setColorTemperature(temperature*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setLevel","label":"command: setLevel(level*, rate)","type":"command","parameters":[{"name":"level*","type":"NUMBER"},{"name":"rate","type":"NUMBER","data":"rate"}]},"command":{"name":"setLevel","arguments":[{"name":"level","optional":false,"schema":{"type":"integer","minimum":0,"maximum":100}},{"name":"rate","optional":true,"schema":{"title":"PositiveInteger","type":"integer","minimum":0}}],"type":"command","capability":"switchLevel","label":"command: setLevel(level*, rate)"},"type":"hubitatTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"type":"integer","minimum":1,"maximum":30000},"unit":{"type":"string","enum":["K"],"default":"K"}},"additionalProperties":false,"required":["value"],"capability":"colorTemperature","attribute":"colorTemperature","label":"attribute: colorTemperature.*"},"command":{"name":"setColorTemperatureValue","label":"command: setColorTemperatureValue(colorTemperature)","type":"command","parameters":[{"name":"colorTemperature","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"PositiveNumber","type":"number","minimum":0}},"additionalProperties":false,"required":[],"capability":"colorControl","attribute":"hue","label":"attribute: hue.*"},"command":{"name":"setHueValue","label":"command: setHueValue(hue)","type":"command","parameters":[{"name":"hue","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"title":"IntegerPercent","type":"attribute","properties":{"value":{"type":"integer","minimum":0,"maximum":100},"unit":{"type":"string","enum":["%"],"default":"%"}},"additionalProperties":false,"required":["value"],"capability":"switchLevel","attribute":"level","label":"attribute: level.*"},"command":{"name":"setLevelValue","label":"command: setLevelValue(level*)","type":"command","parameters":[{"name":"level*","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"PositiveNumber","type":"number","minimum":0}},"additionalProperties":false,"required":[],"capability":"colorControl","attribute":"saturation","label":"attribute: saturation.*"},"command":{"name":"setSaturationValue","label":"command: setSaturationValue(saturation)","type":"command","parameters":[{"name":"saturation","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"SwitchState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"switch","attribute":"switch","label":"attribute: switch.*"},"command":{"name":"setSwitchValue","label":"command: setSwitchValue(switch*)","type":"command","parameters":[{"name":"switch*","type":"ENUM"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"HealthState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"healthCheck","attribute":"healthStatus","label":"attribute: healthStatus.*"},"command":{"name":"setHealthStatusValue","label":"command: setHealthStatusValue(healthStatus*)","type":"command","parameters":[{"name":"healthStatus*","type":"ENUM"}]},"type":"smartTrigger"}]}"""
+	return """{"version":1,"components":[{"trigger":{"name":"refresh","label":"command: refresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"},{"trigger":{"name":"setColor","label":"command: setColor(color*)","type":"command","parameters":[{"name":"color*","type":"OBJECT"}]},"command":{"name":"setColor","arguments":[{"name":"color","optional":false,"schema":{"title":"COLOR_MAP","type":"object","additionalProperties":false,"properties":{"hue":{"type":"number"},"saturation":{"type":"number"},"hex":{"type":"string","maxLength":7},"level":{"type":"integer"},"switch":{"type":"string","maxLength":3}}}}],"type":"command","capability":"colorControl","label":"command: setColor(color*)"},"type":"hubitatTrigger"},{"trigger":{"name":"off","label":"command: off()","type":"command"},"command":{"name":"off","type":"command","capability":"switch","label":"command: off()"},"type":"hubitatTrigger"},{"trigger":{"name":"on","label":"command: on()","type":"command"},"command":{"name":"on","type":"command","capability":"switch","label":"command: on()"},"type":"hubitatTrigger"},{"trigger":{"name":"setColorTemperature","label":"command: setColorTemperature(colorTemperature*)","type":"command","parameters":[{"name":"colorTemperature*","type":"NUMBER"}]},"command":{"name":"setColorTemperature","arguments":[{"name":"temperature","optional":false,"schema":{"type":"integer","minimum":1,"maximum":30000}}],"type":"command","capability":"colorTemperature","label":"command: setColorTemperature(temperature*)"},"type":"hubitatTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"SwitchState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"switch","attribute":"switch","label":"attribute: switch.*"},"command":{"name":"setSwitchValue","label":"command: setSwitchValue(switch*)","type":"command","parameters":[{"name":"switch*","type":"ENUM"}]},"type":"smartTrigger"},{"trigger":{"title":"IntegerPercent","type":"attribute","properties":{"value":{"type":"integer","minimum":0,"maximum":100},"unit":{"type":"string","enum":["%"],"default":"%"}},"additionalProperties":false,"required":["value"],"capability":"switchLevel","attribute":"level","label":"attribute: level.*"},"command":{"name":"setLevelValue","label":"command: setLevelValue(level*)","type":"command","parameters":[{"name":"level*","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"type":"integer","minimum":1,"maximum":30000},"unit":{"type":"string","enum":["K"],"default":"K"}},"additionalProperties":false,"required":["value"],"capability":"colorTemperature","attribute":"colorTemperature","label":"attribute: colorTemperature.*"},"command":{"name":"setColorTemperatureValue","label":"command: setColorTemperatureValue(colorTemperature)","type":"command","parameters":[{"name":"colorTemperature","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"PositiveNumber","type":"number","minimum":0}},"additionalProperties":false,"required":[],"capability":"colorControl","attribute":"hue","label":"attribute: hue.*"},"command":{"name":"setHueValue","label":"command: setHueValue(hue*)","type":"command","parameters":[{"name":"hue*","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"PositiveNumber","type":"number","minimum":0}},"additionalProperties":false,"required":[],"capability":"colorControl","attribute":"saturation","label":"attribute: saturation.*"},"command":{"name":"setSaturationValue","label":"command: setSaturationValue(saturation*)","type":"command","parameters":[{"name":"saturation*","type":"NUMBER"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"String","type":"string","maxLength":255}},"additionalProperties":false,"required":[],"capability":"colorControl","attribute":"color","label":"attribute: color.*"},"command":{"name":"setColorValue","label":"command: setColorValue(color*)","type":"command","parameters":[{"name":"color*","type":"STRING"}]},"type":"smartTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"HealthState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"healthCheck","attribute":"healthStatus","label":"attribute: healthStatus.*"},"command":{"name":"setHealthStatusValue","label":"command: setHealthStatusValue(healthStatus*)","type":"command","parameters":[{"name":"healthStatus*","type":"ENUM"}]},"type":"smartTrigger"},{"trigger":{"name":"setLevel","label":"command: setLevel(level*, rate)","type":"command","parameters":[{"name":"level*","type":"NUMBER"},{"name":"rate","type":"NUMBER","data":"rate"}]},"command":{"name":"setLevel","arguments":[{"name":"level","optional":false,"schema":{"type":"integer","minimum":0,"maximum":100}},{"name":"rate","optional":true,"schema":{"title":"PositiveInteger","type":"integer","minimum":0}}],"type":"command","capability":"switchLevel","label":"command: setLevel(level*, rate)"},"type":"hubitatTrigger"}]}"""
 }
-
 
 def listAttributes(trace = false) {
 	def attrs = device.getSupportedAttributes()
