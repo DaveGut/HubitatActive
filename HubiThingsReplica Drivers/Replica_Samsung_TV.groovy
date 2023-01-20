@@ -18,7 +18,7 @@ import groovy.json.JsonSlurper
 import groovy.transform.CompileStatic //
 import groovy.transform.Field	//
 @Field volatile static Map<String,Long> g_mEventSendTime = [:]	//
-public static String driverVer() { return "0.2" }
+public static String driverVer() { return "0.5" }
 
 metadata {
 	definition (name: "Replica Samsung TV",
@@ -77,7 +77,6 @@ metadata {
 		//	Application Functions
 		command "appOpenByName", ["string"]
 		command "appOpenByCode", ["string"]
-		command "appClose"
 			attribute "currentApp", "string"		//	Use title??????
 		//	Dashboard Support
 		capability "PushableButton"
@@ -134,7 +133,6 @@ def updated() {
 		} else if (findAppCodes) {
 			runIn(5, updateAppCodes)
 		}
-		runEvery5Minutes(poll)
 		pauseExecution(5000)
 		listAttributes(true)
 		//	set state to gather initial attributes on startup
@@ -166,16 +164,13 @@ Map getReplicaCommands() {
 
 Map getReplicaTriggers() {
 	Map triggers = [ 
-		refresh:[], on:[], off:[],
-//		sendKey:[[name:"keyValue*",type:"string"],[name:"keyState",type:"string"]],
+		refresh:[], deviceRefresh: [],
 		setVolume: [[name:"volume*", type: "NUMBER"]], 
 		setMute: [[name:"state*", type: "string"]],
 		setPictureMode:[[name:"mode*", type:"string"]], 
-		setInputSource:[[name:"inputSource*", type: "string"]],
+		setInputSource:[[name:"inputName*", type: "string"]],
 		setSoundMode:[[name:"mode*", type:"string"]],
-		setTvChannel:[[name: "tvChannel", type: "string"]],
-//		fastForward:[], rewind:[], 
-		setTvChannel: [[name:"tvChannel*", type: "integer"]]
+		setTvChannel: [[name:"tvChannel*", type: "number"]]
 	]
 	return triggers
 }
@@ -188,7 +183,7 @@ def configure() {
 }
 
 String getReplicaRules() {
-	return """{"version":1,"components":[{"trigger":{"type":"attribute","properties":{"value":{"title":"HealthState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"healthCheck","attribute":"healthStatus","label":"attribute: healthStatus.*"},"command":{"name":"setHealthStatusValue","label":"command: setHealthStatusValue(healthStatus*)","type":"command","parameters":[{"name":"healthStatus*","type":"ENUM"}]},"type":"smartTrigger","mute":true},{"trigger":{"name":"setVolume","label":"command: setVolume(volume*)","type":"command","parameters":[{"name":"volume*","type":"NUMBER"}]},"command":{"name":"setVolume","arguments":[{"name":"volume","optional":false,"schema":{"type":"integer","minimum":0,"maximum":100}}],"type":"command","capability":"audioVolume","label":"command: setVolume(volume*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setMute","label":"command: setMute(state*)","type":"command","parameters":[{"name":"state*","type":"string"}]},"command":{"name":"setMute","arguments":[{"name":"state","optional":false,"schema":{"title":"MuteState","type":"string","enum":["muted","unmuted"]}}],"type":"command","capability":"audioMute","label":"command: setMute(state*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setPictureMode","label":"command: setPictureMode(mode*)","type":"command","parameters":[{"name":"mode*","type":"string"}]},"command":{"name":"setPictureMode","arguments":[{"name":"mode","optional":false,"schema":{"type":"string"}}],"type":"command","capability":"custom.picturemode","label":"command: setPictureMode(mode*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setSoundMode","label":"command: setSoundMode(mode*)","type":"command","parameters":[{"name":"mode*","type":"string"}]},"command":{"name":"setSoundMode","arguments":[{"name":"mode","optional":false,"schema":{"type":"string"}}],"type":"command","capability":"custom.soundmode","label":"command: setSoundMode(mode*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setInputSource","label":"command: setInputSource(inputSource*)","type":"command","parameters":[{"name":"inputSource*","type":"string"}]},"command":{"name":"setInputSource","arguments":[{"name":"mode","optional":false,"schema":{"title":"MediaSource","enum":["AM","CD","FM","HDMI","HDMI1","HDMI2","HDMI3","HDMI4","HDMI5","HDMI6","digitalTv","USB","YouTube","aux","bluetooth","digital","melon","wifi"],"type":"string"}}],"type":"command","capability":"mediaInputSource","label":"command: setInputSource(mode*)"},"type":"hubitatTrigger"},{"trigger":{"name":"on","label":"command: on()","type":"command"},"command":{"name":"on","type":"command","capability":"switch","label":"command: on()"},"type":"hubitatTrigger"},{"trigger":{"name":"off","label":"command: off()","type":"command"},"command":{"name":"off","type":"command","capability":"switch","label":"command: off()"},"type":"hubitatTrigger"},{"trigger":{"name":"refresh","label":"command: refresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"}]}"""
+	return """ {"version":1,"components":[{"trigger":{"type":"attribute","properties":{"value":{"title":"HealthState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"healthCheck","attribute":"healthStatus","label":"attribute: healthStatus.*"},"command":{"name":"setHealthStatusValue","label":"command: setHealthStatusValue(healthStatus*)","type":"command","parameters":[{"name":"healthStatus*","type":"ENUM"}]},"type":"smartTrigger","mute":true},{"trigger":{"name":"setVolume","label":"command: setVolume(volume*)","type":"command","parameters":[{"name":"volume*","type":"NUMBER"}]},"command":{"name":"setVolume","arguments":[{"name":"volume","optional":false,"schema":{"type":"integer","minimum":0,"maximum":100}}],"type":"command","capability":"audioVolume","label":"command: setVolume(volume*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setMute","label":"command: setMute(state*)","type":"command","parameters":[{"name":"state*","type":"string"}]},"command":{"name":"setMute","arguments":[{"name":"state","optional":false,"schema":{"title":"MuteState","type":"string","enum":["muted","unmuted"]}}],"type":"command","capability":"audioMute","label":"command: setMute(state*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setPictureMode","label":"command: setPictureMode(mode*)","type":"command","parameters":[{"name":"mode*","type":"string"}]},"command":{"name":"setPictureMode","arguments":[{"name":"mode","optional":false,"schema":{"type":"string"}}],"type":"command","capability":"custom.picturemode","label":"command: setPictureMode(mode*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setSoundMode","label":"command: setSoundMode(mode*)","type":"command","parameters":[{"name":"mode*","type":"string"}]},"command":{"name":"setSoundMode","arguments":[{"name":"mode","optional":false,"schema":{"type":"string"}}],"type":"command","capability":"custom.soundmode","label":"command: setSoundMode(mode*)"},"type":"hubitatTrigger"},{"trigger":{"name":"refresh","label":"command: refresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"},{"trigger":{"name":"setInputSource","label":"command: setInputSource(inputName*)","type":"command","parameters":[{"name":"inputName*","type":"string"}]},"command":{"name":"setInputSource","arguments":[{"name":"id","optional":false,"schema":{"type":"string"}}],"type":"command","capability":"samsungvd.mediaInputSource","label":"command: setInputSource(id*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setTvChannel","label":"command: setTvChannel(tvChannel*)","type":"command","parameters":[{"name":"tvChannel*","type":"number"}]},"command":{"name":"setTvChannel","arguments":[{"name":"tvChannel","optional":false,"schema":{"title":"String","type":"string","maxLength":255}}],"type":"command","capability":"tvChannel","label":"command: setTvChannel(tvChannel*)"},"type":"hubitatTrigger"},{"trigger":{"name":"deviceRefresh","label":"command: deviceRefresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"}]}"""
 }
 
 def configureLan() {
@@ -215,8 +210,8 @@ def configureLan() {
 		}
 		def uuid = tvData.device.duid.substring(5)
 		updateDataValue("uuid", uuid)
-		respData << [status: "OK", dni: alternateWolMac, modelYear: modelYear,
-					 frameTv: frameTv, tokenSupport: tokenSupport]
+		respData << [status: "OK", wolMac: wolMac, frameTv: frameTv, 
+					 tokenSupport: tokenSupport, uuid: uuid]
 		sendEvent(name: "artModeStatus", value: "none")
 		if (frameTv == "true") {
 			def data = [request:"get_artmode_status",
@@ -245,11 +240,12 @@ def setInitialAttributes(mainData) {
 	
 	List pictureModes = mainData["custom.picturemode"].supportedPictureModes.value
 	state.pictureModes = pictureModes
-	logData << [pictureModes: mainData["custom.picturemode"].supportedPictureModes.value]
+	logData << [pictureModes: pictureModes]
 
 	pauseExecution(200)
-	state.soundModes = mainData["custom.soundmode"].supportedSoundModes.value
-	logData << [soundModes: mainData["custom.soundmode"].supportedSoundModes.value]
+	List soundModes = mainData["custom.soundmode"].supportedSoundModes.value
+	state.soundModes = soundModes
+	logData << [soundModes: soundModes]
 
 	pauseExecution(200)
 	state.inputSources = mainData.mediaInputSource.supportedInputSources.value
@@ -300,7 +296,7 @@ def setHealthStatusValue(value) {
 void replicaEvent(def parent=null, Map event=null) {
 	def eventData = event.deviceEvent
 	try {
-	"parse_${event.deviceEvent.componentId}"(event.deviceEvent)
+		"parse_${event.deviceEvent.componentId}"(event.deviceEvent)
 	} catch (err) {
 		logWarn("replicaEvent: [event = ${event}, error: ${err}")
 	}
@@ -335,10 +331,28 @@ def parse_main(event) {
 			case "playbackStatus":
 				sendEvent(name: "transportStatus", value: event.value)
 				break
+			case "supportedSoundModes":
+				state.soundModes = event.value
+				break
+			case "supportedInputSources":
+				state.inputSources = event.value
+				break
+			case "supportedPictureModes":
+				state.pictureModes = event.value
+				break
+			case "supportedSoundModesMap":
+			case "supportedInputSourcesMap":
+			case "supportedPictureModes":
+				break
 			default:
 				logInfo("parse_main: [unhandledEvent: ${event}]")
 			break
 		}
+	}
+	if (traceLog) {
+		logTrace("parse_main: <b>[attribute: ${event.attribute}, value: ${event.value}]</b>")
+	} else {
+		logDebug("parse_main: <b>[attribute: ${event.attribute}, value: ${event.value}]</b>")
 	}
 }
 
@@ -348,17 +362,13 @@ private def sendCommand(String name, def value=null, String unit=null, data=[:])
 }
 
 //	===== Samsung TV Commands =====
-def poll() {
-	deviceRefresh()
-}
-
 def refresh() {
+	deviceRefresh()
+	pauseExecution(1000)
 	sendCommand("refresh")
 }
 
 def deviceRefresh() {
-	def deviceId = new JSONObject(getDataValue("replica")).deviceId
-	parent.setSmartDeviceCommand(deviceId, "main", "refresh", "refresh")
 	sendCommand("deviceRefresh")
 }
 
@@ -415,12 +425,12 @@ def setLevel(level) { setVolume(level) }
 
 def volumeUp() {
 	sendKey("VOLUP")
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 def volumeDown() {
 	sendKey("VOLDOWN")
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 def setVolume(volume) {
@@ -428,23 +438,17 @@ def setVolume(volume) {
 	if (volume < 0) { volume = 0 }
 	else if (volume > 100) { volume = 100 }
 	sendCommand("setVolume", volume)
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 def mute() {
 	sendKey("MUTE")
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 def unmute() {
 	sendKey("MUTE")
-	runIn(5, poll)
-}
-
-def setMuteValue(mute) {
-	sendEvent(name: "mute", value: mute)
-	logDebug("setMuteValue: [mute: ${mute}]")
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 def showMessage() { logWarn("showMessage: not implemented") }
@@ -464,7 +468,7 @@ def togglePictureMode() {
 
 def setPictureMode(pictureMode) {
 	sendCommand("setPictureMode", pictureMode)
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 def toggleSoundMode() {
@@ -482,23 +486,12 @@ def toggleSoundMode() {
 
 def setSoundMode(soundMode) { 
 	sendCommand("setSoundMode", soundMode)
-	runIn(5, poll)
+	runIn(5, deviceRefresh)
 }
 
 //	===== capability "MediaInputSource" =====
 def toggleInputSource() {
-	def inputSources = state.inputSources
-	if (inputSources != null) {
-		def totalSources = inputSources.size()
-		def currentSource = device.currentValue("mediaInputSource")
-		def sourceNo = inputSources.indexOf(currentSource)
-		def newSourceNo = sourceNo + 1
-		if (newSourceNo == totalSources) { newSourceNo = 0 }
-		def inputSource = inputSources[newSourceNo]
-		setInputSource(inputSource)
-	} else {
-		sendKey("HDMI")
-	}
+	sendKey("HDMI")
 }
 
 def setInputSource(inputSource) {
@@ -509,26 +502,48 @@ def setInputSource(inputSource) {
 }
 
 //	===== capability "MediaTransport" =====
-def play() { sendKey("PLAY") }
+def play() {
+	sendKey("PLAY")
+	runIn(5, deviceRefresh)
+}
 
-def pause() { sendKey("PAUSE") }
+def pause() {
+	sendKey("PAUSE")
+	runIn(5, deviceRefresh)
+}
 
-def stop() { sendKey("STOP") }
+def stop() {
+	sendKey("STOP")
+	runIn(5, deviceRefresh)
+}
 
-def rewind() { sendKey("REWIND") }
+def rewind() {
+	sendKey("REWIND")
+	runIn(5, deviceRefresh)
+}
 
-def fastForward() { sendKey("REWIND") }
+def fastForward() {
+	sendKey("REWIND")
+	runIn(5, deviceRefresh)
+}
 
 //	===== TV Channel =====
 def setTvChannel(tvChannel) {
 	sendCommand("setTvChannel", tvChannel.toString())
+	runIn(5, deviceRefresh)
 }
 
 def channelList() { sendKey("CH_LIST") }
 
-def channelUp() { sendKey("CHUP") }
+def channelUp() {
+	sendKey("CHUP") 
+	runIn(5, deviceRefresh)
+}
 
-def channelDown() { sendKey("CHDOWN") }
+def channelDown() {
+	sendKey("CHDOWN") 
+	runIn(5, deviceRefresh)
+}
 
 //	===== WEBSOCKET =====
 //	== ART/Ambient Mode
@@ -565,12 +580,19 @@ def artModeCmd(data) {
 						   event:"art_app_request"]]
 	cmdData = JsonOutput.toJson(cmdData)
 	sendMessage("frameArt", cmdData)
+	runIn(5, deviceRefresh)
 }
 
-def ambientMode() { sendKey("AMBIENT") }
+def ambientMode() {
+	sendKey("AMBIENT")
+	runIn(5, deviceRefresh)
+}
 
 //	== Remote Commands
-def exit() { sendKey("EXIT") }
+def exit() {
+	sendKey("EXIT")
+	runIn(5, deviceRefresh)
+}
 
 def Return() { sendKey("RETURN") }
 
@@ -616,7 +638,6 @@ def sendMessage(funct, data) {
 			pauseExecution(600)
 		}
 		interfaces.webSocket.sendMessage(data)
-//		runIn(30, close)
 	}
 }
 
@@ -728,7 +749,7 @@ def appOpenByName(appName) {
 				sendEvent(name: "currentApp", value: respData.name)
 				logData << [status: "OK", currentApp: respData.name]
 			}
-			runIn(5, poll)
+			runIn(5, deviceRefresh)
 		} catch (err) {
 			logData << [status: "appName Not Found", data: err]
 			logWarn("appOpenByName: ${logData}")
@@ -752,7 +773,7 @@ def appOpenByCode(appId) {
 				sendEvent(name: "currentApp", value: appName)
 				logData << [currentApp: appName]
 			}
-			runIn(5, poll)
+			runIn(5, deviceRefresh)
 			logData << [status: "OK", data: resp.data]
 		}
 	} catch (err) {
@@ -760,41 +781,6 @@ def appOpenByCode(appId) {
 		logWarn("appOpenByCode: ${logData}")
 	}
 	logDebug("appOpenByCode: ${logData}")
-}
-
-def appClose() {
-	def appId
-	def appName = device.currentValue("currentApp")
-	if (appName == " " || appName == null) {
-		logWarn("appClose: [status: FAILED, reason: appName not set.]")
-		return
-	}
-	def thisApp = findThisApp(appName)
-	appId = thisApp[1]
-	def logData = [appName: appName, appId: appId]
-	Map params = [uri: "http://${deviceIp}:8001/api/v2/applications/${appId}",
-				  timeout: 3]
-	try {
-		asynchttpDelete("appCloseParse", params, [appId: appId])
-		logData: [status: "OK"]
-		exit()
-	} catch (err) {
-		logData: [status: "FAILED", data: err]
-		logWarn("appClose: ${logData}")
-	}
-	logDebug("appClose: ${logData}")
-}
-
-def appCloseParse(resp, data) {
-	def logData = [appId: data.appId]
-	if (resp.status == 200) {
-		sendEvent(name: "currentApp", value: " ")
-		logData << [status: "OK"]
-	} else {
-		logData << [status: "FAILED", status: resp.status]
-		logWarn("appCloseParse: ${logData}")
-	}
-	logDebug("appCloseParse: ${logData}")
 }
 
 def findThisApp(appName) {
@@ -871,7 +857,6 @@ def updateAppCodes() {
 	if (!state.appData) { state.appData = [:] }
 	if (device.currentValue("switch") == "on") {
 		logInfo("updateAppCodes: [currentDbSize: ${state.appData.size()}, availableCodes: ${appIdList().size()}]")
-		unschedule("onPoll")
 		state.appIdIndex = 0
 		findNextApp()
 	} else {
