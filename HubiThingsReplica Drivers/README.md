@@ -15,8 +15,8 @@ Implements the SmartThings functions related to a Samsung Soundbar.
   * NOT TESTED: Audio Notification and Input Source function.  My Multiroom soundbar does not support these through SmartThings.
   * Example audio test url's are in the comments at the top of the driver.
 
-## Replica_Mono_Bulb.groovy: 
-Generic Monochromatic (White) bulb using SmartThings as the execution platform
+## Replica_Motion_Sensing_Doorbell.groovy: 
+Provides motion sensing and bell press notification to the Hubitat interface.
 
 
 ## Replica_Color_Bulb.groovy.groovy: 
