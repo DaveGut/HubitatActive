@@ -19,6 +19,11 @@ Implements the SmartThings functions related to a Samsung Soundbar.
   * If the SmartThings phone interface has the function "Go To Multiroom App", then this driver is very limited in functions.  Another driver is available at https://community.hubitat.com/t/release-samsung-multiroom-wifi-audio/1805.
   * NOT TESTED: Audio Notification and Input Source function.  My Multiroom soundbar does not support these through SmartThings.
   * Example audio test url's are in the comments at the top of the driver.
+* Audio Notification.  This is now available on the driver.  To test it, (after entering the DeviceIp), I recommend selecting using an Alternate TTS method (the Hubitat method does not work on my 2020 TV).  
+  * Select "Use Alternate TTS Method and save preferences
+  * Go to the Free voices.rss and create an account and obtain a key.
+  * Enter the Key and save preferences.
+  * To test, turn the TV on (make sure switch value is on) and select "Test Audio Notify".  This will start with barking dogs and then a TTS Stream.
 
 ## Replica_Motion_Sensing_Doorbell.groovy: 
 Provides motion sensing and bell press notification to the Hubitat interface.
