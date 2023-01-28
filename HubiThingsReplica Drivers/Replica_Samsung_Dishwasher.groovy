@@ -30,7 +30,7 @@ metadata {
 		capability "Switch"
 		//	samsungce.kidslock
 		attribute "lockState", "string"
-		//	samsungce.dishwasherWashingCourxe
+		//	samsungce.dishwasherWashingCourse
 		command "setWashingCourse", ["string"]
 		command "toggleWashingCourse"
 		command "startWashingCourse", ["string"]
