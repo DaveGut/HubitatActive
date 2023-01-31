@@ -17,7 +17,8 @@ Hubitat Community site: https://community.hubitat.com/
 
 ==========================================================================*/
 import groovy.json.JsonOutput
-def driverVer() { return "0.5T" }
+import groovy.json.JsonSlurper
+def driverVer() { return "0.6T" }
 
 metadata {
 	definition (name: "Replica Samsung Dishwasher",
@@ -26,26 +27,39 @@ metadata {
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy"
 			   ){
 		capability "Configuration"
+		//	refresh, switch, kidsLock, remoteControlStatus
 		capability "Refresh"
 		capability "Switch"
-		//	samsungce.kidslock
 		attribute "lockState", "string"
-		//	samsungce.dishwasherWashingCourse
+		attribute "remoteControlEnabled", "bool"
+
+		//	Washing Course (samsungce.)
 		command "setWashingCourse", ["string"]
 		command "toggleWashingCourse"
 		command "startWashingCourse", ["string"]
 		attribute "washingCourse", "string"
-		//	samsungce.dishwasherOperation
+		//	Operation Control
+			//	dishwasherOperatingState: pause, run (start/resume), stop (cancel)
+			//	custom_dishwasherDelayStartTime: setDishwasherDelayStartTime  (startLater)
+			//	samsungce.dishwasherOperation: resume, cancel, start, pause, startLater
+			//	If samsungce version is enabled, use it.  Create state.samsungce =  t/f to
+				//	control commands and attribute handling.
 		command "resume"
-		command "start"
+		command "start", ["string"]
 		command "pause"
+		command "cancel", ["bool"]
 		command "startLater", ["number"]
-		attribute "operatingState", "string"
-		attribute "operationTime", "string"
+		attribute "operatingState", "string"	//	samsungce: operatingState, std: machineState
+		//	samsungce true attributes
 		attribute "remainingTime", "string"
+		attribute "operationTime", "string"
 		attribute "timeLeftToStart", "string"
-		//	samsungce.dishwasherJobState
-		attribute "dishwasherJobState", "string"
+		//	standard attributes
+		attribute "completionTime", "string"
+		//	Job Status
+			//	custom.dishwasherOperatingProgress
+			//	samsungce.dishwasherJobState
+		attribute "jobState", "string"
 	}
 	preferences {
 		input ("logEnable", "bool",  title: "Enable debug logging for 30 minutes", defaultValue: false)
@@ -55,13 +69,13 @@ metadata {
 }
 
 def installed() {
+	initialize()
 	runIn(1, updated)
 }
 
 def updated() {
 	unschedule()
 	def updStatus = [:]
-	initialize()
 	if (!getDataValue("driverVersion") || getDataValue("driverVersion") != driverVer()) {
 		updateDataValue("driverVersion", driverVer())
 		updStatus << [driverVer: driverVer()]
@@ -70,8 +84,8 @@ def updated() {
 	if (traceLog) { runIn(600, traceLogOff) }
 	updStatus << [logEnable: logEnable, infoLog: infoLog, traceLog: traceLog]
 
-	runIn(10, refresh)
-	pauseExecution(5000)
+	runIn(5, configure)
+	pauseExecution(2000)
 	listAttributes(true)
 	logInfo("updated: ${updStatus}")
 }
@@ -91,61 +105,110 @@ Map getReplicaCommands() {
 
 Map getReplicaTriggers() {
 	def replicaTriggers = [
-		off:[], on:[], refresh:[], 
+		off:[], on:[], refresh:[], deviceRefresh:[],
+		//	samsungce = true
 		setWashingCourse: [[name:"course*", type: "ENUM"]],
 		startWashingCourse: [[name:"course*", type: "ENUM"]],
 		start:[[name: "option", type: "string"]], 
-		pause:[], resume:[],
+		pause:[], resume:[], 
+		cancel:[[name:"drain", type:"bool"]],
 		startLater: [[name:"delay*", type:"number"]],
-		deviceRefresh:[]]
+		//	samsungce = false
+		setMachineState:[[name:"state*", type:"string"]],
+		setDishwasherDelayStartTime:[[name:"dishwasherDelayStartTime*", type:"string"]]
+		]
 	return replicaTriggers
 }
 
 def configure() {
     initialize()
 	setReplicaRules()
+	state.checkCapabilities = true
 	sendCommand("configure")
 	logInfo("configure: configuring default rules")
 }
 
 String setReplicaRules() {
-	def rules = """{"version":1,"components":[{"trigger":{"name":"off","label":"command: off()","type":"command"},"command":{"name":"off","type":"command","capability":"switch","label":"command: off()"},"type":"hubitatTrigger"},{"trigger":{"name":"on","label":"command: on()","type":"command"},"command":{"name":"on","type":"command","capability":"switch","label":"command: on()"},"type":"hubitatTrigger"},{"trigger":{"name":"refresh","label":"command: refresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"HealthState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"healthCheck","attribute":"healthStatus","label":"attribute: healthStatus.*"},"command":{"name":"setHealthStatusValue","label":"command: setHealthStatusValue(healthStatus*)","type":"command","parameters":[{"name":"healthStatus*","type":"ENUM"}]},"type":"smartTrigger"},{"trigger":{"name":"pause","label":"command: pause()","type":"command"},"command":{"name":"pause","type":"command","capability":"samsungce.dishwasherOperation","label":"command: pause()"},"type":"hubitatTrigger"},{"trigger":{"name":"resume","label":"command: resume()","type":"command"},"command":{"name":"resume","type":"command","capability":"samsungce.dishwasherOperation","label":"command: resume()"},"type":"hubitatTrigger"},{"trigger":{"name":"start","label":"command: start(option)","type":"command","parameters":[{"name":"option","type":"string"}]},"command":{"name":"start","arguments":[{"name":"option","optional":true,"schema":{"type":"object"}}],"type":"command","capability":"samsungce.dishwasherOperation","label":"command: start(option)"},"type":"hubitatTrigger"},{"trigger":{"name":"startLater","label":"command: startLater(delay*)","type":"command","parameters":[{"name":"delay*","type":"number"}]},"command":{"name":"startLater","arguments":[{"name":"delay","optional":false,"schema":{"type":"number"}}],"type":"command","capability":"samsungce.dishwasherOperation","label":"command: startLater(delay*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setWashingCourse","label":"command: setWashingCourse(course*)","type":"command","parameters":[{"name":"course*","type":"ENUM"}]},"command":{"name":"setWashingCourse","arguments":[{"name":"course","optional":false,"schema":{"type":"string","enum":["auto","eco","intensive","delicate","express","preWash","selfClean","extraSilence","rinseOnly","plastics","potsAndPans","babycare","normal","selfSanitize","dryOnly","upperExpress","night","babyBottle","coldRinse","glasses","quick","heavy","daily","chef","preBlast","steamSoak","rinseDry","machineCare","AI","nightSilence","express_0C","daily_09","eco_08","eco_10"]}}],"type":"command","capability":"samsungce.dishwasherWashingCourse","label":"command: setWashingCourse(course*)"},"type":"hubitatTrigger"},{"trigger":{"name":"startWashingCourse","label":"command: startWashingCourse(course*)","type":"command","parameters":[{"name":"course*","type":"ENUM"}]},"command":{"name":"startWashingCourse","arguments":[{"name":"course","optional":false,"schema":{"type":"string","enum":["auto","eco","intensive","delicate","express","preWash","selfClean","extraSilence","rinseOnly","plastics","potsAndPans","babycare","normal","selfSanitize","dryOnly","upperExpress","night","babyBottle","coldRinse","glasses","quick","heavy","daily","chef","preBlast","steamSoak","rinseDry","machineCare","AI","nightSilence","express_0C","daily_09","eco_08","eco_10"]}}],"type":"command","capability":"samsungce.dishwasherWashingCourse","label":"command: startWashingCourse(course*)"},"type":"hubitatTrigger"}]}"""
-
+	def rules = """{"version":1,"components":[{"trigger":{"name":"off","label":"command: off()","type":"command"},"command":{"name":"off","type":"command","capability":"switch","label":"command: off()"},"type":"hubitatTrigger"},{"trigger":{"name":"on","label":"command: on()","type":"command"},"command":{"name":"on","type":"command","capability":"switch","label":"command: on()"},"type":"hubitatTrigger"},{"trigger":{"name":"refresh","label":"command: refresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"},{"trigger":{"type":"attribute","properties":{"value":{"title":"HealthState","type":"string"}},"additionalProperties":false,"required":["value"],"capability":"healthCheck","attribute":"healthStatus","label":"attribute: healthStatus.*"},"command":{"name":"setHealthStatusValue","label":"command: setHealthStatusValue(healthStatus*)","type":"command","parameters":[{"name":"healthStatus*","type":"ENUM"}]},"type":"smartTrigger"},{"trigger":{"name":"pause","label":"command: pause()","type":"command"},"command":{"name":"pause","type":"command","capability":"samsungce.dishwasherOperation","label":"command: pause()"},"type":"hubitatTrigger"},{"trigger":{"name":"resume","label":"command: resume()","type":"command"},"command":{"name":"resume","type":"command","capability":"samsungce.dishwasherOperation","label":"command: resume()"},"type":"hubitatTrigger"},{"trigger":{"name":"start","label":"command: start(option)","type":"command","parameters":[{"name":"option","type":"string"}]},"command":{"name":"start","arguments":[{"name":"option","optional":true,"schema":{"type":"object"}}],"type":"command","capability":"samsungce.dishwasherOperation","label":"command: start(option)"},"type":"hubitatTrigger"},{"trigger":{"name":"startLater","label":"command: startLater(delay*)","type":"command","parameters":[{"name":"delay*","type":"number"}]},"command":{"name":"startLater","arguments":[{"name":"delay","optional":false,"schema":{"type":"number"}}],"type":"command","capability":"samsungce.dishwasherOperation","label":"command: startLater(delay*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setWashingCourse","label":"command: setWashingCourse(course*)","type":"command","parameters":[{"name":"course*","type":"ENUM"}]},"command":{"name":"setWashingCourse","arguments":[{"name":"course","optional":false,"schema":{"type":"string","enum":["auto","eco","intensive","delicate","express","preWash","selfClean","extraSilence","rinseOnly","plastics","potsAndPans","babycare","normal","selfSanitize","dryOnly","upperExpress","night","babyBottle","coldRinse","glasses","quick","heavy","daily","chef","preBlast","steamSoak","rinseDry","machineCare","AI","nightSilence","express_0C","daily_09","eco_08","eco_10"]}}],"type":"command","capability":"samsungce.dishwasherWashingCourse","label":"command: setWashingCourse(course*)"},"type":"hubitatTrigger"},{"trigger":{"name":"startWashingCourse","label":"command: startWashingCourse(course*)","type":"command","parameters":[{"name":"course*","type":"ENUM"}]},"command":{"name":"startWashingCourse","arguments":[{"name":"course","optional":false,"schema":{"type":"string","enum":["auto","eco","intensive","delicate","express","preWash","selfClean","extraSilence","rinseOnly","plastics","potsAndPans","babycare","normal","selfSanitize","dryOnly","upperExpress","night","babyBottle","coldRinse","glasses","quick","heavy","daily","chef","preBlast","steamSoak","rinseDry","machineCare","AI","nightSilence","express_0C","daily_09","eco_08","eco_10"]}}],"type":"command","capability":"samsungce.dishwasherWashingCourse","label":"command: startWashingCourse(course*)"},"type":"hubitatTrigger"},{"trigger":{"name":"deviceRefresh","label":"command: deviceRefresh()","type":"command"},"command":{"name":"refresh","type":"command","capability":"refresh","label":"command: refresh()"},"type":"hubitatTrigger"},{"trigger":{"name":"cancel","label":"command: cancel(drain)","type":"command","parameters":[{"name":"drain","type":"bool"}]},"command":{"name":"cancel","arguments":[{"name":"drain","optional":true,"schema":{"type":"boolean"}}],"type":"command","capability":"samsungce.dishwasherOperation","label":"command: cancel(drain)"},"type":"hubitatTrigger"},{"trigger":{"name":"setMachineState","label":"command: setMachineState(state*)","type":"command","parameters":[{"name":"state*","type":"string"}]},"command":{"name":"setMachineState","arguments":[{"name":"state","optional":false,"schema":{"title":"MachineState","type":"string","enum":["pause","run","stop"]}}],"type":"command","capability":"dishwasherOperatingState","label":"command: setMachineState(state*)"},"type":"hubitatTrigger"},{"trigger":{"name":"setDishwasherDelayStartTime","label":"command: setDishwasherDelayStartTime(dishwasherDelayStartTime*)","type":"command","parameters":[{"name":"dishwasherDelayStartTime*","type":"string"}]},"command":{"name":"setDishwasherDelayStartTime","arguments":[{"name":"dishwasherDelayStartTime","optional":false,"schema":{"type":"string"}}],"type":"command","capability":"custom.dishwasherDelayStartTime","label":"command: setDishwasherDelayStartTime(dishwasherDelayStartTime*)"},"type":"hubitatTrigger"}]}"""
 	updateDataValue("rules", rules)
 }
 
 //	===== Event Parse Interface s=====
 void replicaStatus(def parent=null, Map status=null) {
 	def logData = [parent: parent, status: status]
-	if (state.refreshAttributes) {
+	if (state.checkCapabilities) {
+		runIn(10, checkCapabilities, [data: status.components.main])
+	} else if (state.refreshAttributes) {
 		refreshAttributes(status.components.main)
 	}
 	logTrace("replicaStatus: ${logData}")
 }
 
+def checkCapabilities(status) {
+	def disabledCapabilities = ["n/a"]
+	try {
+		disabledCapabilities = status["custom.disabledCapabilities"].disabledCapabilities.value
+	} catch (e) {}
+	def enabledCapabilities = []
+	def description = new JsonSlurper().parseText(getDataValue("description"))
+	description.components.each {
+		it.capabilities.each { cap ->
+			if (!disabledCapabilities.contains(cap.id)) {
+				enabledCapabilities << cap.id
+			}
+		}
+	}
+	state.deviceCapabilities = enabledCapabilities
+	state.checkCapabilities = false
+	logInfo("checkCapabilities: [disabled: ${disabledCapabilities}, enabled: ${enabledCapabilities}]")
+	runIn(2, refreshAttributes, [data: status])
+}
+
 def refreshAttributes(mainData) {
 	logDebug("refreshAttributes: ${mainData}")
-	def value
-	
-	parse_main([attribute: "switch", value: mainData.switch.switch.value])
-	pauseExecution(200)
-
-	try {
-		value = mainData["samsungce.kidsLock"].lockState.value
-	} catch (e) {
-		value = "n/a"
+	if (state.deviceCapabilities.contains("samsungce.dishwasherWashingCourse")) {
+		parse_main([attribute: "supportedCourses", value: mainData["samsungce.dishwasherWashingCourse"].supportedCourses.value])
+		pauseExecution(100)
+		parse_main([attribute: "washingCourse", value: mainData["samsungce.dishwasherWashingCourse"].washingCourse.value])
+		pauseExecution(100)
 	}
-	parse_main([attribute: "lockState", value: value])
-	pauseExecution(200)
 	
-	try {
-		value = mainData["samsungce.dishwasherWashingCourse"].supportedCourses.value
-	} catch(e) {
-		value = ["n/a"]
+	if (state.deviceCapabilities.contains("switch")) {
+		parse_main([attribute: "switch", value: mainData.switch.switch.value])
+		pauseExecution(100)
 	}
-	parse_main([attribute: "supportedCourses", value: value])
-	pauseExecution(200)
-
+	
+	if (state.deviceCapabilities.contains("remoteControlStatus")) {
+		parse_main([attribute: "remoteControlEnabled", value: mainData.remoteControlStatus.remoteControlEnabled.value])
+		pauseExecution(100)
+	}
+	
+	if (state.deviceCapabilities.contains("dishwasherOperatingState")) {
+		parse_main([attribute: "machineState", value: mainData.dishwasherOperatingState.machineState.value])
+		pauseExecution(100)
+		parse_main([attribute: "completionTime", value: mainData.dishwasherOperatingState.completionTime.value])
+		pauseExecution(100)
+	}
+	
+	if (state.deviceCapabilities.contains("samsungce.dishwasherOperation")) {
+		parse_main([attribute: "operatingState", value: mainData["samsungce.dishwasherOperation"].operatingState.value])
+		pauseExecution(100)
+		parse_main([attribute: "operationTime", value: mainData["samsungce.dishwasherOperation"].operationTime.value, unit: "min"])
+		pauseExecution(100)
+		parse_main([attribute: "remainingTime", value: mainData["samsungce.dishwasherOperation"].remainingTime.value, unit: "min"])
+		pauseExecution(100)
+		parse_main([attribute: "timeLeftToStart", value: mainData["samsungce.dishwasherOperation"].timeLeftToStart.value, unit: "min"])
+		pauseExecution(100)
+	}
+	
+	if (state.deviceCapabilities.contains("samsungce.dishwasherJobState")) {
+		parse_main([attribute: "dishwasherJobState", value: mainData["samsungce.dishwasherJobState"].dishwasherJobState.value])
+		pauseExecution(100)
+	}
+	
+	if (state.deviceCapabilities.contains("custom.dishwasherOperatingProgress")) {
+		parse_main([attribute: "dishwasherOperatingProgress", value: mainData["custom.dishwasherOperatingProgress"].dishwasherOperatingProgress.value])
+	}
 	state.refreshAttributes	= false
 }
 
@@ -167,21 +230,20 @@ void replicaEvent(def parent=null, Map event=null) {
 def parse_main(event) {
 	logInfo("parse_main: <b>[attribute: ${event.attribute}, value: ${event.value}, unit: ${event.unit}]</b>")
 	switch(event.attribute) {
-		case "switch":
-		case "lockState":
-		case "washingCourse":
 		case "operatingState":
-		case "operationTime":
-		case "remainingTime":
-		case "timeLeftToStart":
+		case "machineState":
+			sendEvent(name: "operatingState", value: event.value)
+			break
 		case "dishwasherJobState":
-			sendEvent(name: event.attribute, value: event.value)
+		case "dishwasherOperatingProgress":
+			sendEvent(name: "jobState", value: event.value)
 			break
 		case "supportedCourses":
 			state.supportedDishwasherCourses = event.value
 			break
 		default:
-			logDebug("parse_main: [unhandledEvent: ${event}]")
+//			sendEvent(name: event.attribute, value: event.value, unit: event.unit)
+			sendEvent(name: event.attribute, value: event.value)
 		break
 	}
 }
@@ -208,13 +270,21 @@ def deviceRefresh() {
 
 //	===== Samsung Dishwasher Commands =====
 def on() {
-	sendCommand("on")
-	logDebug("on")
+	if (state.deviceCapabilities.contains("switch")){
+		sendCommand("on")
+		logDebug("on")
+	} else {
+		logWarn("on: NOT SUPPORTED BY YOUR DEVICE")
+	}
 }
 
 def off() {
-	sendCommand("off")
-	logDebug("off")
+	if (state.deviceCapabilities.contains("switch")){
+		sendCommand("off")
+		logDebug("off")
+	} else {
+		logWarn("off: NOT SUPPORTED BY YOUR DEVICE")
+	}
 }
 
 def toggleWashingCourse() {
@@ -231,33 +301,81 @@ def toggleWashingCourse() {
 }
 
 def setWashingCourse(washingCourse) {
-	sendCommand("setWashingCourse", washingCourse)
-	logDebug("setWashingCourse: ${washingCourse}")
+	if (state.deviceCapabilities.contains("samsungce.dishwasherWashingCourse")) {
+		sendCommand("setWashingCourse", washingCourse)
+		logDebug("setWashingCourse: ${washingCourse}")
+	} else {
+		logWarn("setWashingCourse: NOT SUPPORTED BY YOUR DEVICE")
+	}
 }
 
 def startWashingCourse(washingCourse = device.currentValue("washingCourse")) {
-	sendCommand("startWashingCourse", washingCourse)
-	logDebug("startWashingCourse: ${washingCourse}")
+	if (state.deviceCapabilities.contains("samsungce.dishwasherWashingCourse")) {
+		sendCommand("startWashingCourse", washingCourse)
+		logDebug("startWashingCourse: ${washingCourse}")
+	} else {
+		logWarn("startWashingCourse: NOT SUPPORTED BY YOUR DEVICE")
+	}
 }
 
 def resume() {
-	sendCommand("resume")
-	logDebug("resume")
+	if (state.deviceCapabilities.contains("samsungce.dishwasherOperation")) {
+		sendCommand("resume")
+		logInfo("resume: samsungce.dishwasherOperation")
+	} else {
+		sendCommand("setMachineState", "run")
+		logInfo("resume: dishwasherOperatingState")
+	}
 }
 
-def start() {
-	sendCommand("start")
-	logDebug("start")
+def start(option = null) {
+	if (state.deviceCapabilities.contains("samsungce.dishwasherOperation")) {
+		if (option == null) {
+			sendCommand("start")
+		} else {
+			sendCommand("start", option)
+		}
+		logInfo("start: [samsungce.dishwasherOperation, option: ${option}]")
+	} else {
+		sendCommand("setMachineState", "run")
+		logInfo("start: dishwasherOperatingState")
+	}
 }
 
 def pause() {
-	sendCommand("pause")
-	logDebug("pause")
+	if (state.deviceCapabilities.contains("samsungce.dishwasherOperation")) {
+		sendCommand("pause")
+		logInfo("pause: samsungce.dishwasherOperation")
+	} else {
+		sendCommand("setMachineState", "pause")
+		logInfo("pause: dishwasherOperatingState")
+	}
+}
+
+def cancel(drain = null) {
+	if (state.deviceCapabilities.contains("samsungce.dishwasherOperation")) {
+		if (drain == null) {
+			sendCommand("cancel")
+		} else {
+			sendCommand("cancel", drain)
+		}
+		logInfo("cancel: [samsungce.dishwasherOperation, drain: ${drain}]")
+	} else {
+		sendCommand("setMachineState", "stop")
+		logInfo("cancel: dishwasherOperatingState")
+	}
 }
 
 def startLater(delay) {
-	sendCommand("startLater", delay, "number")
-	logDebug("startLater")
+	if (state.deviceCapabilities.contains("samsungce.dishwasherOperation")) {
+		sendCommand("startLater", delay)
+		logInfo("startLater: [samsungce.dishwasherOperation, delay: ${delay}]")
+	} else if (state.deviceCapabilities.contains("custom_dishwasherDelayStartTime")) {
+		sendCommand("setDishwasherDelayStartTime", delay)
+		logInfo("startLater: [dishwasherOperatingState, startTime: ${delay}]")
+	} else {
+		logWarn("startLater: not supported by device")
+	}
 }
 
 //	===== Libraries =====
