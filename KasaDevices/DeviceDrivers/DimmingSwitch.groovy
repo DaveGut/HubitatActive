@@ -257,7 +257,8 @@ def setSysInfo(status) {
 def checkTransTime(transTime) {
 	if (transTime == null || transTime < 0.001) {
 		transTime = gentleOn
-	} else if (transTime == 0) {
+	}
+	if (transTime == 0) {
 		transTime = 50
 	} else {
 		transTime = transTime * 1000
