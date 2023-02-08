@@ -12,7 +12,7 @@
 	implied. See the License for the specific language governing 
 	permissions and limitations under the License.
 
-Issues with this driver: Contact davegut on via Private Message on the
+Issues with this driver: Contact davegut via Private Message on the
 Hubitat Community site: https://community.hubitat.com/
 
 ==========================================================================*/
@@ -130,9 +130,11 @@ void refresh() {
 def on() {
 	sendCommand("on")
 }
+
 def off() {
 	sendCommand("off")
 }
+
 def setSwitchValue(onOff) {
     sendEvent(name: "switch", value: onOff)
 	logDebug("setSwitchValue: [switch: ${onOff}]")
@@ -155,16 +157,19 @@ def setLevel(level, transTime = transTime) {
 		sendCommand("setLevel", level, null, [rate:transTime])
 	}
 }
+
 def startLevelChange(direction) {
 	unschedule(levelUp)
 	unschedule(levelDown)
 	if (direction == "up") { levelUp() }
 	else { levelDown() }
 }
+
 def stopLevelChange() {
 	unschedule(levelUp)
 	unschedule(levelDown)
 }
+
 def levelUp() {
 	def curLevel = device.currentValue("level").toInteger()
 	if (curLevel == 100) { return }
@@ -173,6 +178,7 @@ def levelUp() {
 	setLevel(newLevel, 0)
 	runIn(1, levelUp)
 }
+
 def levelDown() {
 	def curLevel = device.currentValue("level").toInteger()
 	if (curLevel == 0 || device.currentValue("switch") == "off") { return }
@@ -183,6 +189,7 @@ def levelDown() {
 		runIn(1, levelDown)
 	}
 }
+
 def setLevelValue(level) {
 	sendEvent(name: "level", value: level, unit: "%")
 	//	Update attribute color if in color mode
@@ -203,6 +210,7 @@ def setColorTemperature(colorTemp) {
 		setColorTemperatureValue(colorTemp)
 	}
 }
+
 def setColorTemperatureValue(colorTemp) {
 	def logData = [colorTemperature: "${colorTemp}°K"]
 	sendEvent(name: "colorTemperature", value: colorTemp, unit: "°K")
@@ -228,23 +236,28 @@ def listAttributes(trace = false) {
 		logDebug("Attributes: ${attrList}")
 	}
 }
+
 def logTrace(msg){
 	log.trace "${device.displayName}-${driverVer()}: ${msg}"
 }
+
 def logInfo(msg) { 
 	if (textEnable) {
 		log.info "${device.displayName}-${driverVer()}: ${msg}"
 	}
 }
+
 def debugLogOff() {
 	if (logEnable) {
 		device.updateSetting("logEnable", [type:"bool", value: false])
 	}
 	logInfo("debugLogOff")
 }
+
 def logDebug(msg) {
 	if (logEnable) {
 		log.debug "${device.displayName}-${driverVer()}: ${msg}"
 	}
 }
+
 def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" }

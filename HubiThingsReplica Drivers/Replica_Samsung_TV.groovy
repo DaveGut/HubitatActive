@@ -19,7 +19,7 @@ Hubitat Community site: https://community.hubitat.com/
 ==========================================================================*/
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
-def driverVer() { return "0.5TEST" }
+def driverVer() { return "1.0" }
 
 metadata {
 	definition (name: "Replica Samsung TV",
@@ -318,6 +318,7 @@ def parse_main(event) {
 			break
 		case "tvChannelName":
 			sendEvent(name: "tvChannelName", value: event.value)
+			sendEvent(name: "trackDescription", value: event.value)
 			if (event.value.contains(".")) {
 				getAppData(event.value)
 			}
@@ -962,7 +963,7 @@ def push(pushed) {
 
 
 
-// ~~~~~ start include (1225) davegut.samsungAudioNotify ~~~~~
+// ~~~~~ start include (1234) davegut.samsungAudioNotify ~~~~~
 library ( // library marker davegut.samsungAudioNotify, line 1
 	name: "samsungAudioNotify", // library marker davegut.samsungAudioNotify, line 2
 	namespace: "davegut", // library marker davegut.samsungAudioNotify, line 3
@@ -1219,7 +1220,7 @@ def parse(resp) { // library marker davegut.samsungAudioNotify, line 230
 */ // library marker davegut.samsungAudioNotify, line 254
 
 
-// ~~~~~ end include (1225) davegut.samsungAudioNotify ~~~~~
+// ~~~~~ end include (1234) davegut.samsungAudioNotify ~~~~~
 
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1

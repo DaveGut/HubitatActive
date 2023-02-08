@@ -18,7 +18,7 @@ Issues with this driver: Contact davegut via Private Message on the
 Hubitat Community site: https://community.hubitat.com/
 ==========================================================================*/
 import groovy.json.JsonOutput
-def driverVer() { return "0.5TEST" }
+def driverVer() { return "1.0" }
 
 metadata {
 	definition (name: "Replica Samsung Soundbar",
@@ -32,6 +32,7 @@ metadata {
 		capability "MediaTransport"
 		capability "AudioVolume"
 		attribute "audioTrackData", "JSON_OBJECT"
+		attribute "trackDescription", "STRING"
 		capability "Refresh"
 		capability "Configuration"
 		attribute "healthStatus", "enum", ["offline", "online"]
@@ -95,10 +96,6 @@ Map getReplicaCommands() {
 		"replicaStatus":[[name:"parent*",type:"OBJECT"],[name:"event*",type:"JSON_OBJECT"]],
 //		"replicaHealth":[[name:"parent*",type:"OBJECT"],[name:"health*",type:"JSON_OBJECT"]],
 		"setHealthStatusValue":[[name:"healthStatus*",type:"ENUM"]]])
-}
-
-def testItem(args) {
-	log.warn args
 }
 
 Map getReplicaTriggers() {
@@ -168,7 +165,7 @@ void replicaStatus(def parent=null, Map status=null) {
 }
 
 def refreshAttributes(mainData) {
-	logDebug("setInitialAttributes: ${mainData}")
+	logDebug("refreshAttributes: ${mainData}")
 	def value
 	try {
 		value = mainData.mediaInputSource.supportedInputSources.value
@@ -228,10 +225,20 @@ def parse_main(event) {
 	logInfo("parse_main: <b>[attribute: ${event.attribute}, value: ${event.value}, unit: ${event.unit}]</b>")
 	switch(event.attribute) {
 		case "switch":
-		case "volume":
 		case "mute":
+			sendEvent(name: event.attribute, value: event.value)
+			break
 		case "audioTrackData":
 			sendEvent(name: event.attribute, value: event.value)
+			def title = " "
+			if (event.value != "n/a" && event.value.title != null) {
+				title = event.value.title
+			}
+			sendEvent(name: "trackDescription", value: title)
+			break
+		case "volume":
+			sendEvent(name: event.attribute, value: event.value)
+			sendEvent(name: "level", value: event.value)
 			break
 		case "inputSource":
 			if (event.capability == "mediaInputSource") {
@@ -243,7 +250,6 @@ def parse_main(event) {
 			break
 		case "supportedInputSources":
 			state.inputSources = event.value
-			break
 			break
 		default:
 			logDebug("parse_main: [unhandledEvent: ${event}]")
@@ -272,7 +278,7 @@ def deviceRefresh() {
 	sendCommand("deviceRefresh")
 }
 
-//	===== Samsung TV Commands =====
+//	===== Samsung Soundbar Commands =====
 def on() {
 	sendCommand("on")
 }
@@ -352,7 +358,7 @@ def unmute() { sendCommand("unmute") }
 
 
 
-// ~~~~~ start include (1225) davegut.samsungAudioNotify ~~~~~
+// ~~~~~ start include (1234) davegut.samsungAudioNotify ~~~~~
 library ( // library marker davegut.samsungAudioNotify, line 1
 	name: "samsungAudioNotify", // library marker davegut.samsungAudioNotify, line 2
 	namespace: "davegut", // library marker davegut.samsungAudioNotify, line 3
@@ -609,7 +615,7 @@ def parse(resp) { // library marker davegut.samsungAudioNotify, line 230
 */ // library marker davegut.samsungAudioNotify, line 254
 
 
-// ~~~~~ end include (1225) davegut.samsungAudioNotify ~~~~~
+// ~~~~~ end include (1234) davegut.samsungAudioNotify ~~~~~
 
 // ~~~~~ start include (1072) davegut.Logging ~~~~~
 library ( // library marker davegut.Logging, line 1

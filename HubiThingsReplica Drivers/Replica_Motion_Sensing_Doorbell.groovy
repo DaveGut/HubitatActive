@@ -12,14 +12,14 @@
 	implied. See the License for the specific language governing 
 	permissions and limitations under the License.
 
-Issues with this driver: Contact davegut on via Private Message on the
-Hubitat Community site: https://community.hubitat.com/
-
 Appreciation and thanks to bthrock for his initial version of this
 driver and support in the developing the below version.
+
+Issues with this driver: Contact davegut via Private Message on the
+Hubitat Community site: https://community.hubitat.com/
 ==========================================================================*/
 import groovy.json.JsonOutput
-def driverVer() { return "1.0.0" }
+def driverVer() { return "1.0" }
 
 metadata {
     definition(name: "Replica Motion-Sensing Doorbell", namespace: "replica", author: "bthrock", importUrl:"https://raw.githubusercontent.com/TheMegamind/Replica-Drivers/main/replicaMotionSensingDoorbell.groovy")
@@ -93,7 +93,9 @@ private def sendCommand(String name, def value=null, String unit=null, data=[:])
 }
 
 void refresh() {
-    sendCommand("refresh")
+	sendCommand("deviceRefresh")
+//	pauseExecution(500)
+//    sendCommand("refresh")
 }
 
 def deviceRefresh() {
@@ -156,23 +158,28 @@ def listAttributes(trace = false) {
 		logDebug("Attributes: ${attrList}")
 	}
 }
+
 def logTrace(msg){
 	log.trace "${device.displayName}-${driverVer()}: ${msg}"
 }
+
 def logInfo(msg) { 
 	if (textEnable) {
 		log.info "${device.displayName}-${driverVer()}: ${msg}"
 	}
 }
+
 def debugLogOff() {
 	if (logEnable) {
 		device.updateSetting("logEnable", [type:"bool", value: false])
 	}
 	logInfo("debugLogOff")
 }
+
 def logDebug(msg) {
 	if (logEnable) {
 		log.debug "${device.displayName}-${driverVer()}: ${msg}"
 	}
 }
+
 def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" }

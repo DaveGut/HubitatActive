@@ -1,6 +1,6 @@
 /*	HubiThings Replica Color Bulb Driver
-	HubiThings Replica Applications Copyright 2023 by Bloodtick
-	Replica Color Bulb Copyright 2023 by Dave Gutheinz
+		HubiThings Replica Applications Copyright 2023 by Bloodtick
+		Replica Color Bulb Copyright 2023 by Dave Gutheinz
 
 	Licensed under the Apache License, Version 2.0 (the "License"); 
 	you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 	implied. See the License for the specific language governing 
 	permissions and limitations under the License.
 
-Issues with this driver: Contact davegut on via Private Message on the
+Issues with this driver: Contact davegut via Private Message on the
 Hubitat Community site: https://community.hubitat.com/
 
 ==========================================================================*/
@@ -135,9 +135,11 @@ void refresh() {
 def on() {
 	sendCommand("on")
 }
+
 def off() {
 	sendCommand("off")
 }
+
 def setSwitchValue(onOff) {
     sendEvent(name: "switch", value: onOff)
 	logDebug("setSwitchValue: [switch: ${onOff}]")
@@ -160,16 +162,19 @@ def setLevel(level, transTime = transTime) {
 		sendCommand("setLevel", level, null, [rate:transTime])
 	}
 }
+
 def startLevelChange(direction) {
 	unschedule(levelUp)
 	unschedule(levelDown)
 	if (direction == "up") { levelUp() }
 	else { levelDown() }
 }
+
 def stopLevelChange() {
 	unschedule(levelUp)
 	unschedule(levelDown)
 }
+
 def levelUp() {
 	def curLevel = device.currentValue("level").toInteger()
 	if (curLevel == 100) { return }
@@ -178,6 +183,7 @@ def levelUp() {
 	setLevel(newLevel, 0)
 	runIn(1, levelUp)
 }
+
 def levelDown() {
 	def curLevel = device.currentValue("level").toInteger()
 	if (curLevel == 0 || device.currentValue("switch") == "off") { return }
@@ -188,6 +194,7 @@ def levelDown() {
 		runIn(1, levelDown)
 	}
 }
+
 def setLevelValue(level) {
 	sendEvent(name: "level", value: level, unit: "%")
 	//	Update attribute color if in color mode
@@ -208,6 +215,7 @@ def setColorTemperature(colorTemp) {
 		setColorTemperatureValue(colorTemp)
 	}
 }
+
 def setColorTemperatureValue(colorTemp) {
 	def logData = [colorTemperature: "${colorTemp}°K"]
 	sendEvent(name: "colorTemperature", value: colorTemp, unit: "°K")
@@ -226,12 +234,14 @@ def setHue(hue) {
 	else if (hue > 100) { hue = 100 }
 	setColor([hue: hue])
 }
+
 def setSaturation(saturation) {
 	saturation = (saturation +0.5).toInteger()
 	if (saturation < 0) { saturation = 0 }
 	else if (saturation > 100) { saturation = 100 }
 	setColor([saturation: saturation])
 }
+
 def setColor(color) {
 	log.trace color
 	if (color == null) {
@@ -258,6 +268,7 @@ def setColor(color) {
 		logDebug("setColor: [color: ${newColor}, colorMode: COLOR]")
 	}
 }
+
 def setHueValue(hue) {
 	def logData = [:]
 	hue = (hue + 0.5).toInteger()
@@ -271,21 +282,25 @@ def setHueValue(hue) {
 	runIn(3, setHslValue)
 	logDebug("setHueValue: ${logData}")
 }
+
 def setSaturationValue(saturation) {
 	saturation = (saturation + 0.5).toInteger()
 	sendEvent(name: "saturation", value: saturation, unit: "%")
 	runIn(3, setHslValue)
 	logInfo("setSaturationValue: [saturation: ${saturation}%]")
 }
+
 def setHslValue() {
 	String color = """{"hue": ${device.currentValue("hue")},"""
 	color += """"saturation": ${device.currentValue("saturation")},"""
 	color += """"level": ${device.currentValue("level")}}"""
 	setColorAttrs(color, true)
 }
+
 def setColorValue(color) {
 	setColorAttrs(color, false)
 }
+
 def setColorAttrs(color, internal) {
 	Map logData = [:]
 	logData << [color: color, internal: internal]
@@ -321,23 +336,28 @@ def listAttributes(trace = false) {
 		logDebug("Attributes: ${attrList}")
 	}
 }
+
 def logTrace(msg){
 	log.trace "${device.displayName}-${driverVer()}: ${msg}"
 }
+
 def logInfo(msg) { 
 	if (textEnable) {
 		log.info "${device.displayName}-${driverVer()}: ${msg}"
 	}
 }
+
 def debugLogOff() {
 	if (logEnable) {
 		device.updateSetting("logEnable", [type:"bool", value: false])
 	}
 	logInfo("debugLogOff")
 }
+
 def logDebug(msg) {
 	if (logEnable) {
 		log.debug "${device.displayName}-${driverVer()}: ${msg}"
 	}
 }
+
 def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" }

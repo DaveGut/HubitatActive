@@ -18,7 +18,7 @@ Hubitat Community site: https://community.hubitat.com/
 ==========================================================================*/
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
-def driverVer() { return "0.6T" }
+def driverVer() { return "1.0" }
 
 metadata {
 	definition (name: "Replica Samsung Dishwasher",
