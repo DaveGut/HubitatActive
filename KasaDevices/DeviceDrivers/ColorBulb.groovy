@@ -6,9 +6,10 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 
-Version 2.3.4_R1
+Version 2.3.4_R2
+No changes for this driver
 ===================================================================================================*/
-def driverVer() { return "2.3.4-1" }
+def driverVer() { return "2.3.4-2" }
 
 metadata {
 	definition (name: "Kasa Color Bulb",
@@ -210,7 +211,7 @@ def setSysInfo(status) {
 
 
 
-// ~~~~~ start include (1202) davegut.kasaCommon ~~~~~
+// ~~~~~ start include (1228) davegut.kasaCommon ~~~~~
 library ( // library marker davegut.kasaCommon, line 1
 	name: "kasaCommon", // library marker davegut.kasaCommon, line 2
 	namespace: "davegut", // library marker davegut.kasaCommon, line 3
@@ -478,9 +479,9 @@ def setDeviceAlias(newAlias) { // library marker davegut.kasaCommon, line 259
 	} // library marker davegut.kasaCommon, line 265
 } // library marker davegut.kasaCommon, line 266
 
-// ~~~~~ end include (1202) davegut.kasaCommon ~~~~~
+// ~~~~~ end include (1228) davegut.kasaCommon ~~~~~
 
-// ~~~~~ start include (1203) davegut.kasaCommunications ~~~~~
+// ~~~~~ start include (1229) davegut.kasaCommunications ~~~~~
 library ( // library marker davegut.kasaCommunications, line 1
 	name: "kasaCommunications", // library marker davegut.kasaCommunications, line 2
 	namespace: "davegut", // library marker davegut.kasaCommunications, line 3
@@ -770,9 +771,9 @@ private inputXorTcp(resp) { // library marker davegut.kasaCommunications, line 2
 	return cmdResponse // library marker davegut.kasaCommunications, line 287
 } // library marker davegut.kasaCommunications, line 288
 
-// ~~~~~ end include (1203) davegut.kasaCommunications ~~~~~
+// ~~~~~ end include (1229) davegut.kasaCommunications ~~~~~
 
-// ~~~~~ start include (1170) davegut.commonLogging ~~~~~
+// ~~~~~ start include (1233) davegut.commonLogging ~~~~~
 library ( // library marker davegut.commonLogging, line 1
 	name: "commonLogging", // library marker davegut.commonLogging, line 2
 	namespace: "davegut", // library marker davegut.commonLogging, line 3
@@ -823,9 +824,9 @@ def logDebug(msg) { // library marker davegut.commonLogging, line 43
 
 def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" } // library marker davegut.commonLogging, line 49
 
-// ~~~~~ end include (1170) davegut.commonLogging ~~~~~
+// ~~~~~ end include (1233) davegut.commonLogging ~~~~~
 
-// ~~~~~ start include (1205) davegut.kasaLights ~~~~~
+// ~~~~~ start include (1231) davegut.kasaLights ~~~~~
 library ( // library marker davegut.kasaLights, line 1
 	name: "kasaLights", // library marker davegut.kasaLights, line 2
 	namespace: "davegut", // library marker davegut.kasaLights, line 3
@@ -922,9 +923,9 @@ def setLightLevel(level, transTime = 0) { // library marker davegut.kasaLights, 
 	} // library marker davegut.kasaLights, line 94
 } // library marker davegut.kasaLights, line 95
 
-// ~~~~~ end include (1205) davegut.kasaLights ~~~~~
+// ~~~~~ end include (1231) davegut.kasaLights ~~~~~
 
-// ~~~~~ start include (1201) davegut.kasaColorLights ~~~~~
+// ~~~~~ start include (1227) davegut.kasaColorLights ~~~~~
 library ( // library marker davegut.kasaColorLights, line 1
 	name: "kasaColorLights", // library marker davegut.kasaColorLights, line 2
 	namespace: "davegut", // library marker davegut.kasaColorLights, line 3
@@ -1035,9 +1036,9 @@ def bulbPresetSet(psName, transTime = transition_Time) { // library marker daveg
 	} // library marker davegut.kasaColorLights, line 108
 } // library marker davegut.kasaColorLights, line 109
 
-// ~~~~~ end include (1201) davegut.kasaColorLights ~~~~~
+// ~~~~~ end include (1227) davegut.kasaColorLights ~~~~~
 
-// ~~~~~ start include (1204) davegut.kasaEnergyMonitor ~~~~~
+// ~~~~~ start include (1230) davegut.kasaEnergyMonitor ~~~~~
 library ( // library marker davegut.kasaEnergyMonitor, line 1
 	name: "kasaEnergyMonitor", // library marker davegut.kasaEnergyMonitor, line 2
 	namespace: "davegut", // library marker davegut.kasaEnergyMonitor, line 3
@@ -1302,4 +1303,4 @@ def getMonthstat(year) { // library marker davegut.kasaEnergyMonitor, line 253
 	} // library marker davegut.kasaEnergyMonitor, line 262
 } // library marker davegut.kasaEnergyMonitor, line 263
 
-// ~~~~~ end include (1204) davegut.kasaEnergyMonitor ~~~~~
+// ~~~~~ end include (1230) davegut.kasaEnergyMonitor ~~~~~

@@ -6,9 +6,10 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 
-Version 2.3.4_R1
+Version 2.3.4_R2
+Change method check transition time to support instant on plus null/negative values.
 ===================================================================================================*/
-def driverVer() { return "2.3.4-1" }
+def driverVer() { return "2.3.4-2" }
 
 metadata {
 	definition (name: "Kasa Dimming Switch",
@@ -35,7 +36,6 @@ metadata {
 		attribute "connection", "string"
 		attribute "commsError", "string"
 	}
-//	6.7.2 Change B.  change logging names and titles to match other built-in drivers.
 	preferences {
 		input ("textEnable", "bool", 
 			   title: "Enable descriptionText logging",
@@ -48,7 +48,7 @@ metadata {
 			   defaultValue:5000,
 			   range: 0 .. 7100)
 		input ("gentleOff", "number",
-			   title: "Gentle On (max 7000 msec)",
+			   title: "Gentle Off (max 7000 msec)",
 			   defaultValue:5000,
 			   range: 0 .. 7100)
 		def fadeOpts = [0: "Instant",  1000: "Fast",
@@ -175,7 +175,7 @@ def getFade(fadeTime) {
 	return fadeSpeed
 }
 
-def setLevel(level, transTime = gentleOn) {
+def setLevel(level, transTime = gentleOn/1000) {
 	setDimmerTransition(level, transTime)
 	def updates = [:]
 	updates << [switch: "on", level: level]
@@ -255,10 +255,16 @@ def setSysInfo(status) {
 }
 
 def checkTransTime(transTime) {
-	if (transTime == null || transTime < 0) { transTime = 0 }
-	transTime = 1000 * transTime.toInteger()
+	if (transTime == null || transTime < 0.001) {
+		transTime = gentleOn
+	} else if (transTime == 0) {
+		transTime = 50
+	} else {
+		transTime = transTime * 1000
+	}
+	
 	if (transTime > 8000) { transTime = 8000 }
-	return transTime
+	return transTime.toInteger()
 }
 
 def checkLevel(level) {
@@ -302,7 +308,7 @@ def getDimmerConfiguration() {
 
 
 
-// ~~~~~ start include (1202) davegut.kasaCommon ~~~~~
+// ~~~~~ start include (1228) davegut.kasaCommon ~~~~~
 library ( // library marker davegut.kasaCommon, line 1
 	name: "kasaCommon", // library marker davegut.kasaCommon, line 2
 	namespace: "davegut", // library marker davegut.kasaCommon, line 3
@@ -570,9 +576,9 @@ def setDeviceAlias(newAlias) { // library marker davegut.kasaCommon, line 259
 	} // library marker davegut.kasaCommon, line 265
 } // library marker davegut.kasaCommon, line 266
 
-// ~~~~~ end include (1202) davegut.kasaCommon ~~~~~
+// ~~~~~ end include (1228) davegut.kasaCommon ~~~~~
 
-// ~~~~~ start include (1203) davegut.kasaCommunications ~~~~~
+// ~~~~~ start include (1229) davegut.kasaCommunications ~~~~~
 library ( // library marker davegut.kasaCommunications, line 1
 	name: "kasaCommunications", // library marker davegut.kasaCommunications, line 2
 	namespace: "davegut", // library marker davegut.kasaCommunications, line 3
@@ -862,9 +868,9 @@ private inputXorTcp(resp) { // library marker davegut.kasaCommunications, line 2
 	return cmdResponse // library marker davegut.kasaCommunications, line 287
 } // library marker davegut.kasaCommunications, line 288
 
-// ~~~~~ end include (1203) davegut.kasaCommunications ~~~~~
+// ~~~~~ end include (1229) davegut.kasaCommunications ~~~~~
 
-// ~~~~~ start include (1170) davegut.commonLogging ~~~~~
+// ~~~~~ start include (1233) davegut.commonLogging ~~~~~
 library ( // library marker davegut.commonLogging, line 1
 	name: "commonLogging", // library marker davegut.commonLogging, line 2
 	namespace: "davegut", // library marker davegut.commonLogging, line 3
@@ -915,9 +921,9 @@ def logDebug(msg) { // library marker davegut.commonLogging, line 43
 
 def logWarn(msg) { log.warn "${device.displayName}-${driverVer()}: ${msg}" } // library marker davegut.commonLogging, line 49
 
-// ~~~~~ end include (1170) davegut.commonLogging ~~~~~
+// ~~~~~ end include (1233) davegut.commonLogging ~~~~~
 
-// ~~~~~ start include (1206) davegut.kasaPlugs ~~~~~
+// ~~~~~ start include (1232) davegut.kasaPlugs ~~~~~
 library ( // library marker davegut.kasaPlugs, line 1
 	name: "kasaPlugs", // library marker davegut.kasaPlugs, line 2
 	namespace: "davegut", // library marker davegut.kasaPlugs, line 3
@@ -941,42 +947,46 @@ def distResp(response) { // library marker davegut.kasaPlugs, line 18
 			setSysInfo(response.system.get_sysinfo) // library marker davegut.kasaPlugs, line 21
 		} else if (response.system.set_relay_state || // library marker davegut.kasaPlugs, line 22
 				   response.system.set_led_off) { // library marker davegut.kasaPlugs, line 23
-			getSysinfo() // library marker davegut.kasaPlugs, line 24
-		} else if (response.system.reboot) { // library marker davegut.kasaPlugs, line 25
-			logWarn("distResp: Rebooting device.") // library marker davegut.kasaPlugs, line 26
-		} else if (response.system.set_dev_alias) { // library marker davegut.kasaPlugs, line 27
-			updateName(response.system.set_dev_alias) // library marker davegut.kasaPlugs, line 28
-		} else { // library marker davegut.kasaPlugs, line 29
-			logDebug("distResp: Unhandled response = ${response}") // library marker davegut.kasaPlugs, line 30
-		} // library marker davegut.kasaPlugs, line 31
-	} else if (response["smartlife.iot.dimmer"]) { // library marker davegut.kasaPlugs, line 32
-		if (response["smartlife.iot.dimmer"].get_dimmer_parameters) { // library marker davegut.kasaPlugs, line 33
-			setDimmerConfig(response["smartlife.iot.dimmer"]) // library marker davegut.kasaPlugs, line 34
-		} else { // library marker davegut.kasaPlugs, line 35
-			logDebug("distResp: Unhandled response: ${response["smartlife.iot.dimmer"]}") // library marker davegut.kasaPlugs, line 36
-		} // library marker davegut.kasaPlugs, line 37
-	} else if (response.emeter) { // library marker davegut.kasaPlugs, line 38
-		distEmeter(response.emeter) // library marker davegut.kasaPlugs, line 39
-	} else if (response.cnCloud) { // library marker davegut.kasaPlugs, line 40
-		setBindUnbind(response.cnCloud) // library marker davegut.kasaPlugs, line 41
-	} else { // library marker davegut.kasaPlugs, line 42
-		logDebug("distResp: Unhandled response = ${response}") // library marker davegut.kasaPlugs, line 43
-	} // library marker davegut.kasaPlugs, line 44
-} // library marker davegut.kasaPlugs, line 45
+			if (getDataValue("model") == "HS210") { // library marker davegut.kasaPlugs, line 24
+				runIn(2, getSysinfo) // library marker davegut.kasaPlugs, line 25
+			} else { // library marker davegut.kasaPlugs, line 26
+				getSysinfo() // library marker davegut.kasaPlugs, line 27
+			} // library marker davegut.kasaPlugs, line 28
+		} else if (response.system.reboot) { // library marker davegut.kasaPlugs, line 29
+			logWarn("distResp: Rebooting device.") // library marker davegut.kasaPlugs, line 30
+		} else if (response.system.set_dev_alias) { // library marker davegut.kasaPlugs, line 31
+			updateName(response.system.set_dev_alias) // library marker davegut.kasaPlugs, line 32
+		} else { // library marker davegut.kasaPlugs, line 33
+			logDebug("distResp: Unhandled response = ${response}") // library marker davegut.kasaPlugs, line 34
+		} // library marker davegut.kasaPlugs, line 35
+	} else if (response["smartlife.iot.dimmer"]) { // library marker davegut.kasaPlugs, line 36
+		if (response["smartlife.iot.dimmer"].get_dimmer_parameters) { // library marker davegut.kasaPlugs, line 37
+			setDimmerConfig(response["smartlife.iot.dimmer"]) // library marker davegut.kasaPlugs, line 38
+		} else { // library marker davegut.kasaPlugs, line 39
+			logDebug("distResp: Unhandled response: ${response["smartlife.iot.dimmer"]}") // library marker davegut.kasaPlugs, line 40
+		} // library marker davegut.kasaPlugs, line 41
+	} else if (response.emeter) { // library marker davegut.kasaPlugs, line 42
+		distEmeter(response.emeter) // library marker davegut.kasaPlugs, line 43
+	} else if (response.cnCloud) { // library marker davegut.kasaPlugs, line 44
+		setBindUnbind(response.cnCloud) // library marker davegut.kasaPlugs, line 45
+	} else { // library marker davegut.kasaPlugs, line 46
+		logDebug("distResp: Unhandled response = ${response}") // library marker davegut.kasaPlugs, line 47
+	} // library marker davegut.kasaPlugs, line 48
+} // library marker davegut.kasaPlugs, line 49
 
-def setRelayState(onOff) { // library marker davegut.kasaPlugs, line 47
-	logDebug("setRelayState: [switch: ${onOff}]") // library marker davegut.kasaPlugs, line 48
-	if (getDataValue("plugNo") == null) { // library marker davegut.kasaPlugs, line 49
-		sendCmd("""{"system":{"set_relay_state":{"state":${onOff}}}}""") // library marker davegut.kasaPlugs, line 50
-	} else { // library marker davegut.kasaPlugs, line 51
-		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaPlugs, line 52
-				""""system":{"set_relay_state":{"state":${onOff}}}}""") // library marker davegut.kasaPlugs, line 53
-	} // library marker davegut.kasaPlugs, line 54
-} // library marker davegut.kasaPlugs, line 55
+def setRelayState(onOff) { // library marker davegut.kasaPlugs, line 51
+	logDebug("setRelayState: [switch: ${onOff}]") // library marker davegut.kasaPlugs, line 52
+	if (getDataValue("plugNo") == null) { // library marker davegut.kasaPlugs, line 53
+		sendCmd("""{"system":{"set_relay_state":{"state":${onOff}}}}""") // library marker davegut.kasaPlugs, line 54
+	} else { // library marker davegut.kasaPlugs, line 55
+		sendCmd("""{"context":{"child_ids":["${getDataValue("plugId")}"]},""" + // library marker davegut.kasaPlugs, line 56
+				""""system":{"set_relay_state":{"state":${onOff}}}}""") // library marker davegut.kasaPlugs, line 57
+	} // library marker davegut.kasaPlugs, line 58
+} // library marker davegut.kasaPlugs, line 59
 
-def setLedOff(onOff) { // library marker davegut.kasaPlugs, line 57
-	logDebug("setLedOff: [ledOff: ${onOff}]") // library marker davegut.kasaPlugs, line 58
-		sendCmd("""{"system":{"set_led_off":{"off":${onOff}}}}""") // library marker davegut.kasaPlugs, line 59
-} // library marker davegut.kasaPlugs, line 60
+def setLedOff(onOff) { // library marker davegut.kasaPlugs, line 61
+	logDebug("setLedOff: [ledOff: ${onOff}]") // library marker davegut.kasaPlugs, line 62
+		sendCmd("""{"system":{"set_led_off":{"off":${onOff}}}}""") // library marker davegut.kasaPlugs, line 63
+} // library marker davegut.kasaPlugs, line 64
 
-// ~~~~~ end include (1206) davegut.kasaPlugs ~~~~~
+// ~~~~~ end include (1232) davegut.kasaPlugs ~~~~~
