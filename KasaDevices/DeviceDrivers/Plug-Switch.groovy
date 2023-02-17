@@ -47,7 +47,7 @@ metadata {
 	}
 //	6.7.2 Change B.  change logging names and titles to match other built-in drivers.
 	preferences {
-		input ("textEnable", "bool", 
+		input ("txtEnable", "bool", 
 			   title: "Enable descriptionText logging",
 			   defaultValue: true)
 		input ("logEnable", "bool",
