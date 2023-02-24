@@ -536,7 +536,7 @@ def addChild(driverId, name, componentId) {
 	} else {
 		def type = "RepChild Samsung Oven ${driverId}"
 		try {
-			addChildDevice("davegut", "${type}", "${childDni}", [
+			addChildDevice("replicaChild", "${type}", "${childDni}", [
 				name: type, label: name, component: componentId])
 			logInfo("addChild: [status: ADDED, label: ${name}, type: ${type}, component: ${componentId}]")
 		} catch (error) {
