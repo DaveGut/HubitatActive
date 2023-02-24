@@ -19,7 +19,7 @@ def driverVer() { return "0.9TEST" }
 
 metadata {
 	definition (name: "RepChild Samsung Oven cavity",
-				namespace: "davegut",
+				namespace: "replicaChild",
 				author: "David Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/HubiThingsReplica%20Drivers/Replica_Samsung_RangeOven_cavity.groovy"
 			   ){
