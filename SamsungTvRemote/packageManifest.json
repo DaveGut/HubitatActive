@@ -1,11 +1,11 @@
 {
   "packageName": "Samsung TV Remote",
   "author": "David Gutheinz",
-  "version": "4.0-3",
+  "version": "4.1-1",
   "minimumHEVersion": "2.3.1",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/README.md",
   "communityLink": "https://community.hubitat.com/t/samsung-hubitat-tv-integration/55120",
-  "dateReleased": "2023-01-15",
+  "dateReleased": "2023-03-01",
   "releaseNotes" : "Enhanced smart application functions.  Updated on/off polling to provide two options.",
   "drivers": [
     {
