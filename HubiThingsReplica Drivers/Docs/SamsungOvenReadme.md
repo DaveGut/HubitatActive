@@ -3,7 +3,7 @@
 ## NOTE: Not all functions work for all devices.  Samsung has chosen to disable non-SmartThings access to Start, Pause, and Set Operation Time functions for "safety" reasons.
 Link to SmartThings Article:  https://community.smartthings.com/t/samsung-oven-apis-for-setting-cooking-mode-setpoint-cooking-time/251558/7?u=gutheinz
 
-## Remote control.
+## Remote control Note.
 Remote control must be enabled on the Oven panel prior to controlling the oven.  The attributes will be correct regardless.
 
 ## Main Device Command Description:
@@ -15,10 +15,10 @@ Remote control must be enabled on the Oven panel prior to controlling the oven. 
 * Set Oven Setpoint: Requires mode set first.  Setpoint in the temperature scale user has set within the oven panel.  
   * Attribute "ovenSetpoint".
 * Set Operation Time: Requires mode and oven setpoint set first.  Sets the operation time of the oven.
-  * Enter is integer seconds or HH:MM:SS format.
+  * Entry is integer seconds or HH:MM:SS format.
   * Note: Function may not work on all ovens.
   * CAUTION: MAY START OVEN ON SOME OVENS.  
-  * Attribute "operationTime"
+  * Attribute "operationTime", format HH:MM:SS
 * Start: Starts the oven.  Mode, setpoint, and operationTime should already be set.
   * Note: Function may not work on all ovens.
   * Attribute "operatingState"
