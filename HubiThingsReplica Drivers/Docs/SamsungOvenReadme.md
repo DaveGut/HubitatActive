@@ -1,4 +1,8 @@
-# HubiThings Replica Drivers
+# HubiThings Replica Samsung Oven
+
+## NOTE: Not all functions work for all devices.  Samsung has chosen to disable non-SmartThings access to Start, Pause, and Set Operation Time functions for "safety" reasons.
+Link to SmartThings Article:  https://community.smartthings.com/t/samsung-oven-apis-for-setting-cooking-mode-setpoint-cooking-time/251558/7?u=gutheinz
+
 
 ## Samsung Refrigerator
 * Requires Replica_Samsung_Refrigerator driver plus two children: Replica_Samsung_Refrigerator_cavity, and Replica_Samsung_Refrigerator_icemaker.
