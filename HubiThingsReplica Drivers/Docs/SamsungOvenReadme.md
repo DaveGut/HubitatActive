@@ -34,7 +34,7 @@ Remote control must be enabled on the Oven panel prior to controlling the oven. 
 For the cavity, commands will only work if attribute "ovenCavityStatus" is on.
 Commands:  See above.  All commands except Configure, Set Oven Light and Set Probe Setpoint are available.
 
-###Appreciation: ###
+### Appreciation: ###
 Jeff Page: Provide a LOT of support verify functions and troubleshooting/identifying issues with the start commands.
 Bloodtick_Jones: Development of a great SmartThings API interface app and supporting my peculiar needs.
 
