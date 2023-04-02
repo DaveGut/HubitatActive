@@ -71,7 +71,7 @@ def stop() { setMachineState("stop") }
 def setMachineState(machState) {
 	def cmdData = [
 		component: "main",
-		capability: "dryerOperatingState",
+		capability: "washerOperatingState",
 		command: "setMachineState",
 		arguments: [machState]]
 	def cmdStatus = deviceCommand(cmdData)
