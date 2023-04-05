@@ -18,12 +18,12 @@ Remote control must be enabled on the Oven panel prior to controlling the oven. 
   * Review the log page for any WARNING or ERROR logs.  If there are some, copy log page and send to the developer.
   * Go to the data section of the driver (or parent) and verify that critical data has passed to the device.  If not, contact the developer.
   * Data (with first several characters as an example):
-    * capabilities: {"components":[{"id":  (this is a very large amount of data)
-    * commands: {"replicaEvent":[{"name":
-    * description: {"name":
-    * replica: {"deviceId"
-    * rules: {"version":1,"components":[{
-    * triggers: {
+    ** capabilities: {"components":[{"id":  (this is a very large amount of data)
+    ** commands: {"replicaEvent":[{"name":
+    ** description: {"name":
+    ** replica: {"deviceId"
+    ** rules: {"version":1,"components":[{
+    ** triggers: {
  
  
  * Recheck problemmatic function:
