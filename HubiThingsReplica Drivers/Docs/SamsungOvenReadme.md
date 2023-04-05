@@ -24,8 +24,6 @@ Remote control must be enabled on the Oven panel prior to controlling the oven. 
     * replica: {"deviceId"
     * rules: {"version":1,"components":[{
     * triggers: {
- 
- 
  * Recheck problemmatic function:
    * Open NEW logging window
    * Execute problemmatic function and note exactly what the anomolous behavior is.
