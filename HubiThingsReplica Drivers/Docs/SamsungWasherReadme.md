@@ -9,7 +9,7 @@ The washer integration does not include child devices (i.e., flex capabilities o
 ## Remote control Note.
 Remote control must be enabled on the Oven panel prior to controlling the oven.  The attributes will be correct regardless.  You must follow the same pre-control procedures on this driver as you do for control via the SmartThings application.
 
-## General troubleshooting recommendations for HubiThingsReplica devices.
+## General troubleshooting recommendations for HubiThings Replica devices.
 * Open the Hubitat Apps page and look at the parent-chile HubiThings Replica for any indications of issues. Expected result:  
   * HubiThings Replica  
   * HubiThings OAuth ea3-5122 : Authorized
