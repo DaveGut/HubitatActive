@@ -7,9 +7,9 @@ Link to SmartThings Article:  https://community.smartthings.com/t/samsung-oven-a
 Remote control must be enabled on the Oven panel prior to controlling the oven.  The attributes will be correct regardless.  You must follow the same pre-control procedures on this driver as you do for control via the SmartThings application.
 
 ## General troubleshooting recommendations for HubiThingsReplica devices.
-* Open the Hubitat Apps page and look at the parent-chile HubiThings Replica for any indications of issues. Expected result:  
+* Open the Hubitat Apps page and look at the parent-child HubiThings Replica for any indications of issues. Expected result:  
   * HubiThings Replica  
-  * HubiThings OAuth ea3-5122 : Authorized
+  * HubiThings OAuth xxn:nnnn : Authorized
 * Go to the SmartThings App and assure the failing function is working within that app.
   * If not, the issue is likely within SmartThings itself and further Hubitat troubleshooting is not warranted.
 * From the Hubitat Devices page, device's edit page,
