@@ -7,7 +7,7 @@ Link to SmartThings Article:  https://community.smartthings.com/t/samsung-oven-a
 The washer integration does not include child devices (i.e., flex capabilities of the washer).
 
 ## Remote control Note.
-Remote control must be enabled on the Oven panel prior to controlling the oven.  The attributes will be correct regardless.  You must follow the same pre-control procedures on this driver as you do for control via the SmartThings application.
+Remote control must be enabled on the washer panel prior to controlling the washer.  The attributes will be correct regardless.  You must follow the same pre-control procedures on this driver as you do for control via the SmartThings application.
 
 ## General troubleshooting recommendations for HubiThings Replica devices.
 * Open the Hubitat Apps page and look at the parent-chile HubiThings Replica for any indications of issues. Expected result:  
