@@ -50,9 +50,7 @@
       "tags": ["LAN", "Utility", "Control"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/packageManifest.json",
       "description": "Samsung TV Remote (2016 and Later TVs)"
-    }
-  ]
-},
+    },
     {
       "name": "Kasa Camera",
       "category": "Utility",
@@ -61,5 +59,4 @@
       "description": "Samsung TV Remote (2016 and Later TVs)"
     }
   ]
-
 }
