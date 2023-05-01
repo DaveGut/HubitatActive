@@ -1,0 +1,18 @@
+{
+  "packageName": "Kasa Camera",
+  "author": "David Gutheinz",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.6",
+  "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaCAM/README.md",
+  "communityLink": "https://community.hubitat.com/t/release-kasa-camera-device-driver/118182",
+  "dateReleased": "2023-05-01",
+  "drivers": [
+    {
+      "id": "e26ecb60-1300-4c6c-82c7-c229501cb10e",
+      "name": "Kasa Camera",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCAM/Kasa_Camera.groovy",
+      "required": true
+    }
+  ]
+}
