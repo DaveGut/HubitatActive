@@ -1,0 +1,116 @@
+{
+  "packageName": "Samsung ST Appliances",
+  "author": "David Gutheinz",
+  "version": "1.2",
+  "minimumHEVersion": "2.3.2",
+  "documentationLink": "https://github.com/DaveGut/HubitatActive/tree/master/SamsungAppliances#readme",
+  "communityLink": "https://community.hubitat.com/t/drivers-for-samsung-appliances-controlled-via-smartthings-cloud-api/94807",
+  "dateReleased": "2022-09-14",
+  "drivers": [
+    {
+      "id": "4ce5611b-9f5f-4f8e-9cc2-6a636d346e4f",
+      "name": "ST Data Collect",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/ST_Data_Collect.groovy",
+      "required": false
+    },
+    {
+      "id": "355f90ac-4419-4e12-8d05-39f677142088",
+      "name": "Samsung Dishwasher",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dishwasher.groovy",
+      "required": false
+    },
+    {
+      "id": "b2024c87-5f9e-4dbb-be26-21e5fe967fd0",
+      "name": "Samsung Dryer",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dryer.groovy",
+      "required": false
+    },
+    {
+      "id": "24242288-6bdd-423e-b257-c8934ebd4e3d",
+      "name": "Samsung Dryer flex",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Dryer_flex.groovy",
+      "required": false
+    },
+    {
+      "id": "cd4e3454-c83e-487b-9364-db9bf3424cdb",
+      "name": "Samsung HVAC",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_HVAC.groovy",
+      "required": false
+    },
+    {
+      "id": "4e0c0053-8411-4151-9519-76d648ae1867",
+      "name": "Samsung Oven",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven.groovy",
+      "required": false
+    },
+    {
+      "id": "1ac00dc0-a28b-462a-b873-2fc468c696e2",
+      "name": "Samsung Oven cavity",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_cavity.groovy",
+      "required": false
+    },
+    {
+      "id": "96183b92-f7dc-4f83-8370-3166483e6635",
+      "name": "Samsung Oven probe",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Oven_probe.groovy",
+      "required": false
+    },
+    {
+      "id": "1b844096-1387-4948-88b5-c333766a0d92",
+      "name": "Samsung Refrig",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig.groovy",
+      "required": false
+    },
+    {
+      "id": "6b32ef0a-1360-45d5-9dfe-7fadcc96cdf2",
+      "name": "Samsung Refrig cavity",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cavity.groovy",
+      "required": false
+    },
+    {
+      "id": "c474f77a-11b2-4c9f-886c-e41bf9e8e000",
+      "name": "Samsung Refrig cvroom",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_cvroom.groovy",
+      "required": false
+    },
+    {
+      "id": "907546ed-507f-430b-b0cf-585fafa01b67",
+      "name": "Samsung Refrig icemaker",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Refrig_icemaker.groovy",
+      "required": false
+    },
+    {
+      "id": "c8bce43d-2c42-4980-9a76-0a000c45fb25",
+      "name": "Samsung Soundbar",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Soundbar.groovy",
+      "required": false
+    },
+    {
+      "id": "0ff2dca2-8ae9-4f59-ad7c-8768206ee76f",
+      "name": "Samsung Washer",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer.groovy",
+      "required": false
+    },
+    {
+      "id": "007b25ca-51d0-44ff-9aa3-c991a6fc0124",
+      "name": "Samsung Washer flex",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungAppliances/Samsung_Washer_flex.groovy",
+      "required": false
+    }
+  ]
+}
