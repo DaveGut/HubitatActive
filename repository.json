@@ -3,6 +3,13 @@
   "gitHubUrl": "https://github.com/DaveGut/HubitatActive",
   "packages": [
     {
+      "name": "TAPO Devices Integration",
+      "category": "Integrations",
+      "tags": ["LAN", "Lights & Switches"],
+      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/packageManifest.json",
+      "description": "TAPO Plug, Switch, Bulb Hub and Hub Sensors LAN Integration."
+    },
+    {
       "name": "Kasa Devices Integration",
       "category": "Integrations",
       "tags": ["LAN", "Lights & Switches"],
