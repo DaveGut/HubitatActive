@@ -15,7 +15,10 @@ def type() { return "Multi Plug" }
 def file() { return type().replaceAll(" ", "-") }
 
 metadata {
-	definition (name: "Kasa ${type()}",
+//	definition (name: "Kasa Plug Switch",
+//	definition (name: "Kasa EM Plug",
+	definition (name: "Kasa Multi Plug",
+//	definition (name: "Kasa EM Multi Plug",
 				namespace: nameSpace(),
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/${file()}.groovy"
