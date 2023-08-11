@@ -23,7 +23,7 @@ import java.security.MessageDigest
 
 definition(
 	name: "Kasa Integration",
-	namespace: "davegut",
+	namespace: nameSpace(),
 	author: "Dave Gutheinz",
 	description: "Application to install TP-Link bulbs, plugs, and switches.",
 	category: "Convenience",
