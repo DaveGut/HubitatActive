@@ -22,8 +22,8 @@ import java.security.MessageDigest
 
 
 definition(
-	name: appName(),
-	namespace: nameSpace(),
+	name: "${appName()}",
+	namespace: "${nameSpace()}",
 	author: "Dave Gutheinz",
 	description: "Application to install TP-Link bulbs, plugs, and switches.",
 	category: "Convenience",
