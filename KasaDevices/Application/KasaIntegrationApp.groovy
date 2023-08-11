@@ -15,7 +15,7 @@ import groovy.json.JsonSlurper
 
 definition(
 	name: "Kasa Integration",
-	namespace: davegut,
+	namespace: "davegut",
 	author: "Dave Gutheinz",
 	description: "Application to install TP-Link bulbs, plugs, and switches.",
 	category: "Convenience",
