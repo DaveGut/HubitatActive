@@ -5,7 +5,7 @@
   "minimumHEVersion": "2.3.5",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
-  "dateReleased": "2023-08-11",
+  "dateReleased": "2023-08-10",
   "apps": [
     {
       "id": "2611e1f3-e696-4559-9103-0bb209d8a608",
