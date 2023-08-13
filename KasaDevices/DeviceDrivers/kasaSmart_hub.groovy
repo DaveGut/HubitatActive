@@ -8,8 +8,7 @@ def type() {return "kasaSmart_hub" }
 def gitPath() { return "DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/" }
 
 metadata {
-//	definition (name: "tpLink_hub", namespace: "davegut", author: "Dave Gutheinz", 
-	definition (name: "kasaSmart_hub", namespace: "${nameSpace()}", author: "Dave Gutheinz", 
+	definition (name: "kasaSmart_hub", namespace: "davegut", author: "Dave Gutheinz", 
 				importUrl: "https://raw.githubusercontent.com/${gitPath()}${type()}.groovy")
 	{
 		capability "Switch"		//	Turns on or off.  easier Alexa/google integration
@@ -880,6 +879,131 @@ def installChildDevices() { // library marker davegut.lib_tpLink_parents, line 4
 		} // library marker davegut.lib_tpLink_parents, line 67
 	} // library marker davegut.lib_tpLink_parents, line 68
 } // library marker davegut.lib_tpLink_parents, line 69
+
+
+
+
+
+//command "TEST" // library marker davegut.lib_tpLink_parents, line 75
+def xxTEST() {createPollList()} // library marker davegut.lib_tpLink_parents, line 76
+def createPollList() { // library marker davegut.lib_tpLink_parents, line 77
+	def children = getChildDevices() // library marker davegut.lib_tpLink_parents, line 78
+	log.info children // library marker davegut.lib_tpLink_parents, line 79
+	List requests = [] // library marker davegut.lib_tpLink_parents, line 80
+	children.each { child -> // library marker davegut.lib_tpLink_parents, line 81
+		Map cmdBody = [ // library marker davegut.lib_tpLink_parents, line 82
+		method: "control_child", // library marker davegut.lib_tpLink_parents, line 83
+		params: [ // library marker davegut.lib_tpLink_parents, line 84
+			device_id: child.getDataValue("deviceId"), // library marker davegut.lib_tpLink_parents, line 85
+			requestData: [ // library marker davegut.lib_tpLink_parents, line 86
+				method: "get_device_info" // library marker davegut.lib_tpLink_parents, line 87
+			]]] // library marker davegut.lib_tpLink_parents, line 88
+//log.warn syncPassthrough(cmdBody) // library marker davegut.lib_tpLink_parents, line 89
+		requests << cmdBody // library marker davegut.lib_tpLink_parents, line 90
+	} // library marker davegut.lib_tpLink_parents, line 91
+	log.debug createMultiCmd(requests) // library marker davegut.lib_tpLink_parents, line 92
+//	asyncPassthrough(createMultiCmd(requests), "TEST", "testParse") // library marker davegut.lib_tpLink_parents, line 93
+	log.trace syncPassthrough(createMultiCmd(requests)) // library marker davegut.lib_tpLink_parents, line 94
+} // library marker davegut.lib_tpLink_parents, line 95
+
+def xyTEST() { // library marker davegut.lib_tpLink_parents, line 97
+	def command = [ // library marker davegut.lib_tpLink_parents, line 98
+		method:"multipleRequest",  // library marker davegut.lib_tpLink_parents, line 99
+		params:[ // library marker davegut.lib_tpLink_parents, line 100
+			requests:[ // library marker davegut.lib_tpLink_parents, line 101
+				[method:"control_child",  // library marker davegut.lib_tpLink_parents, line 102
+				 params:[ // library marker davegut.lib_tpLink_parents, line 103
+					 device_id:"802E2AA5F05058477DAE4F4F76CF2D9020C234A6", // library marker davegut.lib_tpLink_parents, line 104
+					 requestData:[method:"get_device_info"]]],  // library marker davegut.lib_tpLink_parents, line 105
+				[method:"control_child",  // library marker davegut.lib_tpLink_parents, line 106
+				 params:[ // library marker davegut.lib_tpLink_parents, line 107
+					 device_id:"802ECD75CFC5EF371DCB6CB117CD38E420C25A00",  // library marker davegut.lib_tpLink_parents, line 108
+					 requestData:[method:get_device_info]]]]]] // library marker davegut.lib_tpLink_parents, line 109
+
+	log.trace syncPassthrough(command) // library marker davegut.lib_tpLink_parents, line 111
+} // library marker davegut.lib_tpLink_parents, line 112
+
+def TEST() { // library marker davegut.lib_tpLink_parents, line 114
+	def command = [ // library marker davegut.lib_tpLink_parents, line 115
+		method: "control_child", // library marker davegut.lib_tpLink_parents, line 116
+//		method: "multipleRequests", // library marker davegut.lib_tpLink_parents, line 117
+		params:[ // library marker davegut.lib_tpLink_parents, line 118
+			method: "multipleRequests", // library marker davegut.lib_tpLink_parents, line 119
+//			method: "control_child", // library marker davegut.lib_tpLink_parents, line 120
+			params: [requests: [ // library marker davegut.lib_tpLink_parents, line 121
+				[params:[device_id:"802E2AA5F05058477DAE4F4F76CF2D9020C234A6", // library marker davegut.lib_tpLink_parents, line 122
+				 requestData:[method:"get_device_info"]]], // library marker davegut.lib_tpLink_parents, line 123
+				[params:[device_id:"802ECD75CFC5EF371DCB6CB117CD38E420C25A00", // library marker davegut.lib_tpLink_parents, line 124
+				 requestData:[method:"get_device_info"]]]]]]] // library marker davegut.lib_tpLink_parents, line 125
+
+	log.trace syncPassthrough(command) // library marker davegut.lib_tpLink_parents, line 127
+} // library marker davegut.lib_tpLink_parents, line 128
+
+
+
+
+
+def testParse(resp, data) { // library marker davegut.lib_tpLink_parents, line 134
+	log.warn parseData(resp) // library marker davegut.lib_tpLink_parents, line 135
+} // library marker davegut.lib_tpLink_parents, line 136
+
+
+
+def childDeviceInfo() { // library marker davegut.lib_tpLink_parents, line 140
+	List requests = [ // library marker davegut.lib_tpLink_parents, line 141
+		[method: "set_alarm_configure", // library marker davegut.lib_tpLink_parents, line 142
+		 params: [custom: 0, // library marker davegut.lib_tpLink_parents, line 143
+				  type: "${alarmType}", // library marker davegut.lib_tpLink_parents, line 144
+				  volume: "${volume}", // library marker davegut.lib_tpLink_parents, line 145
+				  duration: duration // library marker davegut.lib_tpLink_parents, line 146
+				 ]]] // library marker davegut.lib_tpLink_parents, line 147
+	requests << [method: "get_alarm_configure"] // library marker davegut.lib_tpLink_parents, line 148
+	requests << [method: "play_alarm"] // library marker davegut.lib_tpLink_parents, line 149
+	requests << [method: "get_device_info"] // library marker davegut.lib_tpLink_parents, line 150
+	asyncPassthrough(createMultiCmd(requests), "playAlarmConfig", "alarmParse") // library marker davegut.lib_tpLink_parents, line 151
+
+
+
+
+
+
+/*	 // library marker davegut.lib_tpLink_parents, line 158
+
+		Map cmdBody = [ // library marker davegut.lib_tpLink_parents, line 160
+		method: "multipleRequest", // library marker davegut.lib_tpLink_parents, line 161
+		params: [requests: requests]] // library marker davegut.lib_tpLink_parents, line 162
+
+	List requests = [ // library marker davegut.lib_tpLink_parents, line 164
+		[method: "set_alarm_configure", // library marker davegut.lib_tpLink_parents, line 165
+		 params: [custom: 0, // library marker davegut.lib_tpLink_parents, line 166
+				  type: "${alarmType}", // library marker davegut.lib_tpLink_parents, line 167
+				  volume: "${volume}", // library marker davegut.lib_tpLink_parents, line 168
+				  duration: duration // library marker davegut.lib_tpLink_parents, line 169
+				 ]]] // library marker davegut.lib_tpLink_parents, line 170
+	requests << [method: "get_alarm_configure"] // library marker davegut.lib_tpLink_parents, line 171
+	requests << [method: "play_alarm"] // library marker davegut.lib_tpLink_parents, line 172
+	requests << [method: "get_device_info"] // library marker davegut.lib_tpLink_parents, line 173
+	asyncPassthrough(createMultiCmd(requests), "playAlarmConfig", "alarmParse") // library marker davegut.lib_tpLink_parents, line 174
+
+	Map cmdBody = [ // library marker davegut.lib_tpLink_parents, line 176
+		method: "multipleRequest", // library marker davegut.lib_tpLink_parents, line 177
+		params: [requests: requests]] // library marker davegut.lib_tpLink_parents, line 178
+
+
+
+		method: "control_child", // library marker davegut.lib_tpLink_parents, line 182
+		params: [ // library marker davegut.lib_tpLink_parents, line 183
+			device_id: getDataValue("deviceId"), // library marker davegut.lib_tpLink_parents, line 184
+			requestData: [ // library marker davegut.lib_tpLink_parents, line 185
+				method: "get_device_running_info" // library marker davegut.lib_tpLink_parents, line 186
+//				method: "get_trigger_logs", // library marker davegut.lib_tpLink_parents, line 187
+//				params: [page_size: 5,"start_id": 0] // library marker davegut.lib_tpLink_parents, line 188
+			] // library marker davegut.lib_tpLink_parents, line 189
+		] // library marker davegut.lib_tpLink_parents, line 190
+*/	 // library marker davegut.lib_tpLink_parents, line 191
+} // library marker davegut.lib_tpLink_parents, line 192
+
+
 
 // ~~~~~ end include (1353) davegut.lib_tpLink_parents ~~~~~
 

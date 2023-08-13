@@ -8,8 +8,7 @@ def type() {return "kasaSmart_plug" }
 def gitPath() { return "DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/" }
 
 metadata {
-//	definition (name: "tpLink_plug", namespace: "davegut", author: "Dave Gutheinz", 
-	definition (name: "kasaSmart_plug", namespace: "${nameSpace()}", author: "Dave Gutheinz", 
+	definition (name: "kasaSmart_plug", namespace: "davegut", author: "Dave Gutheinz", 
 				importUrl: "https://raw.githubusercontent.com/${gitPath()}${type()}.groovy")
 	{
 		attribute "commsError", "string"
