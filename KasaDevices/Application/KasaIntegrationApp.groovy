@@ -10,7 +10,7 @@ Version 2.3.4_R2
 No changes.
 ===================================================================================================*/
 def nameSpace() { return "davegut" }
-def appVersion() { return "2.3.4-2" }
+def appVersion() { return "2.3.5-1" }
 import groovy.json.JsonSlurper
 
 definition(
