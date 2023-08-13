@@ -6,16 +6,16 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 
-Version 2.3.5-1
+Version 2.3.4_R2
 No changes.
 ===================================================================================================*/
 def nameSpace() { return "davegut" }
-def appVersion() { return "2.3.5-1" }
+def appVersion() { return "2.3.4-2" }
 import groovy.json.JsonSlurper
 
 definition(
 	name: "Kasa Integration",
-	namespace: davegut,
+	namespace: nameSpace(),
 	author: "Dave Gutheinz",
 	description: "Application to install TP-Link bulbs, plugs, and switches.",
 	category: "Convenience",
