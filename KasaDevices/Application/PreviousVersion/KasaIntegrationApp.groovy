@@ -6,11 +6,11 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 
-Version 2.3.4_R2
-No changes.
+Version 2.3.4-R1
+
 ===================================================================================================*/
 def nameSpace() { return "davegut" }
-def appVersion() { return "2.3.4-2" }
+def appVersion() { return "2.3.4-1" }
 import groovy.json.JsonSlurper
 
 definition(
