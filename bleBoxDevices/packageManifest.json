@@ -4,7 +4,7 @@
   "version": "2.0.1",
   "minimumHEVersion": "2.2.7",
   "communityLink": "https://community.hubitat.com/t/blebox-switches-dimmers-etc/9024",
-  "dateReleased": "2021-07-27",
+  "dateReleased": "2021-07-28",
   "apps": [
     {
       "id": "e6e5f174-e7b9-4f9a-8d1e-fae71570d255",
