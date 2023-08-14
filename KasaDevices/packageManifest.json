@@ -2,7 +2,7 @@
   "packageName": "Kasa Plugs, Switches and Bulbs",
   "author": "David Gutheinz",
   "version": "2.3.6",
-  "minimumHEVersion": "2.3.6",
+  "minimumHEVersion": "2.3.5",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf","releaseNotes": "DO NOT INSTALL.  DO NOT INSTALL.  Added support to Kasa Hub and Kasa Matter devices.",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "dateReleased": "2023-08-11",
