@@ -1,8 +1,7 @@
 # Hubitat Kasa Device Integration
 Combined LAN and Cloud Integration with user choice of cloud usage at the application level and the individual device level.  Accounts for on-going TP-Link firmware updates that cause the LAN integration to fail.
 
-## This integration does not currently support Kasa Matter Devices nor any TAPO Device
-Matter support is being investigated.  Tapo integration is available via the Tapo Integration App (same author)
+## This integration noe support Kasa Matter Devices and the Kasa HUB.
 
 ## Instructions:
 Installation Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Install.pdf
