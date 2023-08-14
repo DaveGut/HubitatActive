@@ -5,7 +5,9 @@
   "minimumHEVersion": "2.3.5",
   "documentationLink": "https://github.com/DaveGut/HubitatActive/tree/master/KasaDevices#readme",
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
-  "dateReleased": "2023-04-12","releaseNotes": "Added: energyToday pollInterval option, manual IP and Port update.","licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/License",
+  "dateReleased": "2023-04-12",
+  "releaseNotes": "TEST DO NOT USE.  Added: energyToday pollInterval option, manual IP and Port update.",
+  "licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/License.md",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
