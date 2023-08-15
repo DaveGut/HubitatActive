@@ -7,7 +7,7 @@
   "communityLink": "https://community.hubitat.com/t/re-release-tp-link-plug-switch-and-bulb-integration/39341",
   "dateReleased": "2023-08-14",
   "releaseNotes": "AFTER UPDATING, YOU MUST DO A HPM REPAIR.  (Issues with HPM or my packageManifest)  AFTER UPDATING, YOU MUST DO A HPM REPAIR. Added support for new Kasa devices using the TP-LinkSmart Protocol.  Support includes new MATTER devices as well as the Kasa Hub 100.",
-  "licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/License",
+  "licenseFile": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/License.md",
   "apps": [
     {
       "id": "16027445-4f62-4714-9af9-82fb6c330366",
