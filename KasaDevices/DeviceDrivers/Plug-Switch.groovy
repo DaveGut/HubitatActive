@@ -16,7 +16,7 @@ def file() { return type().replaceAll(" ", "-") }
 
 metadata {
 	definition (name: "Kasa Plug Switch",
-				namespace: "davegut",
+				namespace: nameSpace(),
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/${file()}.groovy"
 			   ) {

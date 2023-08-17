@@ -8,7 +8,7 @@ def type() {return "kasaSmart plug_dimmer" }
 def gitPath() { return "DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/" }
 
 metadata {
-	definition (name: "kasaSmart_plug_dimmer", namespace: "davegut", author: "Dave Gutheinz", 
+	definition (name: "kasaSmart_plug_dimmer", namespace: nameSpace(), author: "Dave Gutheinz", 
 				importUrl: "https://raw.githubusercontent.com/${gitPath()}${type()}.groovy")
 	{
 		attribute "commsError", "string"

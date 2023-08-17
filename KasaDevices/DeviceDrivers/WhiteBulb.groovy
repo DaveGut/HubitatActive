@@ -6,11 +6,11 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 ===== Link to Documentation =====
 	https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Documentation.pdf
 ===================================================================================================*/
-def driverVer() { return "2.3.6" }
+def driverVer() { return "2.3.6-1" }
 
 metadata {
 	definition (name: "Kasa Mono Bulb",
-				namespace: "davegut",
+				namespace: nameSpace(),
 				author: "Dave Gutheinz",
 				importUrl: "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/WhiteBulb.groovy"
 			   ) {

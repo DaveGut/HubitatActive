@@ -8,7 +8,7 @@ def type() {return "kasaSmart_hub" }
 def gitPath() { return "DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/" }
 
 metadata {
-	definition (name: "kasaSmart_hub", namespace: "davegut", author: "Dave Gutheinz", 
+	definition (name: "kasaSmart_hub", namespace: nameSpace(), author: "Dave Gutheinz", 
 				importUrl: "https://raw.githubusercontent.com/${gitPath()}${type()}.groovy")
 	{
 		capability "Switch"		//	Turns on or off.  easier Alexa/google integration
