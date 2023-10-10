@@ -11,7 +11,7 @@ Provides buttons for rapidly changing a bulb color or color temperature through 
 Installation and operation from th Local Area Network of Kasa (TP-Link) bulbs, plugs, switches, and energy monitor switches. See WIKI for additional information.
 
 ## Samsung Appliances
-Drivers Samsung Washer, Dryer, Oven, and Refrigerators.  Provides control and status through the SmartThings cloud.  Does not require a SmartThings hub.
+No longer maintained.  Use HubithingReplica instead.  Drivers Samsung Washer, Dryer, Oven, and Refrigerators.  Provides control and status through the SmartThings cloud.  Does not require a SmartThings hub.
 
 ## Samsung TV
 Driver for Samsung TV (2016 and later models) into Hubitat.  Provides basic control and optional linkage to SmartThings additional controls.
