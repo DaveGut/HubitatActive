@@ -3,14 +3,14 @@
   "gitHubUrl": "https://github.com/DaveGut/HubitatActive",
   "packages": [
     {
-      "name": "Kasa Devices Integration",
+      "name": "TAPO Devices Integration",
       "category": "Integrations",
       "tags": ["LAN", "Lights & Switches"],
       "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/packageManifest.json",
       "description": "TAPO Plugs, Switches, Bulds and Kasa Matter(only) devices integration"
     },
     {
-      "name": "TAPO Device Integration",
+      "name": "Kasa Device Integration",
       "category": "Integrations",
       "tags": ["LAN", "Lights & Switches"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/packageManifest.json",
