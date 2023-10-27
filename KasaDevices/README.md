@@ -1,5 +1,13 @@
-# Hubitat Kasa Device Integration
-Combined LAN and Cloud Integration with user choice of cloud usage at the application level and the individual device level.  Accounts for on-going TP-Link firmware updates that cause the LAN integration to fail.
+# (DEPRECATED) Hubitat Kasa Device Integration
+This integration is now DEPRECATED in favor of the Built-In Capability and the HUBITAT Matter implementation. The integration still works; however, updates and fixes are not a priority on my part.
+
+Legacy Kasa Devices. These are the non-Matter Kasa Devices except for the Kasa Hub 100. New installations should be via the built-in integration.
+
+Matter Kasa Devices and Kasa Hub. Two options:
+
+    Use the HUBITAT MATTER INTEGRATION.
+    Go to the TP-Link TAPO integration below and select Kasa devices from the app.
+        '[RELEASE] TP-LINK TAPO Plug, Switch, Bulb, and Hub Integration'
 
 ## This integration supports Kasa Matter Devices and the Kasa HUB.
 
@@ -19,21 +27,3 @@ Device Capabilities:  https://github.com/DaveGut/HubitatActive/blob/master/KasaD
 Device Preferences:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/DevicePrefs.pdf
 
 Troubleshooting Guide:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Troubleshoot.pdf
-
-## Driver and Application Links
-
-Kasa Integration App:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/Application/KasaIntegrationApp.groovy
-
-All Plugs and Switches except DIMMER:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/Plug-Switch.groovy
-
-Dimming Switch: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/DimmingSwitch.groovy
-
-Color Bulb:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/ColorBulb.groovy
-
-Color Temperature Bulb:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/CTBulb.groovy
-
-Mono/White Bulb:  https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/WhiteBulb.groovy
-
-Light Strip: https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaDevices/DeviceDrivers/LightStrip.groovy	
-
-
