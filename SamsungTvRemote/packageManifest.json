@@ -1,120 +1,19 @@
 {
-  "packageName": "Tapo Plugs, Switches and Bulbs",
+  "packageName": "Samsung TV Remote",
   "author": "David Gutheinz",
-  "version": "2.3.7b",
-  "minimumHEVersion": "2.3.6",
-  "documentationLink": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/App/tapo_device_install.groovy",
-  "communityLink": "https://community.hubitat.com/t/tp-link-tapo-devices/121084",
-  "dateReleased": "2023-11-13",
-  "apps": [
-    {
-      "id": "6efbd8e8-3a4c-4688-8596-276254571622",
-      "name": "tapo_device_install",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/App/tapo_device_install.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": true
-    }
-  ],
+  "version": "4.1-2",
+  "minimumHEVersion": "2.3.1",
+  "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/SamsungTvRemote/README.md",
+  "communityLink": "https://community.hubitat.com/t/samsung-hubitat-tv-integration/55120",
+  "dateReleased": "2023-8-08",
+  "releaseNotes" : "Increase delay from wsConnect to sendCommand.  Added wsOpen and wsClose commands. Clarified Conflict warning error messges.",
   "drivers": [
     {
-      "id": "66dc68ae-d32c-4ffb-a7ab-5be688a0b7b0",
-      "name": "tpLink_bulb_color",
+      "id": "af921623-3d72-4e86-8f00-cd5879c13c19",
+      "name": "Samsung TV Remote",
       "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_bulb_color.groovy",
-      "required": false
-    },
-    {
-      "id": "c05be785-e0f8-42e5-98c1-0701d6a3b003",
-      "name": "tpLink_bulb_dimmer",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_bulb_dimmer.groovy",
-      "required": false
-    },
-    {
-      "id": "25905ce3-c403-447f-bf38-393fdf4ded75",
-      "name": "tpLink_bulb_lightStrip",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_bulb_lightStrip.groovy",
-      "required": false
-    },
-    {
-      "id": "2e14739f-836b-4957-8a9f-707507328f99",
-      "name": "tpLink_hub",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_hub.groovy",
-      "required": false
-    },
-    {
-      "id": "9ae6e8c8-6675-4ed8-a44d-72ad02447cb2",
-      "name": "tpLink_hub_button",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_hub_button.groovy",
-      "required": false
-    },
-    {
-      "id": "b3f71a0c-144f-4b27-97ca-4ac71e1a6ebf",
-      "name": "tpLink_hub_contact",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_hub_contact.groovy",
-      "required": false
-    },
-    {
-      "id": "92a3b691-5ae2-485e-9234-c5bc1339de0d",
-      "name": "tpLink_hub_motion",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_hub_motion.groovy",
-      "required": false
-    },
-    {
-      "id": "f81591ce-cb24-4fb8-87e6-2a8786f00e56",
-      "name": "tpLink_hub_tempHumidity",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_hub_tempHumidity.groovy",
-      "required": false
-    },
-    {
-      "id": "cf2f6dbf-8cda-48dc-a805-f348ee864cd2",
-      "name": "tpLink_plug",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_plug.groovy",
-      "required": false
-    },
-    {
-      "id": "27e5d7da-8e0e-42e7-89b3-078c578e4d54",
-      "name": "tpLink_plug_dimmer",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_plug_dimmer.groovy",
-      "required": false
-    },
-    {
-      "id": "528edf6b-7602-40a2-8a46-e5acd9e8ddf3",
-      "name": "tpLink_plug_em",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_plug_em.groovy",
-      "required": false
-    },
-    {
-      "id": "4718b39e-d18a-49e3-89b9-ae49f29ec4b0",
-      "name": "tpLink_plug_multi",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_plug_multi.groovy",
-      "required": false
-    },
-    {
-      "id": "0f27371f-ce48-454e-a1a6-ef852d0235c5",
-      "name": "tpLink_plug_multi_child",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_plug_multi_child.groovy",
-      "required": false
-    },
-    {
-      "id": "e696d305-43d7-4566-b83a-d6ceb815a5ee",
-      "name": "tpLink_robovac",
-      "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/Drivers/tpLink_robovac.groovy",
-      "required": false
+      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/SamsungTVRemote.groovy",
+      "required": true
     }
   ]
 }
