@@ -12,14 +12,14 @@
     {
       "name": "TAPO Device Integration",
       "category": "Integrations",
-      "tags": ["LAN", "Lights & Switches"],
+      "tags": ["LAN", "Lights & Switches", "Cleaning Devices", "Energy Monitoring"],
       "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/packageManifest.json",
       "description": "TAPO Plugs, Switches, Bulbs and Kasa Matter(only) devices integration"
     },
     {
       "name": "HubiThings Replica Drivers",
-      "category": "integrations",
-      "tags": [],
+      "category": "Integrations",
+      "tags": ["Appliances"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubithingsReplica/main/packageManifest.json",
       "description": "Drivers for HubiThings Replica Samsung Applicance and miscellaneous devices."
     },
@@ -32,7 +32,7 @@
     },
     {
       "name": "Samsung MultiRoom Speakers",
-      "category": "Notification",
+      "category": "Integrations",
       "tags": ["LAN", "Notifications", "Speakers"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/packageManifest.json",
       "description": "Samsung MultiRoom Speaker Integration"
@@ -40,16 +40,16 @@
     {
       "name": "Samsung TV Remote",
       "category": "Utility",
-      "tags": ["LAN", "Utility", "Control"],
+      "tags": ["LAN", "Multimedia"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungTvRemote/packageManifest.json",
       "description": "Samsung TV Remote (2016 and Later TVs)"
     },
     {
       "name": "Kasa Camera",
       "category": "Utility",
-      "tags": ["LAN", "Utility"],
+      "tags": ["LAN", "Security", "Monitoring"],
       "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCAM/packageManifest.json",
-      "description": "Samsung TV Remote (2016 and Later TVs)"
+      "description": "Samsung TV Remote (2017 and Later TVs)"
     }
   ]
 }
