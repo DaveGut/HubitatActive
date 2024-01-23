@@ -48,8 +48,8 @@
       "name": "Kasa Camera",
       "category": "Utility",
       "tags": ["LAN", "Security", "Monitoring"],
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCAM/packageManifest.json",
-      "description": "Samsung TV Remote (2017 and Later TVs)"
+      "location": "https://raw.githubusercontent.com/DaveGut/kasaCam_Hubitat/main/packageManifest.json",
+      "description": "Kasa Fixed/PTC Camera and Doorbell LAN integration"
     }
   ]
 }
