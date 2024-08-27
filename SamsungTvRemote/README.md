@@ -2,10 +2,14 @@
 This driver provide integration of the Samsung TV Remote Control functions with the Hubitat.  Additionally, it provides an option to connect to the SmartThings Cloud for addition functions and information not otherwise available.
 
 ### 2.3.9 Release Notes (BETA):
+
  a.  Created preset functions (create, execute, trigger). Function work with and without
 	   SmartThings.  SEE DOCUMENTATION.
+    
  b.  Added buttons to support preset functions in dashboards.
- c.	 Added app codes to built-in app search list.
+ 
+ c.  Added app codes to built-in app search list.
+ 
  d.  Created methods to support adding running app automatically to state.appData
 	   if the SmartThings interface is enabled.
 
