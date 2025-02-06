@@ -8,7 +8,7 @@ Provide a framework for installing Blink Cameras in a Hubitat <-> IFTTT integrat
 Provides buttons for rapidly changing a bulb color or color temperature through the Hubitat Dashboards.
 
 ## Kasa Devices
-Installation and operation from th Local Area Network of Kasa (TP-Link) bulbs, plugs, switches, and energy monitor switches. See WIKI for additional information.
+Deprecated.  Use the built-in integration.
 
 ## Samsung Appliances
 No longer maintained.  Use HubithingReplica instead.  Drivers Samsung Washer, Dryer, Oven, and Refrigerators.  Provides control and status through the SmartThings cloud.  Does not require a SmartThings hub.
