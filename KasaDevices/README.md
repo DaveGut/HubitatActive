@@ -1,4 +1,5 @@
-# (DEPRECATED) Hubitat Kasa Device Integration
+# (DEPRECATED) Hubitat Kasa Device Integration  Use Hubitat Built In App Instead.
+# Below instructions are current
 This integration is now DEPRECATED in favor of the Built-In Capability and the HUBITAT Matter implementation. The integration still works; however, updates and fixes are not a priority on my part.
 
 Legacy Kasa Devices. These are the non-Matter Kasa Devices except for the Kasa Hub 100. New installations should be via the built-in integration.
