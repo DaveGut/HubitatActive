@@ -10,13 +10,6 @@
       "description": "DEPRECATED in favor of Hubitat Built-In App and Hubitat Matter Implementation.  Matter Devices (non-C8 Hubs) are supported in the Tp-Link TAPO integration (in HPM)."
     },
     {
-      "name": "TAPO Device Integration",
-      "category": "Integrations",
-      "tags": ["LAN", "Lights & Switches", "Cleaning Devices", "Energy Monitoring"],
-      "location": "https://raw.githubusercontent.com/DaveGut/tpLink_Hubitat/main/packageManifest.json",
-      "description": "TAPO Plugs, Switches, Bulbs and Kasa Matter(only) devices integration"
-    },
-    {
       "name": "HubiThings Replica Drivers",
       "category": "Integrations",
       "tags": ["Appliances"],
