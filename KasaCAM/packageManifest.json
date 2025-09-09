@@ -1,18 +1,43 @@
 {
   "packageName": "Kasa Camera",
   "author": "David Gutheinz",
-  "version": "1.0.0",
-  "minimumHEVersion": "2.2.6",
-  "documentationLink": "https://github.com/DaveGut/HubitatActive/blob/master/KasaCAM/README.md",
-  "communityLink": "https://community.hubitat.com/t/release-kasa-camera-device-driver/118182",
-  "dateReleased": "2023-05-01",
+  "version": "2.4.3",
+  "minimumHEVersion": "2.4.1",
+  "documentationLink": "https://github.com/DaveGut/kasaCam_Hubitat/blob/main/README.md",
+  "communityLink": "https://community.hubitat.com/t/release-kasa-camera-integration/118182",
+  "dateReleased": "2025-09-09",
+  "apps": [
+    {
+      "id": "41bebef4-1e10-46cd-8eb2-fd0360167bba",
+      "name": "Kasa Cameras",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/kasaCam_Hubitat/main/application/Kasa_Cameras.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": true
+    }
+  ],
   "drivers": [
     {
-      "id": "f9770319-21cd-407e-a7db-22788da9c8e6",
-      "name": "Kasa Camera",
+      "id": "73480003-b71d-4942-93eb-27699edc4f30",
+      "name": "kasaDoorbell",
       "namespace": "davegut",
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCAM/Kasa_Camera.groovy",
-      "required": true
+      "location": "https://raw.githubusercontent.com/DaveGut/kasaCam_Hubitat/main/drivers/kasaDoorbell.groovy",
+      "required": false
+    },
+    {
+      "id": "3571f07c-c7f5-450f-b1e0-861a917b94ef",
+      "name": "kasaCameraFixed",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/kasaCam_Hubitat/main/drivers/kasaCameraFixed.groovy",
+      "required": false
+    },
+    {
+      "id": "bb1ce128-ea69-40e7-a887-459f4a7c6481",
+      "name": "kasaCameraPtz",
+      "namespace": "davegut",
+      "location": "https://raw.githubusercontent.com/DaveGut/kasaCam_Hubitat/main/drivers/kasaCameraPtz.groovy",
+      "required": false
     }
   ]
 }
