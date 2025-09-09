@@ -41,9 +41,10 @@
       "name": "Kasa Camera",
       "category": "Utility",
       "tags": ["LAN", "Security", "Monitoring"],
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/KasaCAM/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/DaveGut/kasaCam_Hubitat/refs/heads/main/packageManifest.json",
       "description": "Kasa Camera / Doorbell Integration"
     }
   ]
 }
+
 
