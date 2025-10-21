@@ -1,16 +1,18 @@
-# (DEPRECATED) Hubitat Kasa Device Integration  Use Hubitat Built In App Instead.
-# Below instructions are current
-This integration is now DEPRECATED in favor of the Built-In Capability and the HUBITAT Matter implementation. The integration still works; however, updates and fixes are not a priority on my part.
+# Hubitat Kasa Device Integration  For the Hubitat Built-In App only.
 
-Legacy Kasa Devices. These are the non-Matter Kasa Devices except for the Kasa Hub 100. New installations should be via the built-in integration.
+## Supports legacy Kasa Devices
+TP-Link has decided that new Kasa Devices will use the Tapo integration.  To accommodate this, this integration
+* Tests for all devices
+* If compatible with tihs integration, presents the device for installation
+* Provides a list of those requiring the Hubitat community TP-Link Tapo integration.
 
-Matter Kasa Devices and Kasa Hub. Two options:
+### TP-Link Kasa devices now require enabling Third Party Services in the Phone App.
+    Open the phone app (kasa or tapo), go to ME > Third Party Services > Third-Party-Compatibility and turn on.
 
+### Matter Kasa Devices and Kasa Hub. Two options:
     Use the HUBITAT MATTER INTEGRATION.
     Go to the TP-Link TAPO integration below and select Kasa devices from the app.
         '[RELEASE] TP-LINK TAPO Plug, Switch, Bulb, and Hub Integration'
-
-## This integration supports Kasa Matter Devices and the Kasa HUB.
 
 ## Instructions:
 Installation Instructions:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Docs/Install.pdf
