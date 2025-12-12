@@ -10,27 +10,6 @@
       "description": "TAPO Plugs, Switches, Bulbs and Kasa Matter(only) devices integration"
     },
     {
-      "name": "HubiThings Replica Drivers",
-      "category": "Integrations",
-      "tags": ["Appliances"],
-      "location": "https://raw.githubusercontent.com/DaveGut/HubithingsReplica/main/packageManifest.json",
-      "description": "Drivers for HubiThings Replica Samsung Applicance and miscellaneous devices."
-    },
-    {
-      "name": "BleBox Device Integration",
-      "category": "Integrations",
-      "tags": ["Lights & Switches", "LAN", "Doors & Windows"],
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/bleBoxDevices/packageManifest.json",
-      "description": "BleBox Devices Integration"
-    },
-    {
-      "name": "Samsung MultiRoom Speakers",
-      "category": "Integrations",
-      "tags": ["LAN", "Notifications", "Speakers"],
-      "location": "https://raw.githubusercontent.com/DaveGut/HubitatActive/master/SamsungMultiroom/packageManifest.json",
-      "description": "Samsung MultiRoom Speaker Integration"
-    },
-    {
       "name": "Samsung TV Remote",
       "category": "Utility",
       "tags": ["LAN", "Multimedia"],
@@ -46,5 +25,6 @@
     }
   ]
 }
+
 
 
