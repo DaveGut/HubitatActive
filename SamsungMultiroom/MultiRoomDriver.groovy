@@ -10,6 +10,10 @@ License:  https://github.com/DaveGut/HubitatActive/blob/master/KasaDevices/Licen
 a.	Fixed TTS not playing issue.
 b.	Converted preference name for information logging to a common format.
 c.	Added listAttributes() to display devices data when SavePreferences is run.
+
+
+Special Update for manual IP update AFTER installation is completed. Install requires APP
+UPNP enabled on your router.
 ===== HUBITAT INTEGRATION VERSION =======================================================*/
 import org.json.JSONObject
 import groovy.json.JsonSlurper
@@ -94,7 +98,14 @@ metadata {
 						 "rr": "surround right"]
 		input ("notificationVolume", "num", title: "Notification volume increase in percent", defaultValue: 10)
 		input ("refresh_Rate","enum", title: "Device Refresh Interval", options: refreshRate, defaultValue: "15")
-		
+
+
+//	Special Update for manual IP update AFTER installation is completed. Install requires APP
+//	UPNP enabled on your router.
+		input ("manualIp", "string", title: "Manual IP Update",
+			   defaultValue: getDataValue("deviceIP"))
+
+
 		input ("infoLog", "bool", title: "Enable descriptionText logging", defaultValue: true)
 		input ("logEnable", "bool", title: "Enable debug logging", defaultValue: false)
 		input ("spkGroupLoc", "enum", title: "Surround/Stereo Speaker Location", options: positions)
@@ -132,6 +143,16 @@ def updated() {
 		logData << [ appVersion: driverVer()]
 	}
 	unschedule()
+	
+	
+//	Special Update for manual IP update AFTER installation is completed. Install requires APP
+//	UPNP enabled on your router.
+	if (manualIp != getDataValue("deviceIP")) {
+		updateDataValue("deviceIP", manualIp)
+		log.info "<b>Updated: Manually updated device IP. Please check functionality.</b>"
+	}
+	
+	
 	sendEvent(name: "numberOfButtons", value: "29")
 	state.triggered = false
 	state.updateTrackDescription = true
